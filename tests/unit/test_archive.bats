@@ -446,7 +446,7 @@ teardown() {
     # Setup feature
     local feature_dir="$RALPH_DIR/integration-feature"
     mkdir -p "$feature_dir/specs"
-    echo '{"feature": "integration-feature", "status": "complete"}' > "$feature_dir/prd.json"
+    echo '{"description": "integration-feature", "status": "complete"}' > "$feature_dir/prd.json"
     echo "Progress log with important info" > "$feature_dir/progress.txt"
     echo "# Integration Spec" > "$feature_dir/specs/integration.md"
     echo "Custom prompt for integration" > "$feature_dir/prompt.md"
@@ -461,7 +461,7 @@ teardown() {
     [ -d "$archive_dir" ]
 
     # Verify all files copied correctly
-    grep -q '"feature": "integration-feature"' "$archive_dir/prd.json"
+    grep -q '"description": "integration-feature"' "$archive_dir/prd.json"
     grep -q "Progress log with important info" "$archive_dir/progress.txt"
     grep -q "# Integration Spec" "$archive_dir/specs/integration.md"
     grep -q "Custom prompt for integration" "$archive_dir/prompt.md"
@@ -474,7 +474,7 @@ teardown() {
     # Setup feature
     local feature_dir="$RALPH_DIR/cleanup-integration"
     mkdir -p "$feature_dir"
-    echo '{"feature": "cleanup-integration"}' > "$feature_dir/prd.json"
+    echo '{"description": "cleanup-integration"}' > "$feature_dir/prd.json"
     echo "Progress" > "$feature_dir/progress.txt"
 
     # Create archive
@@ -496,7 +496,7 @@ teardown() {
     # Setup feature
     local feature_dir="$RALPH_DIR/multi-archive"
     mkdir -p "$feature_dir"
-    echo '{"feature": "multi-archive"}' > "$feature_dir/prd.json"
+    echo '{"description": "multi-archive"}' > "$feature_dir/prd.json"
     echo "Progress 1" > "$feature_dir/progress.txt"
 
     # Create first archive

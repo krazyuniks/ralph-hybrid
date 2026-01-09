@@ -55,9 +55,6 @@ claude:
 # Git Settings
 #=============================================================================
 git:
-  # Automatically create branch from prd.json branchName
-  auto_create_branch: true
-
   # Branch name prefix (used with auto-generated names)
   branch_prefix: "feature/"
 
