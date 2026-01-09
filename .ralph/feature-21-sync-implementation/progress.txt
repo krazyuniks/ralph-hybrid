@@ -75,3 +75,28 @@ Learnings:
   - All tests pass after cleanup
 Commit: 7d20d5c
 
+---
+Iteration: 5
+Date: 2026-01-10T02:15:00Z
+Story: STORY-004 - Create preflight validation library
+Status: complete
+Files Changed:
+  - lib/preflight.sh (new file - preflight validation library)
+  - tests/unit/test_preflight.bats (new file - 34 unit tests)
+Tests Added:
+  - test_preflight.bats with 34 tests covering:
+    - pf_reset, pf_error, pf_warning, pf_has_errors, pf_has_warnings
+    - pf_check_branch (detached HEAD detection)
+    - pf_check_protected_branch (main/master/develop warnings)
+    - pf_check_feature_folder (folder existence)
+    - pf_check_required_files (spec.md, prd.json, progress.txt)
+    - pf_check_prd_schema (JSON validation, userStories array)
+    - pf_check_spec_structure (required sections)
+    - pf_run_all_checks (full preflight run)
+Learnings:
+  - BATS tests with set -e need || true pattern for functions that return 1
+  - Arrays in bash need explicit declaration: declare -a _PREFLIGHT_ERRORS=()
+  - pf_has_errors/warnings need [[ ${#array[@]} -gt 0 ]] pattern
+  - Clear separation: errors (blocking) vs warnings (informational)
+  - Spec sections checked: Problem Statement, Success Criteria, User Stories, Out of Scope
+
