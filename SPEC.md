@@ -16,15 +16,16 @@
 7. [File Ownership](#file-ownership)
 8. [Preflight Validation](#preflight-validation)
 9. [Planning Workflow](#planning-workflow)
-10. [PRD Format](#prd-format)
-11. [Spec Format](#spec-format)
-12. [Progress Tracking](#progress-tracking)
-13. [Prompt Template](#prompt-template)
-14. [Safety Mechanisms](#safety-mechanisms)
-15. [Monitoring Dashboard](#monitoring-dashboard-tmux)
-16. [Exit Conditions](#exit-conditions)
-17. [Installation](#installation)
-18. [Testing](#testing)
+10. [Amendment System](#amendment-system)
+11. [PRD Format](#prd-format)
+12. [Spec Format](#spec-format)
+13. [Progress Tracking](#progress-tracking)
+14. [Prompt Template](#prompt-template)
+15. [Safety Mechanisms](#safety-mechanisms)
+16. [Monitoring Dashboard](#monitoring-dashboard-tmux)
+17. [Exit Conditions](#exit-conditions)
+18. [Installation](#installation)
+19. [Testing](#testing)
 
 ---
 
@@ -44,6 +45,10 @@
 | F8 | Support per-iteration timeout |
 | F9 | Archive completed features with timestamp |
 | F10 | Isolate features in separate folders |
+| F11 | Support mid-implementation amendments (ADD/CORRECT/REMOVE) |
+| F12 | Preserve completed work when adding amendments |
+| F13 | Track amendment history with sequential IDs (AMD-NNN) |
+| F14 | Warn before resetting completed stories during correction |
 
 ### Safety Requirements
 
@@ -361,9 +366,9 @@ Clear separation of what writes each file:
 
 | File | Written By | Read By | Purpose |
 |------|------------|---------|---------|
-| `spec.md` | `/ralph-plan` (Claude) | `/ralph-prd`, Claude agent | Source of truth for requirements |
-| `prd.json` | `/ralph-prd` (Claude) | Ralph loop, Claude agent | Machine-readable task state |
-| `progress.txt` | Claude agent (appends) | Claude agent | Iteration history and learnings |
+| `spec.md` | `/ralph-plan`, `/ralph-amend` (Claude) | `/ralph-prd`, Claude agent | Source of truth for requirements |
+| `prd.json` | `/ralph-prd`, `/ralph-amend` (Claude) | Ralph loop, Claude agent | Machine-readable task state |
+| `progress.txt` | Claude agent (appends), `/ralph-amend` | Claude agent | Iteration history, learnings, amendments |
 | `status.json` | Ralph loop (bash) | Monitor script | Real-time loop status |
 | `logs/iteration-N.log` | Ralph loop (bash) | Monitor script, debugging | Raw Claude output per iteration |
 
@@ -372,16 +377,18 @@ Clear separation of what writes each file:
 ```
 spec.md (human-readable requirements)
     ↓
-    /ralph-prd generates
+    /ralph-prd generates (or /ralph-amend updates)
     ↓
 prd.json (machine-readable, derived)
     ↓
     Claude updates passes field
     ↓
-progress.txt (append-only history)
+progress.txt (append-only history + amendment log)
 ```
 
-**Important:** `spec.md` is the source of truth. If requirements change, edit `spec.md` and regenerate `prd.json` with `/ralph-prd`.
+**Important:** `spec.md` is the source of truth. For requirement changes:
+- **During planning:** Edit `spec.md` and regenerate with `/ralph-prd`
+- **During implementation:** Use `/ralph-amend` to safely modify requirements
 
 ---
 
@@ -643,8 +650,311 @@ After `/ralph-plan` completes:
 # Follow interactive prompts...
 
 # After planning completes:
-ralph run -f user-authentication
+ralph run
 ```
+
+---
+
+## Amendment System
+
+Plans evolve during implementation. Edge cases emerge. Stakeholders clarify requirements. The amendment system handles scope changes without losing progress.
+
+### Philosophy
+
+> **"No plan survives first contact with implementation."**
+
+Traditional workflows force a choice between:
+- Manual prd.json edits (risky, loses context)
+- Starting over (loses progress)
+- Hoping the AI remembers verbal changes (it won't)
+
+Ralph Hybrid treats scope changes as **expected, not exceptional**.
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/ralph-amend add <description>` | Add new requirement discovered during implementation |
+| `/ralph-amend correct <story-id> <description>` | Fix or clarify existing story |
+| `/ralph-amend remove <story-id> <reason>` | Descope story (archived, not deleted) |
+| `/ralph-amend status` | View amendment history and current state |
+
+### Amendment Modes
+
+#### ADD Mode
+
+Adds new requirements discovered during implementation.
+
+**Workflow:**
+```
+1. VALIDATE   - Confirm feature folder exists
+2. CLARIFY    - Mini-planning session (2-3 questions max)
+3. DEFINE     - Create acceptance criteria
+4. SIZE       - Check if story needs splitting
+5. INTEGRATE  - Update spec.md and prd.json
+6. LOG        - Record amendment in progress.txt
+7. CONFIRM    - Show summary
+```
+
+**Key behaviors:**
+- Asks focused clarifying questions (max 3)
+- Generates proper acceptance criteria
+- Assigns priority (usually after existing stories)
+- Preserves all existing `passes: true` stories
+
+#### CORRECT Mode
+
+Fixes or clarifies existing story requirements.
+
+**Workflow:**
+```
+1. VALIDATE   - Confirm story exists
+2. SHOW       - Display current definition
+3. IDENTIFY   - What needs to change?
+4. WARN       - If passes: true, warn about reset
+5. UPDATE     - Modify spec.md and prd.json
+6. LOG        - Record correction in progress.txt
+7. CONFIRM    - Show diff and summary
+```
+
+**Key behaviors:**
+- Shows current story before changes
+- Warns if correcting completed (`passes: true`) story
+- Resets `passes` to `false` if story was complete (requires re-verification)
+- Logs before/after for audit trail
+
+#### REMOVE Mode
+
+Descopes a story (moves elsewhere, no longer needed, etc.).
+
+**Workflow:**
+```
+1. VALIDATE   - Confirm story exists
+2. SHOW       - Display story and status
+3. CONFIRM    - Require reason for removal
+4. ARCHIVE    - Move to Descoped section (never deleted)
+5. UPDATE     - Remove from active prd.json stories
+6. LOG        - Record removal in progress.txt
+7. CONFIRM    - Show summary
+```
+
+**Key behaviors:**
+- Stories are **never deleted** - moved to "Descoped Stories" section
+- Requires explicit reason
+- Warns about dependencies (if other stories depend on this one)
+- Full audit trail preserved
+
+### Amendment ID Format
+
+```
+AMD-001  # First amendment
+AMD-002  # Second amendment
+AMD-NNN  # Sequential within feature
+```
+
+**Rules:**
+- Unique per feature (not global)
+- Never reused (even if amendment is reverted)
+- Referenced in spec.md, prd.json, and progress.txt
+
+### File Updates
+
+Each amendment updates three files consistently:
+
+#### spec.md Updates
+
+Amendments are recorded in a dedicated section:
+
+```markdown
+---
+
+## Amendments
+
+### AMD-001: CSV Export (2026-01-09T14:32:00Z)
+
+**Type:** ADD
+**Reason:** User needs data export for external reporting
+**Added by:** /ralph-amend
+
+#### STORY-004: Export data as CSV
+
+**As a** user
+**I want to** export my data as CSV
+**So that** I can analyze it in spreadsheets
+
+**Acceptance Criteria:**
+- [ ] Export button visible on data list view
+- [ ] Clicking export downloads CSV file
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Priority:** 2
+
+---
+
+### AMD-002: STORY-003 Correction (2026-01-09T15:10:00Z)
+
+**Type:** CORRECT
+**Target:** STORY-003 - Validate user input
+**Reason:** Email validation was underspecified
+
+**Changes:**
+| Field | Before | After |
+|-------|--------|-------|
+| Acceptance Criteria #1 | Email field is required | Email validated against RFC 5322 |
+
+**Status Impact:** passes reset to false
+
+---
+
+## Descoped Stories
+
+### STORY-005: Advanced filtering (Removed AMD-003)
+
+**Removed:** 2026-01-09T16:00:00Z
+**Reason:** Moved to separate issue #47 for Phase 2
+**Status at removal:** passes: false
+
+**Original Definition:**
+[full story preserved here]
+```
+
+#### prd.json Updates
+
+Stories include amendment metadata:
+
+```json
+{
+  "id": "STORY-004",
+  "title": "Export data as CSV",
+  "description": "As a user I want to export my data as CSV...",
+  "acceptanceCriteria": ["..."],
+  "priority": 2,
+  "passes": false,
+  "notes": "",
+  "amendment": {
+    "id": "AMD-001",
+    "type": "add",
+    "timestamp": "2026-01-09T14:32:00Z",
+    "reason": "User needs data export for external reporting"
+  }
+}
+```
+
+For corrections:
+
+```json
+{
+  "amendment": {
+    "id": "AMD-002",
+    "type": "correct",
+    "timestamp": "2026-01-09T15:10:00Z",
+    "reason": "Email validation was underspecified",
+    "changes": {
+      "acceptanceCriteria": {
+        "before": ["Email field is required"],
+        "after": ["Email validated against RFC 5322"]
+      },
+      "passesReset": true
+    }
+  }
+}
+```
+
+#### progress.txt Updates
+
+Amendments are logged with full context:
+
+```
+---
+## Amendment AMD-001: 2026-01-09T14:32:00Z
+
+Type: ADD
+Command: /ralph-amend add "Users need CSV export for reporting"
+
+Added Stories:
+  - STORY-004: Export data as CSV (priority: 2)
+
+Reason: User needs data export for external reporting
+
+Files Updated:
+  - spec.md: Added Amendments section
+  - prd.json: Added STORY-004
+
+Context: Discovered during STORY-002 implementation that users
+need to export filtered results for monthly reporting.
+
+---
+```
+
+### Edge Cases
+
+#### Adding to Completed Feature
+
+```
+/ralph-amend add "One more thing..."
+
+⚠️  All stories currently pass. Adding new story will:
+  - Mark feature incomplete
+  - Require additional Ralph runs
+
+Proceed? (y/N)
+```
+
+#### Correcting a Blocking Story
+
+```
+/ralph-amend correct STORY-001 "Change API contract"
+
+⚠️  STORY-001 is a dependency for:
+  - STORY-002 (passes: true)
+  - STORY-003 (passes: false)
+
+Correcting may invalidate dependent stories.
+Reset all dependent stories? (y/N/select)
+```
+
+#### Removing a Story with Dependents
+
+```
+/ralph-amend remove STORY-002 "Not needed"
+
+⚠️  STORY-002 blocks:
+  - STORY-003 (passes: false)
+  - STORY-004 (passes: false)
+
+Options:
+  A) Remove STORY-002, keep dependent stories
+  B) Remove STORY-002 and all dependent stories
+  C) Cancel
+
+Choice:
+```
+
+### Integration with Ralph Loop
+
+The prompt template acknowledges amendments:
+
+```markdown
+## Amendment Awareness
+
+When you see stories with `amendment` field in prd.json:
+- These were added/modified after initial planning
+- Check progress.txt for context on why
+- Amendments marked with AMD-XXX in spec.md have full details
+
+Amendments are normal. Plans evolve. Implement them like any other story.
+```
+
+### Preflight Validation
+
+The sync check (see [Preflight Validation](#preflight-validation)) validates amendments:
+
+| Check | Severity | Description |
+|-------|----------|-------------|
+| Amendment IDs unique | ERROR | No duplicate AMD-NNN within feature |
+| Amendment referenced | WARN | Stories with `amendment` field should have matching AMD in spec.md |
+| Descoped stories archived | ERROR | Removed stories must be in Descoped section |
 
 ---
 
@@ -688,6 +998,14 @@ The prd.json file is a **derived artifact** generated from spec.md by `/ralph-pr
 | `userStories[].priority` | number | Yes | 1 = highest |
 | `userStories[].passes` | boolean | Yes | Completion status (updated by Claude) |
 | `userStories[].notes` | string | No | Agent notes, blockers |
+| `userStories[].amendment` | object | No | Amendment metadata (if added/modified via /ralph-amend) |
+| `userStories[].amendment.id` | string | Yes* | Amendment ID (e.g., AMD-001) |
+| `userStories[].amendment.type` | string | Yes* | "add", "correct", or "remove" |
+| `userStories[].amendment.timestamp` | ISO-8601 | Yes* | When amendment was made |
+| `userStories[].amendment.reason` | string | Yes* | Why the amendment was made |
+| `userStories[].amendment.changes` | object | No | For corrections: before/after values |
+
+*Required if `amendment` object is present
 
 ---
 
@@ -734,6 +1052,33 @@ created: {ISO-8601}
 
 ## Open Questions
 - {Unresolved decisions}
+
+---
+
+## Amendments
+<!-- Added by /ralph-amend - DO NOT manually edit this section -->
+
+### AMD-001: {Title} ({ISO-8601})
+
+**Type:** ADD | CORRECT | REMOVE
+**Reason:** {Why the amendment was made}
+**Added by:** /ralph-amend
+
+{Story definition for ADD, change table for CORRECT}
+
+---
+
+## Descoped Stories
+<!-- Stories removed via /ralph-amend remove - preserved for audit trail -->
+
+### {STORY-ID}: {Title} (Removed {AMD-ID})
+
+**Removed:** {ISO-8601}
+**Reason:** {Why removed}
+**Status at removal:** passes: true|false
+
+**Original Definition:**
+{Full story preserved here}
 ```
 
 ### Frontmatter Fields
@@ -786,14 +1131,50 @@ Learnings:
 Commit: <hash>
 ```
 
+### Amendment Log Format
+
+Amendments are logged in progress.txt with a distinct format:
+
+```
+---
+## Amendment AMD-001: <ISO-8601>
+
+Type: ADD | CORRECT | REMOVE
+Command: /ralph-amend <mode> "<description>"
+
+Added Stories:           # For ADD
+  - <ID>: <Title> (priority: N)
+
+Corrected Story:         # For CORRECT
+  - <ID>: <Title>
+  - Changes: <summary>
+  - Status Reset: yes|no
+
+Removed Story:           # For REMOVE
+  - <ID>: <Title>
+  - Previous Status: passes: true|false
+
+Reason: <why the amendment was made>
+
+Files Updated:
+  - spec.md: <what changed>
+  - prd.json: <what changed>
+
+Context: <additional context from the amendment session>
+
+---
+```
+
 ### Purpose
 
 | Use | Description |
 |-----|-------------|
 | Agent continuity | Agent reads to understand prior work |
 | Progress detection | Compare iterations to detect stuck loops |
-| Post-mortem analysis | Review iteration patterns |
+| **Amendment history** | Track scope changes and their rationale |
+| Post-mortem analysis | Review iteration patterns and amendments |
 | Prompt refinement | Identify what causes many iterations |
+| **Learning data** | Amendments show where initial planning fell short |
 
 ---
 
@@ -809,8 +1190,9 @@ You are an autonomous development agent working through a PRD using TDD.
 ## Context Files
 
 - **prd.json**: User stories with `passes: true/false`
-- **progress.txt**: Previous iteration log
+- **progress.txt**: Previous iteration log (includes amendment history)
 - **specs/**: Detailed requirements
+- **spec.md**: Full specification (includes Amendments section)
 
 ## Workflow
 
@@ -827,12 +1209,26 @@ You are an autonomous development agent working through a PRD using TDD.
    - Append to progress.txt
 6. If ALL stories pass: output `<promise>COMPLETE</promise>`
 
+## Amendment Awareness
+
+Stories may have an `amendment` field in prd.json. This means they were added
+or modified after initial planning via `/ralph-amend`.
+
+When you see amended stories:
+- Check progress.txt for "## Amendment AMD-XXX" entries explaining why
+- Check spec.md "## Amendments" section for full context
+- Implement them like any other story - amendments are normal
+
+**Amendments are expected.** Plans evolve during implementation. Treat amended
+stories with the same rigor as original stories.
+
 ## Rules
 
 - ONE story per iteration
 - Tests first
 - Never commit broken code
 - Document learnings in progress.txt
+- Treat amended stories the same as original stories
 ```
 
 ---
@@ -1046,6 +1442,20 @@ tests/
 | Archive | Creates timestamped directory |
 | Archive | Copies all feature files |
 | CLI | Parses all arguments correctly |
+| **Amendment** | ADD mode creates new story |
+| **Amendment** | ADD mode preserves existing passes:true stories |
+| **Amendment** | ADD mode generates sequential AMD-NNN IDs |
+| **Amendment** | CORRECT mode updates story |
+| **Amendment** | CORRECT mode warns on passes:true story |
+| **Amendment** | CORRECT mode resets passes to false |
+| **Amendment** | REMOVE mode archives to Descoped section |
+| **Amendment** | REMOVE mode never deletes story |
+| **Amendment** | STATUS mode shows amendment history |
+| **Amendment** | Updates spec.md Amendments section |
+| **Amendment** | Updates prd.json with amendment metadata |
+| **Amendment** | Logs to progress.txt |
+| **Preflight** | Validates amendment ID uniqueness |
+| **Preflight** | Validates descoped stories are archived |
 
 ### Running Tests
 
