@@ -311,15 +311,3 @@ ralph status
 ## License
 
 MIT
-
----
-
-## Acknowledgments
-
-This implementation builds on the foundational work of:
-
-- **Geoffrey Huntley** - Creator of the Ralph Wiggum technique
-- **Ryan Carson** (snarktank/ralph) - prd.json pattern, progress.txt, archiving
-- **Frank Bria** (ralph-claude-code) - Safety features, circuit breaker, rate limiting
-- **Matt Pocock** - Comprehensive practitioner guidance
-- **The Claude Code team** - For the AI coding CLI that makes this possible
