@@ -1,0 +1,24 @@
+# Progress Log
+# Branch: feature/21-sync-implementation
+# Started: 2026-01-09T21:30:00+10:00
+# Spec: spec.md
+# Source: GitHub Issue #21
+
+---
+Iteration: 1
+Date: 2026-01-09T23:09:00Z
+Story: STORY-001 - Remove branch.sh and init command
+Status: complete
+Files Changed:
+  - ralph (removed init command case, removed -f flag handling in status/archive)
+  - tests/unit/test_story001_removal.bats (fixed shellcheck skip logic)
+Tests Added:
+  - (tests already existed in test_story001_removal.bats)
+Learnings:
+  - lib/branch.sh was already deleted
+  - Source statement for branch.sh was already removed
+  - Main changes were removing init command case and -f flag handling in status/archive
+  - Added argument validation to cmd_status() and cmd_archive() to reject unknown options
+  - Fixed shellcheck test to properly skip when shellcheck is a non-working shim
+Commit: (pending)
+
