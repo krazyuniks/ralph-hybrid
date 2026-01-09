@@ -98,7 +98,7 @@ The hypothesis: by clearly separating the **inner loop** (iterative feature impl
 - Swap implementations as the ecosystem matures
 - Integrate with any outer-loop workflow (BMAD, GitHub Issues, Linear, [Beads](https://github.com/beads-project/beads-cli), etc.)
 
-This is an experiment, not a replacement for comprehensive solutions like BMAD.
+This is an experiment, not a replacement for comprehensive solutions like [BMAD](https://github.com/bmadcode/BMAD-METHOD).
 
 ### The Problem
 
