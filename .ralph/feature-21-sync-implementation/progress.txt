@@ -57,5 +57,21 @@ Learnings:
   - Template prd.json.example was already correctly minimal
   - jq handles missing fields gracefully with // operator
   - Tests need to be updated when functions are removed
-Commit: (pending)
+Commit: 9ec9a03
+
+---
+Iteration: 4
+Date: 2026-01-10T00:45:00Z
+Story: STORY-003 - Simplify prd.json schema handling (cleanup)
+Status: complete
+Files Changed:
+  - tests/unit/test_archive.bats (removed remaining "feature" fields from integration tests)
+  - templates/config.yaml.example (removed auto_create_branch and branchName reference)
+Tests Added:
+  - None (existing tests verified passing)
+Learnings:
+  - Some feature/branchName references were in test mock data at end of file
+  - Config template had auto_create_branch option that referenced branchName
+  - All tests pass after cleanup
+Commit: 7d20d5c
 
