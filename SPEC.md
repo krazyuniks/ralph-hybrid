@@ -113,51 +113,44 @@
 
 ## File Structure
 
-### Tool Installation (Global)
+### Tool Repository
 
 ```
-~/.ralph/
-├── ralph.sh                    # Main entry point (symlinked to PATH)
+ralph-hybrid/
+├── ralph                       # Main script (no extension)
 ├── lib/
-│   ├── circuit_breaker.sh      # Stuck loop detection
-│   ├── rate_limiter.sh         # API call throttling
-│   ├── exit_detection.sh       # Completion signal detection
-│   ├── archive.sh              # Previous run archiving
-│   ├── branch.sh               # Git branch management
-│   └── utils.sh                # Shared utilities
+│   ├── circuit_breaker.sh
+│   ├── rate_limiter.sh
+│   ├── exit_detection.sh
+│   ├── archive.sh
+│   ├── branch.sh
+│   └── utils.sh
 ├── templates/
-│   ├── prompt.md               # Default prompt template
-│   ├── prompt-tdd.md           # TDD-focused prompt template
-│   └── prd.json.example        # Example PRD structure
-└── config.yaml                 # Global defaults
-
+│   ├── prompt.md
+│   ├── prompt-tdd.md
+│   └── prd.json.example
+├── install.sh
+├── uninstall.sh
+└── config.yaml.example
 ```
 
-### Per-Project Usage
+### Per-Project Structure
 
 ```
 <project>/
-├── .ralph/
-│   ├── config.yaml             # Project-specific settings (optional)
-│   └── <feature-name>/         # Feature folder
-│       ├── prd.json            # User stories with passes field
-│       ├── progress.txt        # Append-only iteration log
-│       ├── prompt.md           # Custom prompt (optional)
-│       └── specs/              # Detailed requirements
-│           └── *.md
-└── [project files]
-```
-
-### Archive Structure
-
-```
-.ralph/
-├── archive/
-│   └── <timestamp>-<feature-name>/
-│       ├── prd.json
-│       ├── progress.txt
-│       └── specs/
-└── <active-feature>/
+└── .ralph/
+    ├── config.yaml                         # Project settings (optional)
+    ├── <feature-name>/                     # Active feature folder
+    │   ├── prd.json                        # User stories with passes field
+    │   ├── progress.txt                    # Append-only iteration log
+    │   ├── prompt.md                       # Custom prompt (optional)
+    │   └── specs/                          # Detailed requirements
+    │       └── *.md
+    └── archive/                            # Completed features
+        └── <timestamp>-<feature-name>/
+            ├── prd.json
+            ├── progress.txt
+            └── specs/
 ```
 
 ---
@@ -490,35 +483,33 @@ You are an autonomous development agent working through a PRD using TDD.
 - Git
 - timeout (coreutils)
 
-### Install Script
+### Install
 
 ```bash
-#!/bin/bash
-# install.sh
-
-INSTALL_DIR="$HOME/.ralph"
-
-mkdir -p "$INSTALL_DIR"/{lib,templates}
-cp ralph.sh "$INSTALL_DIR/"
-cp lib/*.sh "$INSTALL_DIR/lib/"
-cp templates/* "$INSTALL_DIR/templates/"
-cp config.yaml.example "$INSTALL_DIR/config.yaml"
-
-chmod +x "$INSTALL_DIR/ralph.sh"
-
-# Add to PATH
-SHELL_RC="$HOME/.$(basename $SHELL)rc"
-echo 'export PATH="$HOME/.ralph:$PATH"' >> "$SHELL_RC"
-
-echo "Installed to $INSTALL_DIR"
-echo "Run 'source $SHELL_RC' or restart shell"
+git clone https://github.com/krazyuniks/ralph-hybrid.git
+cd ralph-hybrid
+./install.sh
 ```
+
+The install script:
+1. Copies files to `~/.ralph/`
+2. Adds `ralph` command to PATH
+3. Creates default config
+
+After installation, the cloned repo can be deleted.
 
 ### Uninstall
 
 ```bash
-rm -rf ~/.ralph
-# Remove PATH entry from shell rc
+./uninstall.sh
+# Or manually: rm -rf ~/.ralph and remove PATH entry
+```
+
+### Verify Installation
+
+```bash
+ralph --version
+ralph help
 ```
 
 ---
