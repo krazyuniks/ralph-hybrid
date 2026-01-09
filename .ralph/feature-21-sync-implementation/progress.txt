@@ -38,5 +38,24 @@ Learnings:
   - log_warn outputs to stderr, which gets mixed with stdout in BATS tests
   - Tests need to check for patterns rather than exact matches when warnings are involved
   - Added is_protected_branch() to allow custom protected branch lists via RALPH_PROTECTED_BRANCHES env var
+Commit: a9e6589
+
+---
+Iteration: 3
+Date: 2026-01-09T23:19:11Z
+Story: STORY-003 - Simplify prd.json schema handling
+Status: complete
+Files Changed:
+  - lib/prd.sh (removed get_feature_name() function)
+  - ralph (removed branchName reference from cmd_status())
+  - tests/unit/test_prd.bats (removed get_feature_name tests)
+  - tests/unit/test_utils.bats (removed get_feature_name tests)
+  - tests/unit/test_story003_schema.bats (added tests for schema simplification)
+Tests Added:
+  - test_story003_schema.bats with 9 tests
+Learnings:
+  - Template prd.json.example was already correctly minimal
+  - jq handles missing fields gracefully with // operator
+  - Tests need to be updated when functions are removed
 Commit: (pending)
 

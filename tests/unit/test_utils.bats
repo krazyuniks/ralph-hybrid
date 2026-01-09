@@ -263,17 +263,7 @@ EOF
     [ "$output" = "true,false,true" ]
 }
 
-@test "get_feature_name extracts feature from prd.json" {
-    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
-{
-  "feature": "my-awesome-feature",
-  "userStories": []
-}
-EOF
-    run get_feature_name "$TEST_TEMP_DIR/prd.json"
-    [ "$status" -eq 0 ]
-    [ "$output" = "my-awesome-feature" ]
-}
+# Note: get_feature_name test removed - feature identity now comes from folder path (STORY-003)
 
 @test "all_stories_complete returns 0 when all passes=true" {
     cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
@@ -421,7 +411,7 @@ EOF
     declare -f get_prd_passes_count >/dev/null
     declare -f get_prd_total_stories >/dev/null
     declare -f get_passes_state >/dev/null
-    declare -f get_feature_name >/dev/null
+    # Note: get_feature_name removed - use get_feature_dir instead (STORY-003)
     declare -f all_stories_complete >/dev/null
 }
 

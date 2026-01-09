@@ -36,12 +36,8 @@ get_passes_state() {
     jq -r '[.userStories[].passes] | map(tostring) | join(",")' "$file"
 }
 
-# Extract feature name from prd.json
-# Usage: get_feature_name "prd.json"
-get_feature_name() {
-    local file="$1"
-    jq -r '.feature' "$file"
-}
+# Note: get_feature_name() removed - feature identity comes from folder path (STORY-003)
+# Use get_feature_dir() from utils.sh instead
 
 # Check if all stories have passes=true
 # Returns 0 if all complete, 1 otherwise

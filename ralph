@@ -163,22 +163,15 @@ cmd_status() {
     total=$(get_prd_total_stories "$prd_file")
     passed=$(get_prd_passes_count "$prd_file")
 
-    # Get current branch
+    # Get current branch (for display only - feature is derived from folder)
     local current_branch
     current_branch=$(git branch --show-current 2>/dev/null || echo "unknown")
-
-    # Get expected branch from prd
-    local expected_branch
-    expected_branch=$(jq -r '.branchName // empty' "$prd_file" 2>/dev/null || echo "")
 
     echo "=========================================="
     echo "Feature: ${feature_name}"
     echo "=========================================="
     echo "Stories: ${passed}/${total} complete"
     echo "Current branch: ${current_branch}"
-    if [[ -n "$expected_branch" ]]; then
-        echo "Expected branch: ${expected_branch}"
-    fi
     echo ""
 
     # Show circuit breaker state if it exists
@@ -498,25 +491,87 @@ run_single_iteration() {
     mkdir -p "${feature_dir}/logs"
     local log_file="${feature_dir}/logs/iteration-${iteration}.log"
 
-    # Run Claude with timeout
+    # Run Claude with timeout and real-time output
     log_info "Running Claude Code..."
-    local output=""
     local exit_code=0
 
-    set +e
-    # Note: claude -p requires stdin input, not positional args
-    output=$(echo "$prompt_content" | $timeout_cmd "${RALPH_TIMEOUT_MINUTES}m" claude -p $claude_args 2>&1)
-    exit_code=$?
-    set -e
-
-    # Save output to log file
+    # Initialize log file
     echo "=== Iteration ${iteration} ===" > "$log_file"
     echo "Timestamp: $(get_timestamp)" >> "$log_file"
-    echo "Exit code: ${exit_code}" >> "$log_file"
     echo "" >> "$log_file"
-    echo "=== Output ===" >> "$log_file"
-    echo "$output" >> "$log_file"
+
+    set +e
+    # Use stream-json for real-time visibility, tee to log file
+    # Parse JSON stream to show activity while also saving raw output
+    echo "$prompt_content" | $timeout_cmd "${RALPH_TIMEOUT_MINUTES}m" \
+        claude -p $claude_args --output-format stream-json --verbose 2>&1 | \
+        tee -a "$log_file" | \
+        {
+            # Scrolling window - keep last 8 lines visible
+            declare -a buffer=()
+            local window_size=8
+            local line_count=0
+
+            # Hide cursor during updates
+            printf '\e[?25l'
+
+            # Print empty lines to create window space
+            for ((i=0; i<window_size; i++)); do echo ""; done
+
+            while IFS= read -r line; do
+                # Parse JSON and extract display text
+                local display=""
+                if echo "$line" | jq -e '.message.content' &>/dev/null; then
+                    display=$(echo "$line" | jq -r '
+                        .message.content[]? |
+                        if .type == "text" then
+                            "  💬 " + (.text | split("\n")[0] | .[0:90])
+                        elif .type == "tool_use" then
+                            "  🔧 " + .name + ": " + (.input | tostring | .[0:50])
+                        else empty end
+                    ' 2>/dev/null)
+                elif echo "$line" | jq -e '.type == "result"' &>/dev/null; then
+                    display=$(echo "$line" | jq -r '"  ✅ Done: " + (.result | .[0:70])' 2>/dev/null)
+                fi
+
+                # Add to buffer if we have display text
+                if [[ -n "$display" ]]; then
+                    while IFS= read -r dline; do
+                        [[ -n "$dline" ]] && buffer+=("$dline")
+                    done <<< "$display"
+
+                    # Keep only last window_size lines
+                    while [[ ${#buffer[@]} -gt $window_size ]]; do
+                        buffer=("${buffer[@]:1}")
+                    done
+
+                    # Move cursor up and redraw window
+                    printf '\e[%dA' "$window_size"  # Move up
+                    printf '\e[J'                    # Clear to end of screen
+
+                    # Print buffer with padding
+                    for ((i=0; i<window_size; i++)); do
+                        if [[ $i -lt ${#buffer[@]} ]]; then
+                            printf '%s\n' "${buffer[$i]}"
+                        else
+                            echo ""
+                        fi
+                    done
+                fi
+            done
+
+            # Show cursor again
+            printf '\e[?25h'
+        }
+    exit_code=${PIPESTATUS[1]}
+    set -e
+
+    echo "Exit code: ${exit_code}" >> "$log_file"
     log_info "Output saved to: ${log_file}"
+
+    # Read output from log for completion detection
+    local output
+    output=$(cat "$log_file")
 
     # Record API call
     rl_record_call
@@ -705,8 +760,21 @@ main() {
     esac
 }
 
+# Cleanup function to kill child processes
+cleanup() {
+    # Show cursor again (in case we were in scrolling window)
+    printf '\e[?25h'
+    echo ""
+    log_warn "Interrupted by user"
+    # Kill all child processes in our process group
+    pkill -P $$ 2>/dev/null
+    # Also kill any claude processes we spawned
+    pkill -f "claude -p --permission-mode" 2>/dev/null
+    exit 130
+}
+
 # Handle Ctrl+C gracefully
-trap 'echo ""; log_warn "Interrupted by user"; exit 130' INT
+trap cleanup INT TERM
 
 # Run main
 main "$@"

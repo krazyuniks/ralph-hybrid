@@ -126,8 +126,6 @@ create_test_feature() {
 
     cat > "${TEST_TEMP_DIR}/project/.ralph/${feature_name}/prd.json" << EOF
 {
-  "feature": "${feature_name}",
-  "branchName": "feature/${feature_name}",
   "description": "Test feature for integration tests",
   "createdAt": "2026-01-09T12:00:00Z",
   "userStories": [
