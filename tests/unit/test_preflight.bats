@@ -531,6 +531,75 @@ EOF
     [ "$status" -eq 1 ]
 }
 
+@test "pf_run_all_checks includes sync check" {
+    pf_reset
+    cd "$TEST_TEMP_DIR"
+    git checkout -b feature/sync-test 2>/dev/null
+
+    mkdir -p "$TEST_TEMP_DIR/.ralph/feature-sync-test"
+
+    # Create prd.json with STORY-001 and STORY-002
+    cat > "$TEST_TEMP_DIR/.ralph/feature-sync-test/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
+    {"id": "STORY-002", "title": "Second", "acceptanceCriteria": ["T"], "priority": 2, "passes": false, "notes": ""}
+  ]
+}
+EOF
+
+    # Create spec.md with only STORY-001 (STORY-002 is orphan)
+    cat > "$TEST_TEMP_DIR/.ralph/feature-sync-test/spec.md" <<'EOF'
+## Problem Statement
+Test
+## Success Criteria
+- [ ] Test
+## User Stories
+### STORY-001: First
+## Out of Scope
+None
+EOF
+
+    touch "$TEST_TEMP_DIR/.ralph/feature-sync-test/progress.txt"
+
+    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-sync-test"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Sync check failed"* ]]
+}
+
+@test "pf_run_all_checks shows sync check passed when in sync" {
+    pf_reset
+    cd "$TEST_TEMP_DIR"
+    git checkout -b feature/sync-ok 2>/dev/null
+
+    mkdir -p "$TEST_TEMP_DIR/.ralph/feature-sync-ok"
+
+    cat > "$TEST_TEMP_DIR/.ralph/feature-sync-ok/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""}
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/feature-sync-ok/spec.md" <<'EOF'
+## Problem Statement
+Test
+## Success Criteria
+- [ ] Test
+## User Stories
+### STORY-001: First
+## Out of Scope
+None
+EOF
+
+    touch "$TEST_TEMP_DIR/.ralph/feature-sync-ok/progress.txt"
+
+    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-sync-ok"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Sync check passed"* ]]
+}
+
 #=============================================================================
 # Source Guard Tests
 #=============================================================================
@@ -541,4 +610,373 @@ EOF
 
     pf_reset
     ! pf_has_errors
+}
+
+#=============================================================================
+# Sync Check Tests (STORY-005)
+#=============================================================================
+
+@test "pf_check_sync succeeds when spec.md and prd.json are in sync" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Create prd.json with two stories
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "description": "Test feature",
+  "createdAt": "2026-01-09T00:00:00Z",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "First story",
+      "acceptanceCriteria": ["Test criterion"],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-002",
+      "title": "Second story",
+      "acceptanceCriteria": ["Test criterion"],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}
+EOF
+
+    # Create matching spec.md with same stories
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+# Test Feature
+
+## Problem Statement
+
+This is a test problem.
+
+## Success Criteria
+
+- [ ] Test criterion
+
+## User Stories
+
+### STORY-001: First story
+
+**As a** user
+**I want to** test
+**So that** I can test
+
+### STORY-002: Second story
+
+**As a** user
+**I want to** test more
+**So that** I can test more
+
+## Out of Scope
+
+- Nothing
+EOF
+
+    run pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature"
+    [ "$status" -eq 0 ]
+    ! pf_has_errors
+}
+
+@test "pf_check_sync fails when prd.json has orphan story (not in spec.md)" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Create prd.json with story that doesn't exist in spec.md
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "description": "Test feature",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "First story",
+      "acceptanceCriteria": ["Test"],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-002",
+      "title": "Orphan story",
+      "acceptanceCriteria": ["Test"],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
+EOF
+
+    # Create spec.md with only STORY-001
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+# Test Feature
+
+## User Stories
+
+### STORY-001: First story
+
+**As a** user
+**I want to** test
+EOF
+
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_has_errors
+}
+
+@test "pf_check_sync shows orphan story ID in error message" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Create prd.json with orphan story
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "First",
+      "acceptanceCriteria": ["Test"],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-ORPHAN",
+      "title": "Orphan",
+      "acceptanceCriteria": ["Test"],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: First
+EOF
+
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+
+    # Check that error message contains the orphan story ID
+    local found_orphan=false
+    for error in "${_PREFLIGHT_ERRORS[@]}"; do
+        if [[ "$error" == *"STORY-ORPHAN"* ]]; then
+            found_orphan=true
+            break
+        fi
+    done
+    [ "$found_orphan" = true ]
+}
+
+@test "pf_check_sync fails when spec.md has story not in prd.json (missing)" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Create prd.json with only one story
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "First story",
+      "acceptanceCriteria": ["Test"],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
+EOF
+
+    # Create spec.md with two stories (STORY-002 is missing from prd.json)
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: First story
+
+**As a** user
+
+### STORY-002: Missing from prd
+
+**As a** user
+EOF
+
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_has_errors
+}
+
+@test "pf_check_sync shows missing story ID in error message" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "First",
+      "acceptanceCriteria": ["Test"],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: First
+
+### STORY-MISSING: Not in prd
+EOF
+
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+
+    # Check that error message contains the missing story ID
+    local found_missing=false
+    for error in "${_PREFLIGHT_ERRORS[@]}"; do
+        if [[ "$error" == *"STORY-MISSING"* ]]; then
+            found_missing=true
+            break
+        fi
+    done
+    [ "$found_missing" = true ]
+}
+
+@test "pf_check_sync detects both orphans and missing stories" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # prd.json has STORY-001 and STORY-ORPHAN
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Common",
+      "acceptanceCriteria": ["Test"],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-ORPHAN",
+      "title": "Only in prd",
+      "acceptanceCriteria": ["Test"],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
+EOF
+
+    # spec.md has STORY-001 and STORY-MISSING
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: Common
+
+### STORY-MISSING: Only in spec
+EOF
+
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+
+    # Should have errors for both orphan and missing
+    local error_count=${#_PREFLIGHT_ERRORS[@]}
+    [ "$error_count" -ge 2 ]
+}
+
+@test "pf_check_sync handles empty prd.json userStories" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": []
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: A story
+EOF
+
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_has_errors  # Should error because spec has story that prd doesn't
+}
+
+@test "pf_check_sync handles spec.md with no stories" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Orphan",
+      "acceptanceCriteria": ["Test"],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+# Feature
+
+## User Stories
+
+No stories defined yet.
+EOF
+
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_has_errors  # Should error because prd has story that spec doesn't
+}
+
+@test "pf_check_sync extracts story IDs from various spec.md formats" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Test different heading formats
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: Standard format
+
+### STORY-002: Another format
+
+#### STORY-003: Different heading level
+
+### STORY-004: With extra spaces
+
+### STORY-005:No space after colon
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "1", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
+    {"id": "STORY-002", "title": "2", "acceptanceCriteria": ["T"], "priority": 2, "passes": false, "notes": ""},
+    {"id": "STORY-003", "title": "3", "acceptanceCriteria": ["T"], "priority": 3, "passes": false, "notes": ""},
+    {"id": "STORY-004", "title": "4", "acceptanceCriteria": ["T"], "priority": 4, "passes": false, "notes": ""},
+    {"id": "STORY-005", "title": "5", "acceptanceCriteria": ["T"], "priority": 5, "passes": false, "notes": ""}
+  ]
+}
+EOF
+
+    run pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature"
+    [ "$status" -eq 0 ]
 }

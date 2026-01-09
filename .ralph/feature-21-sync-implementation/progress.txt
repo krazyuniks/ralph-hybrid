@@ -99,4 +99,33 @@ Learnings:
   - pf_has_errors/warnings need [[ ${#array[@]} -gt 0 ]] pattern
   - Clear separation: errors (blocking) vs warnings (informational)
   - Spec sections checked: Problem Statement, Success Criteria, User Stories, Out of Scope
+Commit: 19f917c
+
+---
+Iteration: 6
+Date: 2026-01-10T09:38:00Z
+Story: STORY-005 - Add sync check to preflight
+Status: complete
+Files Changed:
+  - lib/preflight.sh (added pf_check_sync() function, integrated into pf_run_all_checks())
+  - tests/unit/test_preflight.bats (added 11 sync check tests)
+Tests Added:
+  - test_preflight.bats now has 45 tests (was 34), added:
+    - pf_check_sync succeeds when spec.md and prd.json are in sync
+    - pf_check_sync fails when prd.json has orphan story (not in spec.md)
+    - pf_check_sync shows orphan story ID in error message
+    - pf_check_sync fails when spec.md has story not in prd.json (missing)
+    - pf_check_sync shows missing story ID in error message
+    - pf_check_sync detects both orphans and missing stories
+    - pf_check_sync handles empty prd.json userStories
+    - pf_check_sync handles spec.md with no stories
+    - pf_check_sync extracts story IDs from various spec.md formats
+    - pf_run_all_checks includes sync check
+    - pf_run_all_checks shows sync check passed when in sync
+Learnings:
+  - Story ID extraction from spec.md uses two-step grep: first to find heading lines, then to extract the ID
+  - grep -oE 'STORY-[A-Za-z0-9_-]+' reliably extracts story IDs from markdown headings
+  - Sync check integrates into pf_run_all_checks() after spec.md structure check, before final display
+  - Error messages include specific story IDs for easy debugging
+  - Pre-existing test failures (261, 305) are unrelated to sync check implementation
 

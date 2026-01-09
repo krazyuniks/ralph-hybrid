@@ -167,6 +167,81 @@ pf_check_prd_schema() {
     return 0
 }
 
+# Check: Sync between spec.md and prd.json (story IDs must match)
+# Args: feature_dir
+# Returns: 0 if in sync, 1 if mismatch
+pf_check_sync() {
+    local feature_dir="$1"
+    local spec_file="${feature_dir}/spec.md"
+    local prd_file="${feature_dir}/prd.json"
+
+    # Files must exist (should have been checked earlier)
+    if [[ ! -f "$spec_file" ]] || [[ ! -f "$prd_file" ]]; then
+        return 1
+    fi
+
+    # Extract story IDs from prd.json
+    local prd_ids
+    prd_ids=$(jq -r '.userStories[].id' "$prd_file" 2>/dev/null | sort)
+
+    # Extract story IDs from spec.md (look for ### STORY-XXX: or #### STORY-XXX: patterns)
+    # Handles formats like: ### STORY-001: Title, #### STORY-002:No space, etc.
+    # First grep finds heading lines, second grep extracts just the story ID
+    local spec_ids
+    spec_ids=$(grep -E '^#{2,4}\s*STORY-[A-Za-z0-9_-]+:' "$spec_file" 2>/dev/null | \
+               grep -oE 'STORY-[A-Za-z0-9_-]+' | sort -u)
+
+    # Convert to arrays for comparison
+    local -a prd_array=()
+    local -a spec_array=()
+
+    while IFS= read -r id; do
+        [[ -n "$id" ]] && prd_array+=("$id")
+    done <<< "$prd_ids"
+
+    while IFS= read -r id; do
+        [[ -n "$id" ]] && spec_array+=("$id")
+    done <<< "$spec_ids"
+
+    local has_mismatch=false
+
+    # Check for orphans: stories in prd.json but not in spec.md
+    for prd_id in "${prd_array[@]}"; do
+        local found=false
+        for spec_id in "${spec_array[@]}"; do
+            if [[ "$prd_id" == "$spec_id" ]]; then
+                found=true
+                break
+            fi
+        done
+        if [[ "$found" == "false" ]]; then
+            pf_error "Orphan story in prd.json: ${prd_id} not found in spec.md"
+            has_mismatch=true
+        fi
+    done
+
+    # Check for missing: stories in spec.md but not in prd.json
+    for spec_id in "${spec_array[@]}"; do
+        local found=false
+        for prd_id in "${prd_array[@]}"; do
+            if [[ "$spec_id" == "$prd_id" ]]; then
+                found=true
+                break
+            fi
+        done
+        if [[ "$found" == "false" ]]; then
+            pf_error "Missing story in prd.json: ${spec_id} from spec.md not found in prd.json"
+            has_mismatch=true
+        fi
+    done
+
+    if [[ "$has_mismatch" == "true" ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
 # Check: spec.md structure valid (has required sections)
 # Args: feature_dir
 # Returns: 0 if valid, 1 if invalid (only warnings for missing sections)
@@ -300,6 +375,21 @@ pf_run_all_checks() {
             done
         else
             echo "✓ spec.md structure valid"
+        fi
+    fi
+
+    # Check sync between spec.md and prd.json (only if both files exist and prd.json is valid)
+    if [[ -f "${feature_dir}/spec.md" ]] && [[ -f "${feature_dir}/prd.json" ]]; then
+        # Only run sync check if prd.json was valid (no errors from schema check)
+        local errors_before_sync=${#_PREFLIGHT_ERRORS[@]}
+        if pf_check_sync "$feature_dir"; then
+            echo "✓ Sync check passed"
+        else
+            echo "✗ Sync check failed"
+            # Show sync-related errors
+            for ((i=errors_before_sync; i<${#_PREFLIGHT_ERRORS[@]}; i++)); do
+                echo "    ${_PREFLIGHT_ERRORS[$i]}"
+            done
         fi
     fi
 

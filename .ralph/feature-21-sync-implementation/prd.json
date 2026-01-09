@@ -87,8 +87,8 @@
         "Unit tests pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Added pf_check_sync() function to lib/preflight.sh with 11 unit tests covering orphan/missing story detection and various spec.md formats."
     },
     {
       "id": "STORY-006",
