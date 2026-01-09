@@ -13,13 +13,16 @@
 4. [CLI Interface](#cli-interface)
 5. [Configuration](#configuration)
 6. [Core Loop Logic](#core-loop-logic)
-7. [PRD Format](#prd-format)
-8. [Progress Tracking](#progress-tracking)
-9. [Prompt Template](#prompt-template)
-10. [Safety Mechanisms](#safety-mechanisms)
-11. [Exit Conditions](#exit-conditions)
-12. [Installation](#installation)
-13. [Testing](#testing)
+7. [Planning Workflow](#planning-workflow)
+8. [PRD Format](#prd-format)
+9. [Spec Format](#spec-format)
+10. [Progress Tracking](#progress-tracking)
+11. [Prompt Template](#prompt-template)
+12. [Safety Mechanisms](#safety-mechanisms)
+13. [Monitoring Dashboard](#monitoring-dashboard-tmux)
+14. [Exit Conditions](#exit-conditions)
+15. [Installation](#installation)
+16. [Testing](#testing)
 
 ---
 
@@ -124,6 +127,7 @@ ralph-hybrid/
 │   ├── exit_detection.sh
 │   ├── archive.sh
 │   ├── branch.sh
+│   ├── monitor.sh
 │   └── utils.sh
 ├── templates/
 │   ├── prompt.md
@@ -143,7 +147,10 @@ ralph-hybrid/
     ├── <feature-name>/                     # Active feature folder
     │   ├── prd.json                        # User stories with passes field
     │   ├── progress.txt                    # Append-only iteration log
+    │   ├── status.json                     # Machine-readable status (for monitor)
     │   ├── prompt.md                       # Custom prompt (optional)
+    │   ├── logs/                           # Iteration logs
+    │   │   └── iteration-N.log
     │   └── specs/                          # Detailed requirements
     │       └── *.md
     └── archive/                            # Completed features
@@ -163,6 +170,7 @@ ralph-hybrid/
 ralph init <feature-name>       # Initialize feature folder
 ralph run [options]             # Execute the loop
 ralph status                    # Show current state
+ralph monitor                   # Launch tmux monitoring dashboard
 ralph archive                   # Archive current feature
 ralph help                      # Show help
 ```
@@ -180,6 +188,7 @@ ralph help                      # Show help
 | `--no-archive` | false | Don't archive on completion |
 | `--reset-circuit` | false | Reset circuit breaker state |
 | `--dry-run` | false | Show what would happen |
+| `--monitor` | false | Launch with tmux monitoring dashboard |
 | `--dangerously-skip-permissions` | false | Pass to Claude Code |
 
 ---
@@ -310,6 +319,107 @@ EOF
 
 ---
 
+## Planning Workflow
+
+Ralph Hybrid provides Claude Code commands for guided feature planning. This separates **planning** (done interactively with Claude) from **execution** (done autonomously by Ralph loop).
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/ralph-plan <description>` | Interactive planning workflow |
+| `/ralph-prd` | Generate prd.json from existing spec.md |
+
+### Workflow States
+
+```
+┌─────────────┐
+│  SUMMARIZE  │ ← Understand feature request
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│   CLARIFY   │ ← Ask 3-5 targeted questions
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│    DRAFT    │ ← Generate spec.md
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  DECOMPOSE  │ ← Break into properly-sized stories
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  GENERATE   │ ← Create prd.json + progress.txt
+└─────────────┘
+```
+
+### Clarifying Questions
+
+Focus on critical ambiguities:
+
+1. **Problem Definition**: "What specific problem does this solve?"
+2. **Scope Boundaries**: "What should it NOT do?" (prevents scope creep)
+3. **Success Criteria**: "How do we know it's done?"
+4. **Technical Constraints**: "Any existing patterns to follow?"
+5. **Dependencies**: "What does this depend on?"
+
+### Story Sizing Rule
+
+> Each story must be completable in ONE Ralph iteration (one context window).
+
+**Split indicators:**
+- Description exceeds 2-3 sentences
+- More than 6 acceptance criteria
+- Changes more than 3 files
+
+### Acceptance Criteria Format
+
+**Required for ALL stories:**
+- `Typecheck passes`
+- `Unit tests pass` (or specific test file)
+
+**For UI stories, add:**
+- `Verify in browser` or E2E test reference
+
+**Good criteria are:**
+
+| Trait | Good Example | Bad Example |
+|-------|--------------|-------------|
+| Verifiable | "Email format is validated" | "Works correctly" |
+| Measurable | "Response time < 200ms" | "Is fast" |
+| Specific | "GET /api/users returns 200" | "API works" |
+
+### Output Files
+
+After `/ralph-plan` completes:
+
+```
+.ralph/{feature}/
+├── spec.md           # Full specification (human-readable)
+├── prd.json          # Machine-readable task list
+├── progress.txt      # Empty, ready for iterations
+└── specs/            # Additional detailed specs (optional)
+```
+
+### Usage
+
+```bash
+# In Claude Code session:
+/ralph-plan Add user authentication with JWT
+
+# Follow interactive prompts...
+
+# After planning completes:
+ralph run -f user-authentication
+```
+
+---
+
 ## PRD Format
 
 ### Schema (prd.json)
@@ -350,6 +460,79 @@ EOF
 | `userStories[].priority` | number | Yes | 1 = highest |
 | `userStories[].passes` | boolean | Yes | Completion status |
 | `userStories[].notes` | string | No | Agent notes, blockers |
+
+---
+
+## Spec Format
+
+### Schema (spec.md)
+
+The spec.md file is a human-readable specification generated by `/ralph-plan`. It serves as the source of truth for feature requirements.
+
+### Structure
+
+```markdown
+---
+feature: {feature-name}
+branch: feature/{feature-name}
+created: {ISO-8601}
+---
+
+# {Feature Title}
+
+## Problem Statement
+{Description of the problem being solved}
+
+## Success Criteria
+- [ ] {High-level measurable outcome}
+
+## User Stories
+
+### STORY-001: {Title}
+**As a** {user type}
+**I want to** {goal}
+**So that** {benefit}
+
+**Acceptance Criteria:**
+- [ ] {Specific, testable criterion}
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Technical Notes:**
+- {Implementation hints}
+
+## Out of Scope
+- {Explicitly excluded features}
+
+## Open Questions
+- {Unresolved decisions}
+```
+
+### Frontmatter Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `feature` | string | Yes | Feature identifier (kebab-case) |
+| `branch` | string | Yes | Git branch name |
+| `created` | ISO-8601 | Yes | Creation timestamp |
+
+### Story Format
+
+Each story follows the user story format with structured sections:
+
+| Section | Purpose |
+|---------|---------|
+| **As a / I want / So that** | User perspective and motivation |
+| **Acceptance Criteria** | Testable requirements |
+| **Technical Notes** | Implementation guidance |
+
+### Best Practices
+
+1. **Keep stories small**: One context window per story
+2. **Be specific**: Avoid vague criteria like "works correctly"
+3. **Include tech checks**: Always include typecheck/test criteria
+4. **Document exclusions**: "Out of Scope" prevents scope creep
+5. **Capture decisions**: Document resolved "Open Questions"
 
 ---
 
@@ -457,6 +640,92 @@ You are an autonomous development agent working through a PRD using TDD.
 |-----------|--------|
 | "usage limit" in output | Prompt user: wait or exit |
 | No response in 30s | Auto-exit |
+
+---
+
+## Monitoring Dashboard (tmux)
+
+Ralph Hybrid provides an optional tmux-based monitoring dashboard for real-time visibility into loop execution. This feature is adapted from [frankbria/ralph-claude-code](https://github.com/frankbria/ralph-claude-code).
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `ralph run --monitor` | Start loop with integrated tmux dashboard |
+| `ralph monitor` | Launch standalone dashboard (attach to running loop) |
+
+### Dashboard Display
+
+The live dashboard shows:
+
+| Metric | Description |
+|--------|-------------|
+| Loop count | Current iteration number / max iterations |
+| Status | Running, paused, completed, or failed |
+| API usage | Calls used vs. rate limit (e.g., 45/100) |
+| Rate limit countdown | Time until limit resets |
+| Recent logs | Last N log entries from current iteration |
+| Progress | Stories completed vs. total |
+
+### Layout
+
+```
+┌─────────────────────────────────┬─────────────────────────────────┐
+│                                 │                                 │
+│        RALPH LOOP               │        MONITOR                  │
+│                                 │                                 │
+│  Claude Code output             │  Iteration: 5/20                │
+│  appears here                   │  Status: Running                │
+│                                 │  API: 45/100 (resets in 23m)    │
+│                                 │  Progress: 2/6 stories          │
+│                                 │                                 │
+│                                 │  Recent:                        │
+│                                 │  [12:34] Started STORY-003      │
+│                                 │  [12:35] Running tests...       │
+│                                 │  [12:36] Tests passed           │
+│                                 │                                 │
+└─────────────────────────────────┴─────────────────────────────────┘
+```
+
+### tmux Controls
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+B D` | Detach from session (loop continues in background) |
+| `Ctrl+B ←/→` | Switch between panes |
+| `tmux attach -t ralph` | Reattach to detached session |
+| `tmux list-sessions` | List all active sessions |
+
+### Implementation
+
+| File | Purpose |
+|------|---------|
+| `lib/monitor.sh` | Dashboard rendering and update logic |
+| `logs/` | Directory for iteration logs |
+| `status.json` | Machine-readable status (for programmatic access) |
+
+### Status File Format (status.json)
+
+```json
+{
+  "iteration": 5,
+  "maxIterations": 20,
+  "status": "running",
+  "feature": "user-authentication",
+  "storiesComplete": 2,
+  "storiesTotal": 6,
+  "apiCallsUsed": 45,
+  "apiCallsLimit": 100,
+  "rateLimitResetsAt": "2026-01-09T13:00:00Z",
+  "startedAt": "2026-01-09T12:00:00Z",
+  "lastUpdated": "2026-01-09T12:36:00Z"
+}
+```
+
+### Prerequisites
+
+- tmux must be installed (`brew install tmux` or `apt-get install tmux`)
+- If tmux is not available, `--monitor` flag is ignored with a warning
 
 ---
 

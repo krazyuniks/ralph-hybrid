@@ -1,0 +1,118 @@
+---
+feature: user-authentication
+branch: feature/user-authentication
+created: 2026-01-09T12:00:00Z
+---
+
+# User Authentication
+
+## Problem Statement
+
+Users need secure access to their accounts. Currently there is no authentication system, meaning all data is publicly accessible. This feature adds email/password authentication with JWT tokens, enabling secure user sessions and protecting user data.
+
+## Success Criteria
+
+- [ ] Users can register with email and password
+- [ ] Users can log in and receive a JWT token
+- [ ] Protected routes reject unauthenticated requests
+- [ ] Sessions persist across page refresh (token storage)
+- [ ] Invalid credentials show appropriate error message
+
+## User Stories
+
+### STORY-001: User Registration
+
+**As a** new user
+**I want to** create an account with email and password
+**So that** I can access the application securely
+
+**Acceptance Criteria:**
+- [ ] POST /api/auth/register accepts email and password
+- [ ] Email format is validated
+- [ ] Password requires 8+ characters
+- [ ] Duplicate email returns 409 Conflict
+- [ ] Success returns 201 with user object (no password)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Technical Notes:**
+- Use bcrypt for password hashing (cost factor 12)
+- Store in users table with id, email, password_hash, created_at
+
+---
+
+### STORY-002: User Login
+
+**As a** registered user
+**I want to** log in with my credentials
+**So that** I can access protected resources
+
+**Acceptance Criteria:**
+- [ ] POST /api/auth/login accepts email and password
+- [ ] Valid credentials return JWT token
+- [ ] Invalid credentials return 401 Unauthorized
+- [ ] Token expires after 7 days
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Technical Notes:**
+- JWT payload: { sub: user_id, email, iat, exp }
+- Use HS256 algorithm with secret from env
+
+---
+
+### STORY-003: Auth Middleware
+
+**As a** developer
+**I want to** protect routes with authentication middleware
+**So that** only authenticated users can access sensitive endpoints
+
+**Acceptance Criteria:**
+- [ ] Middleware extracts token from Authorization header
+- [ ] Valid token attaches user to request context
+- [ ] Invalid/expired token returns 401
+- [ ] Missing token returns 401
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Technical Notes:**
+- Header format: `Authorization: Bearer <token>`
+- Attach decoded user to req.user or context
+
+---
+
+### STORY-004: Token Refresh (Optional)
+
+**As a** logged-in user
+**I want to** refresh my token before it expires
+**So that** I don't get logged out unexpectedly
+
+**Acceptance Criteria:**
+- [ ] POST /api/auth/refresh accepts valid (non-expired) token
+- [ ] Returns new token with extended expiration
+- [ ] Expired tokens cannot be refreshed (must re-login)
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Technical Notes:**
+- Only allow refresh within last 24 hours of token life
+- Consider refresh token pattern for production
+
+---
+
+## Out of Scope
+
+- Social login (OAuth/Google/GitHub) - separate feature
+- Password reset / forgot password - separate feature
+- Multi-factor authentication (MFA) - future enhancement
+- Email verification - could add later
+- Rate limiting on auth endpoints - separate security feature
+
+## Open Questions
+
+- Should we implement refresh tokens or just short-lived JWTs?
+  - **Decision:** Start with 7-day JWTs, add refresh tokens if needed
+- Where should tokens be stored client-side?
+  - **Decision:** httpOnly cookie for web, localStorage acceptable for now
+- Should failed login attempts be logged/tracked?
+  - **Decision:** Out of scope for v1, add in security hardening phase

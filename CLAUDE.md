@@ -13,7 +13,15 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 | README.md | Complete - Philosophy, rationale, source material |
 | SPEC.md | Complete - Technical specification |
 | templates/ | Complete - Prompt templates, examples |
+| .claude/commands/ | Complete - `/ralph-plan` and `/ralph-prd` commands |
 | Implementation | Not started |
+
+## Claude Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/ralph-plan <description>` | Interactive planning workflow: SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE |
+| `/ralph-prd [feature]` | Generate/regenerate prd.json from existing spec.md |
 
 ## Next Steps (Implementation Order)
 
@@ -59,7 +67,8 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 |----------|---------|
 | [README.md](README.md) | Philosophy, source material, rationale, feature comparison |
 | [SPEC.md](SPEC.md) | Technical specification - requirements, architecture, CLI, formats |
-| [templates/](templates/) | Prompt templates, prd.json example, config example |
+| [templates/](templates/) | Prompt templates, prd.json example, config example, spec.md example |
+| [.claude/commands/](.claude/commands/) | Claude Code slash commands for planning workflow |
 
 ## Source Implementations Studied
 
