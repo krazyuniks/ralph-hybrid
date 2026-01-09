@@ -489,11 +489,12 @@ You are an autonomous development agent working through a PRD using TDD.
 git clone https://github.com/krazyuniks/ralph-hybrid.git
 cd ralph-hybrid
 ./install.sh
+source ~/.bashrc  # or ~/.zshrc, or open new terminal
 ```
 
 The install script:
 1. Copies files to `~/.ralph/`
-2. Adds `ralph` command to PATH
+2. Adds `~/.ralph` to PATH in shell rc file
 3. Creates default config
 
 After installation, the cloned repo can be deleted.
