@@ -647,6 +647,10 @@ run_single_iteration() {
         claude_args="--dangerously-skip-permissions"
     fi
 
+    # Ensure logs directory exists
+    mkdir -p "${feature_dir}/logs"
+    local log_file="${feature_dir}/logs/iteration-${iteration}.log"
+
     # Run Claude with timeout
     log_info "Running Claude Code..."
     local output=""
@@ -656,6 +660,15 @@ run_single_iteration() {
     output=$($timeout_cmd "${RALPH_TIMEOUT_MINUTES}m" claude --print "$prompt_content" $claude_args 2>&1)
     exit_code=$?
     set -e
+
+    # Save output to log file
+    echo "=== Iteration ${iteration} ===" > "$log_file"
+    echo "Timestamp: $(get_timestamp)" >> "$log_file"
+    echo "Exit code: ${exit_code}" >> "$log_file"
+    echo "" >> "$log_file"
+    echo "=== Output ===" >> "$log_file"
+    echo "$output" >> "$log_file"
+    log_info "Output saved to: ${log_file}"
 
     # Record API call
     rl_record_call
