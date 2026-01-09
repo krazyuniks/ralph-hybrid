@@ -130,33 +130,7 @@ check_git_repo() {
     return 0
 }
 
-#=============================================================================
-# Feature Detection (Branch-Based)
-#=============================================================================
-
-# Get the .ralph directory path
-get_ralph_dir() {
-    echo ".ralph"
-}
-
-# Get the feature directory based on current git branch
-# This is a placeholder - will be properly implemented in get_feature_dir() in lib/utils.sh
-# For now, use the branch name with slashes converted to dashes
-get_feature_dir() {
-    local branch
-    branch=$(git branch --show-current 2>/dev/null)
-
-    # Error if detached HEAD
-    if [[ -z "$branch" ]]; then
-        log_error "Not on a branch (detached HEAD). Cannot determine feature folder."
-        return 1
-    fi
-
-    # Sanitize: feature/user-auth → feature-user-auth
-    local feature_name="${branch//\//-}"
-    echo ".ralph/${feature_name}"
-}
-
+# Note: get_ralph_dir() and get_feature_dir() are now provided by lib/utils.sh
 
 #=============================================================================
 # Status Command

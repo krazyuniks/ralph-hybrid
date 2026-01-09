@@ -20,5 +20,23 @@ Learnings:
   - Main changes were removing init command case and -f flag handling in status/archive
   - Added argument validation to cmd_status() and cmd_archive() to reject unknown options
   - Fixed shellcheck test to properly skip when shellcheck is a non-working shim
+Commit: 14510ad
+
+---
+Iteration: 2
+Date: 2026-01-09T23:14:14Z
+Story: STORY-002 - Add branch-based feature detection
+Status: complete
+Files Changed:
+  - lib/utils.sh (added get_feature_dir(), is_protected_branch(), get_ralph_dir())
+  - ralph (removed duplicate get_feature_dir() function, now uses lib/utils.sh)
+  - tests/unit/test_story002_branch_detection.bats (new test file)
+Tests Added:
+  - test_story002_branch_detection.bats with 16 tests
+Learnings:
+  - BATS run captures both stdout and stderr in $output
+  - log_warn outputs to stderr, which gets mixed with stdout in BATS tests
+  - Tests need to check for patterns rather than exact matches when warnings are involved
+  - Added is_protected_branch() to allow custom protected branch lists via RALPH_PROTECTED_BRANCHES env var
 Commit: (pending)
 
