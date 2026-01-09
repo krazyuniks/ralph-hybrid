@@ -488,8 +488,8 @@ You are an autonomous development agent working through a PRD using TDD.
 ```bash
 git clone https://github.com/krazyuniks/ralph-hybrid.git
 cd ralph-hybrid
-./install.sh
-source ~/.bashrc  # or ~/.zshrc, or open new terminal
+./install.sh                # installs to ~/.ralph/
+source ~/.bashrc            # or ~/.zshrc, or open new terminal
 ```
 
 The install script:
