@@ -1,0 +1,83 @@
+# Ralph Hybrid Configuration
+# Copy to ~/.ralph/config.yaml for global settings
+# Copy to .ralph/config.yaml for project-specific overrides
+
+#=============================================================================
+# Default Settings
+#=============================================================================
+defaults:
+  # Maximum iterations before stopping (safety net)
+  max_iterations: 20
+
+  # Timeout per iteration in minutes
+  timeout_minutes: 15
+
+  # API calls per hour limit
+  rate_limit_per_hour: 100
+
+  # Default prompt template (from ~/.ralph/templates/)
+  prompt_template: "prompt-tdd.md"
+
+#=============================================================================
+# Circuit Breaker
+#=============================================================================
+circuit_breaker:
+  # Stop after N iterations with no progress (no stories completed)
+  no_progress_threshold: 3
+
+  # Stop after N iterations with the same error
+  same_error_threshold: 5
+
+#=============================================================================
+# Completion Detection
+#=============================================================================
+completion:
+  # String that signals task is complete
+  promise: "<promise>COMPLETE</promise>"
+
+  # Backup: stop after N consecutive "done" signals from Claude
+  consecutive_done_signals: 2
+
+  # Backup: stop after N consecutive test-only iterations
+  consecutive_test_loops: 3
+
+#=============================================================================
+# Claude Code Settings
+#=============================================================================
+claude:
+  # Skip permission prompts (use with caution)
+  dangerously_skip_permissions: false
+
+  # Tools Claude is allowed to use
+  allowed_tools: "Write,Bash(git *),Read,Grep,Glob"
+
+#=============================================================================
+# Git Settings
+#=============================================================================
+git:
+  # Automatically create branch from prd.json branchName
+  auto_create_branch: true
+
+  # Branch name prefix (used with auto-generated names)
+  branch_prefix: "feature/"
+
+#=============================================================================
+# Archive Settings
+#=============================================================================
+archive:
+  # Automatically archive completed features
+  auto_archive: true
+
+  # Archive directory (relative to .ralph/)
+  directory: "archive"
+
+  # Archive format: {date}-{feature}
+  name_format: "{date}-{feature}"
+
+#=============================================================================
+# Project-Specific Quality Checks (override in project config)
+#=============================================================================
+# quality_checks:
+#   backend: "docker compose exec backend pytest tests/ && just check-backend"
+#   frontend: "docker compose exec frontend pnpm check && just check-frontend"
+#   all: "just check"

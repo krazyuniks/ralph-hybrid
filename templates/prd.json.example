@@ -1,0 +1,46 @@
+{
+  "feature": "example-feature",
+  "branchName": "feature/42-example-feature",
+  "description": "A description of what this feature accomplishes",
+  "createdAt": "2026-01-09T12:00:00Z",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "First user story title",
+      "description": "As a [user type], I want [goal] so that [benefit]",
+      "acceptanceCriteria": [
+        "First testable criterion",
+        "Second testable criterion",
+        "Third testable criterion"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-002",
+      "title": "Second user story title",
+      "description": "As a [user type], I want [goal] so that [benefit]",
+      "acceptanceCriteria": [
+        "First testable criterion",
+        "Second testable criterion"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-003",
+      "title": "Write tests for feature",
+      "description": "Ensure the feature is properly tested",
+      "acceptanceCriteria": [
+        "Unit tests cover core logic",
+        "Integration tests verify API behavior",
+        "Edge cases are tested"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
