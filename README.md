@@ -98,11 +98,11 @@ The hypothesis: by clearly separating the **inner loop** (iterative feature impl
 - Swap implementations as the ecosystem matures
 - Integrate with any outer-loop workflow (BMAD, GitHub Issues, Linear, [Beads](https://github.com/beads-project/beads-cli), etc.)
 
-This is an experiment, not a replacement for comprehensive solutions like [BMAD](https://github.com/bmadcode/BMAD-METHOD).
+This is an experiment, not a replacement for otherw comprehensive solutions.
 
 ### The Problem
 
-No single existing implementation provides everything needed for a robust, production-ready Ralph workflow:
+No single existing Ralph implementation provides everything we were looking in a robust, production-ready Ralph workflow:
 
 | Gap | Which implementations have it? | Why it matters |
 |-----|-------------------------------|----------------|
