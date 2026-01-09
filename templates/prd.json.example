@@ -1,6 +1,4 @@
 {
-  "feature": "example-feature",
-  "branchName": "feature/42-example-feature",
   "description": "A description of what this feature accomplishes",
   "createdAt": "2026-01-09T12:00:00Z",
   "userStories": [

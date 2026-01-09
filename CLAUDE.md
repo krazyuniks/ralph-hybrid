@@ -25,15 +25,16 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 
 ## Next Steps (Implementation Order)
 
-1. `lib/utils.sh` - Shared utilities (logging, config loading)
-2. `lib/circuit_breaker.sh` - Stuck loop detection
-3. `lib/rate_limiter.sh` - API call throttling
-4. `lib/exit_detection.sh` - Completion signal detection
-5. `lib/archive.sh` - Feature archiving
-6. `lib/branch.sh` - Git branch management
-7. `ralph` - Main script (orchestrates everything)
-8. `install.sh` / `uninstall.sh` - Installation scripts
-9. `tests/*.bats` - BATS test suite
+1. `lib/utils.sh` - Shared utilities (logging, config loading, branch detection)
+2. `lib/preflight.sh` - Preflight validation and sync check
+3. `lib/circuit_breaker.sh` - Stuck loop detection
+4. `lib/rate_limiter.sh` - API call throttling
+5. `lib/exit_detection.sh` - Completion signal detection
+6. `lib/archive.sh` - Feature archiving
+7. `lib/monitor.sh` - tmux monitoring dashboard
+8. `ralph` - Main script (orchestrates everything)
+9. `install.sh` / `uninstall.sh` - Installation scripts
+10. `tests/*.bats` - BATS test suite
 
 ## Key Decisions Made
 
@@ -46,7 +47,9 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 ### Implementation Choices
 - **Bash 4.0+** - Simple, minimal dependencies
 - **No extension on main script** - `ralph` not `ralph.sh` for cleaner CLI
-- **Feature folders** - `.ralph/<feature-name>/` isolates per-feature files
+- **Branch-based feature folders** - `.ralph/{branch-name}/` derived from git branch (no manual init)
+- **spec.md as source of truth** - prd.json is derived via `/ralph-prd`
+- **Preflight validation** - Sync check ensures spec.md and prd.json match before running
 - **TDD-first workflow** - Default prompt template emphasizes tests first
 - **YAML config** - Global (~/.ralph/config.yaml) and project-level (.ralph/config.yaml)
 

@@ -4,32 +4,97 @@ Plan a new feature for Ralph Hybrid development. Guide the user through requirem
 
 ## Arguments
 
-- `$ARGUMENTS` - Brief description of the feature to plan (optional)
+- `$ARGUMENTS` - Brief description of the feature to plan (optional, used if no GitHub issue found)
 
 ## Workflow States
 
 ```
-SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE
+DISCOVER → SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE
 ```
+
+---
+
+## Phase 0: DISCOVER
+
+**Goal:** Extract context from GitHub issue if branch was created from one.
+
+### Actions:
+1. Get current branch: `git branch --show-current`
+2. Extract issue number from branch name using patterns:
+   - `feature/42-description` → issue #42
+   - `issue-42-description` → issue #42
+   - `42-description` → issue #42
+   - `fix/42-description` → issue #42
+   - `feat/PROJ-123-description` → (Jira-style, skip GitHub lookup)
+
+3. If issue number found, fetch via GitHub CLI:
+   ```bash
+   gh issue view 42 --json number,title,body,labels,state,comments
+   ```
+
+4. Extract useful context:
+   | Field | Use |
+   |-------|-----|
+   | `title` | Feature title for spec.md |
+   | `body` | Problem statement, may contain acceptance criteria |
+   | `labels` | Priority hints, feature type |
+   | `comments` | Additional context, decisions made |
+
+### Output (if issue found):
+```
+I see you're on branch 'feature/42-user-auth'.
+Found GitHub issue #42: "Add user authentication"
+
+From the issue:
+  Title: Add user authentication
+  Labels: priority:high, type:feature
+  Description: Users need secure login with email/password...
+
+  Acceptance criteria mentioned in issue:
+  - JWT tokens for session management
+  - 7-day token expiry
+  - Rate limiting on login attempts
+
+I'll use this as the starting point for the spec.
+```
+
+### Output (if no issue found):
+```
+I see you're on branch 'feature/user-auth'.
+No GitHub issue number detected in branch name.
+
+Using provided description: "$ARGUMENTS"
+```
+
+### Skip Conditions:
+- Branch name doesn't match issue patterns
+- `gh` CLI not available
+- Issue fetch fails (private repo, no access, etc.)
+- User provides `--no-issue` flag
 
 ---
 
 ## Phase 1: SUMMARIZE
 
-**Goal:** Understand the feature request and any existing context.
+**Goal:** Combine GitHub issue context (if any) with user input.
 
-### If `$ARGUMENTS` provided:
+### If GitHub issue was found (from DISCOVER):
+1. Present issue summary to user
+2. Ask: "Does this capture the feature correctly? Any additions or changes?"
+3. Note any acceptance criteria already in the issue
+
+### If `$ARGUMENTS` provided (no issue):
 1. Parse the feature description
 2. Check for existing `.ralph/*/` folders that might be related
 3. Summarize understanding back to user
 
 ### If resuming (existing spec.md found):
-1. Read `.ralph/{feature}/spec.md`
+1. Read `.ralph/{branch}/spec.md`
 2. Summarize current state
 3. Ask what needs to change
 
 ### Output:
-> "I understand you want to [summary]. Let me ask a few clarifying questions."
+> "Based on [issue #42 / your description], I understand you want to [summary]. Let me ask a few clarifying questions."
 
 ---
 
@@ -77,25 +142,32 @@ SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE
 **Goal:** Generate the spec.md document.
 
 ### Actions:
-1. Determine feature name (kebab-case, e.g., `user-authentication`)
-2. Create directory: `.ralph/{feature-name}/`
-3. Generate `spec.md` using template (see below)
-4. Present spec to user for review
+1. Get current git branch: `git branch --show-current`
+2. Derive feature folder: `.ralph/{branch-name}/` (sanitize slashes to dashes)
+3. Create directory if it doesn't exist
+4. Generate `spec.md` using template (see below)
+5. Present spec to user for review
+
+> **Note:** The feature folder is derived from the current git branch. User should be on the correct branch before running `/ralph-plan`.
 
 ### Spec Template:
 
 ```markdown
 ---
-feature: {feature-name}
-branch: feature/{feature-name}
 created: {ISO-8601 timestamp}
+github_issue: {number or null}
 ---
 
 # {Feature Title}
 
+<!-- If from GitHub issue: -->
+> **Source:** GitHub issue #{number} - {issue title}
+> **Link:** https://github.com/{owner}/{repo}/issues/{number}
+
 ## Problem Statement
 
 {1-2 paragraphs describing the problem this feature solves}
+{If from issue, start with the issue description}
 
 ## Success Criteria
 
@@ -191,12 +263,11 @@ STORY-004: Implement user login (blocked by STORY-003)
 
 ### Actions:
 1. Read final spec.md
-2. Generate `.ralph/{feature}/prd.json`:
+2. Get feature folder from current branch (same as Phase 3)
+3. Generate `.ralph/{branch-name}/prd.json`:
 
 ```json
 {
-  "feature": "{feature-name}",
-  "branchName": "feature/{feature-name}",
   "description": "{from spec Problem Statement}",
   "createdAt": "{ISO-8601}",
   "userStories": [
@@ -218,10 +289,13 @@ STORY-004: Implement user login (blocked by STORY-003)
 }
 ```
 
-3. Initialize empty `progress.txt`:
+> **Note:** No `feature` or `branchName` fields - the feature is identified by the folder path, which is derived from the git branch.
+
+4. Initialize empty `progress.txt`:
 
 ```
-# Progress Log: {feature-name}
+# Progress Log
+# Branch: {branch-name}
 # Started: {ISO-8601}
 # Spec: spec.md
 
@@ -232,19 +306,20 @@ STORY-004: Implement user login (blocked by STORY-003)
 5. Output summary:
 
 ```
-Feature planned: {feature-name}
+Planning complete for branch: feature/user-auth
+Feature folder: .ralph/feature-user-auth/
 
 Created files:
-  .ralph/{feature}/
+  .ralph/feature-user-auth/
   ├── spec.md          # Feature specification
   ├── prd.json         # {N} stories, all passes: false
   └── progress.txt     # Empty, ready for iterations
 
 Next steps:
   1. Review spec.md and prd.json
-  2. Run: ralph run -f {feature-name}
+  2. Run: ralph run
 
-To modify: /ralph-plan (will resume from spec.md)
+To modify: Edit spec.md, then run /ralph-prd to regenerate
 ```
 
 ---
@@ -252,22 +327,91 @@ To modify: /ralph-plan (will resume from spec.md)
 ## Error Handling
 
 ### If user wants changes after GENERATE:
-- Edit spec.md directly, or
-- Run `/ralph-plan` again (resumes from SUMMARIZE with existing spec)
+- Edit spec.md directly
+- Run `/ralph-prd` to regenerate prd.json from updated spec
 
 ### If feature folder already exists:
-- Ask: "Found existing .ralph/{feature}/. Resume planning or start fresh?"
+- Ask: "Found existing .ralph/{branch}/. Resume planning or start fresh?"
 - Resume: Load spec.md, skip to DRAFT
 - Fresh: Archive existing folder first
 
+### If not on a feature branch:
+- Warn: "You're on branch 'main'. Create a feature branch first?"
+- Suggest: `git checkout -b feature/your-feature-name`
+
 ---
 
-## Example Session
+## Example Sessions
+
+### Example 1: With GitHub Issue (typical flow)
+
+```
+User: /ralph-plan
+
+Claude: I see you're on branch 'feature/42-user-auth'.
+
+[DISCOVER] Fetching GitHub issue #42...
+
+Found issue #42: "Add user authentication"
+  Labels: priority:high, type:feature
+  Created: 2026-01-08
+
+  Description from issue:
+  > Users need to be able to log in to access their data.
+  > We should use JWT tokens for session management.
+  > Sessions should expire after 7 days.
+
+  Acceptance criteria mentioned:
+  - [ ] Users can register with email/password
+  - [ ] Users can log in and receive JWT
+  - [ ] Protected routes require valid token
+
+I'll use this as the starting point for the spec.
+Does this capture the feature correctly? Any additions or changes?
+
+User: Looks good, but also add rate limiting on login attempts
+
+Claude: Got it - I'll add rate limiting. A few clarifying questions:
+
+1. How many failed attempts before rate limiting kicks in?
+   A) 3 attempts
+   B) 5 attempts
+   C) 10 attempts
+
+User: B
+
+Claude: 2. What's the lockout duration?
+   A) 5 minutes
+   B) 15 minutes
+   C) 1 hour
+
+User: A
+
+Claude: 3. Any existing auth patterns in the codebase I should follow?
+
+User: No, this is greenfield
+
+Claude: Got it. Let me draft the specification...
+
+[Creates .ralph/feature-42-user-auth/spec.md]
+
+Here's the draft spec. Please review:
+[Shows spec.md content]
+
+Note: This spec was generated from GitHub issue #42.
+```
+
+### Example 2: Without GitHub Issue
 
 ```
 User: /ralph-plan Add user authentication with JWT
 
-Claude: I understand you want to add user authentication using JWT tokens.
+Claude: I see you're on branch 'feature/user-auth'.
+
+[DISCOVER] No GitHub issue number detected in branch name.
+
+I'll use your description as the starting point.
+I understand you want to add user authentication using JWT tokens.
 Let me ask a few clarifying questions.
 
 1. What user data needs to be stored?
@@ -298,7 +442,7 @@ User: No, this is greenfield
 
 Claude: Got it. Let me draft the specification...
 
-[Creates .ralph/user-authentication/spec.md]
+[Creates .ralph/feature-user-auth/spec.md]
 
 Here's the draft spec. Please review:
 [Shows spec.md content]

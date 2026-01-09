@@ -13,16 +13,18 @@
 4. [CLI Interface](#cli-interface)
 5. [Configuration](#configuration)
 6. [Core Loop Logic](#core-loop-logic)
-7. [Planning Workflow](#planning-workflow)
-8. [PRD Format](#prd-format)
-9. [Spec Format](#spec-format)
-10. [Progress Tracking](#progress-tracking)
-11. [Prompt Template](#prompt-template)
-12. [Safety Mechanisms](#safety-mechanisms)
-13. [Monitoring Dashboard](#monitoring-dashboard-tmux)
-14. [Exit Conditions](#exit-conditions)
-15. [Installation](#installation)
-16. [Testing](#testing)
+7. [File Ownership](#file-ownership)
+8. [Preflight Validation](#preflight-validation)
+9. [Planning Workflow](#planning-workflow)
+10. [PRD Format](#prd-format)
+11. [Spec Format](#spec-format)
+12. [Progress Tracking](#progress-tracking)
+13. [Prompt Template](#prompt-template)
+14. [Safety Mechanisms](#safety-mechanisms)
+15. [Monitoring Dashboard](#monitoring-dashboard-tmux)
+16. [Exit Conditions](#exit-conditions)
+17. [Installation](#installation)
+18. [Testing](#testing)
 
 ---
 
@@ -126,8 +128,8 @@ ralph-hybrid/
 │   ├── rate_limiter.sh
 │   ├── exit_detection.sh
 │   ├── archive.sh
-│   ├── branch.sh
 │   ├── monitor.sh
+│   ├── preflight.sh
 │   └── utils.sh
 ├── templates/
 │   ├── prompt.md
@@ -167,13 +169,15 @@ ralph-hybrid/
 ### Commands
 
 ```bash
-ralph init <feature-name>       # Initialize feature folder
-ralph run [options]             # Execute the loop
+ralph run [options]             # Execute the loop (includes preflight validation)
 ralph status                    # Show current state
 ralph monitor                   # Launch tmux monitoring dashboard
 ralph archive                   # Archive current feature
+ralph validate                  # Run preflight checks without starting loop
 ralph help                      # Show help
 ```
+
+> **Note:** There is no `ralph init` command. Use `/ralph-plan` in a Claude Code session to create the feature folder and files. The feature folder is derived from the current git branch name.
 
 ### Run Options
 
@@ -182,14 +186,16 @@ ralph help                      # Show help
 | `-n, --max-iterations` | 20 | Maximum iterations |
 | `-t, --timeout` | 15 | Per-iteration timeout (minutes) |
 | `-r, --rate-limit` | 100 | Max API calls per hour |
-| `-f, --feature` | auto-detect | Feature folder to use |
 | `-p, --prompt` | default | Custom prompt file |
 | `-v, --verbose` | false | Detailed output |
 | `--no-archive` | false | Don't archive on completion |
 | `--reset-circuit` | false | Reset circuit breaker state |
 | `--dry-run` | false | Show what would happen |
 | `--monitor` | false | Launch with tmux monitoring dashboard |
+| `--skip-preflight` | false | Skip preflight validation (use with caution) |
 | `--dangerously-skip-permissions` | false | Pass to Claude Code |
+
+> **Note:** The feature folder is automatically derived from the current git branch name. No `-f` flag is needed.
 
 ---
 
@@ -225,14 +231,38 @@ quality_checks:
   backend: "docker compose exec backend pytest tests/"
   frontend: "docker compose exec frontend pnpm check"
 
-branch:
-  prefix: "feature/"
-  auto_create: true
+# Protected branches - ralph will warn if running on these
+protected_branches:
+  - main
+  - master
+  - develop
 ```
 
 ---
 
 ## Core Loop Logic
+
+### Feature Detection
+
+The feature folder is derived from the current git branch name:
+
+```bash
+get_feature_dir() {
+    local branch=$(git branch --show-current)
+
+    # Error if detached HEAD
+    [[ -z "$branch" ]] && error "Not on a branch (detached HEAD)"
+
+    # Warn if on protected branch
+    if is_protected_branch "$branch"; then
+        warn "Running on protected branch '$branch'"
+    fi
+
+    # Sanitize: feature/user-auth → feature-user-auth
+    local feature_name="${branch//\//-}"
+    echo ".ralph/${feature_name}"
+}
+```
 
 ### Main Loop (Pseudocode)
 
@@ -240,9 +270,12 @@ branch:
 main() {
     load_config
     check_prerequisites
-    resolve_feature_folder
-    maybe_archive_previous_run
-    maybe_create_branch
+
+    # Derive feature folder from branch
+    FEATURE_DIR=$(get_feature_dir)
+
+    # Preflight validation
+    run_preflight_checks || exit 1
 
     iteration=0
     no_progress_count=0
@@ -255,6 +288,9 @@ main() {
         # Safety checks
         check_circuit_breaker || exit 1
         check_rate_limit || wait_for_reset
+
+        # Update status for monitor
+        update_status "running" "$iteration"
 
         # Snapshot before
         prd_before=$(get_passes_state)
@@ -319,6 +355,177 @@ EOF
 
 ---
 
+## File Ownership
+
+Clear separation of what writes each file:
+
+| File | Written By | Read By | Purpose |
+|------|------------|---------|---------|
+| `spec.md` | `/ralph-plan` (Claude) | `/ralph-prd`, Claude agent | Source of truth for requirements |
+| `prd.json` | `/ralph-prd` (Claude) | Ralph loop, Claude agent | Machine-readable task state |
+| `progress.txt` | Claude agent (appends) | Claude agent | Iteration history and learnings |
+| `status.json` | Ralph loop (bash) | Monitor script | Real-time loop status |
+| `logs/iteration-N.log` | Ralph loop (bash) | Monitor script, debugging | Raw Claude output per iteration |
+
+### Source of Truth Hierarchy
+
+```
+spec.md (human-readable requirements)
+    ↓
+    /ralph-prd generates
+    ↓
+prd.json (machine-readable, derived)
+    ↓
+    Claude updates passes field
+    ↓
+progress.txt (append-only history)
+```
+
+**Important:** `spec.md` is the source of truth. If requirements change, edit `spec.md` and regenerate `prd.json` with `/ralph-prd`.
+
+---
+
+## Preflight Validation
+
+Before starting the loop, `ralph run` performs preflight checks. These can also be run standalone with `ralph validate`.
+
+### Checks Performed
+
+| Check | Severity | Description |
+|-------|----------|-------------|
+| Branch detected | ERROR | Must be on a branch (not detached HEAD) |
+| Protected branch | WARN | Warn if on main/master/develop |
+| Folder exists | ERROR | `.ralph/{branch}/` must exist |
+| Required files | ERROR | spec.md, prd.json, progress.txt must exist |
+| prd.json schema | ERROR | Valid JSON with required fields |
+| spec.md structure | WARN | Has Problem Statement, Success Criteria, Stories |
+| **Sync check** | ERROR | spec.md and prd.json must be in sync |
+
+### Sync Check
+
+The sync check ensures `prd.json` reflects the current `spec.md`:
+
+```bash
+sync_check() {
+    # Generate temp prd.json from current spec.md
+    temp_prd=$(generate_prd_from_spec "$FEATURE_DIR/spec.md")
+
+    # Compare stories (ignoring passes field and notes)
+    current_stories=$(jq '[.userStories[] | {id, title, acceptanceCriteria}]' "$FEATURE_DIR/prd.json")
+    spec_stories=$(jq '[.userStories[] | {id, title, acceptanceCriteria}]' <<< "$temp_prd")
+
+    if [[ "$current_stories" != "$spec_stories" ]]; then
+        error "spec.md and prd.json are out of sync"
+        diff_stories "$current_stories" "$spec_stories"
+        echo "Run '/ralph-prd' to regenerate prd.json from spec.md"
+        return 1
+    fi
+}
+```
+
+### Sync Scenarios
+
+| Scenario | Detection | Severity | Resolution |
+|----------|-----------|----------|------------|
+| New story in spec.md | Story in spec not in prd | ERROR | Run `/ralph-prd` |
+| Acceptance criteria changed | Criteria arrays differ | ERROR | Run `/ralph-prd` |
+| Orphaned story (passes: false) | Story in prd not in spec | WARN | Run `/ralph-prd` or add to spec |
+| **Orphaned story (passes: true)** | Completed story in prd not in spec | **ERROR** | Requires explicit confirmation |
+| Only `passes` field differs | Ignored | OK | Expected (work in progress) |
+| Only `notes` field differs | Ignored | OK | Agent notes are ephemeral |
+
+### Orphaned Story Handling
+
+Orphaned stories are stories present in `prd.json` but not in `spec.md`. This usually means:
+1. Story was removed from spec.md (intentional)
+2. Story was manually added to prd.json without spec (bad practice)
+3. Merge conflict or accidental deletion
+
+**Critical:** If an orphaned story has `passes: true`, this represents **completed work that will be discarded**. This requires explicit user confirmation.
+
+```bash
+orphan_check() {
+    prd_ids=$(jq -r '.userStories[].id' "$FEATURE_DIR/prd.json")
+    spec_ids=$(extract_story_ids "$FEATURE_DIR/spec.md")
+
+    for id in $prd_ids; do
+        if ! echo "$spec_ids" | grep -q "^$id$"; then
+            passes=$(jq -r ".userStories[] | select(.id==\"$id\") | .passes" "$FEATURE_DIR/prd.json")
+            if [[ "$passes" == "true" ]]; then
+                error "Orphaned COMPLETED story: $id"
+                echo "  This story has passes:true but is not in spec.md"
+                echo "  Options:"
+                echo "    1. Add story back to spec.md (preserve work)"
+                echo "    2. Run '/ralph-prd --confirm-orphan-removal' (discard work)"
+                return 1
+            else
+                warn "Orphaned story: $id (passes: false, will be removed)"
+            fi
+        fi
+    done
+}
+```
+
+### Preflight Output
+
+```
+$ ralph validate
+
+Preflight checks for branch: feature/user-auth
+Feature folder: .ralph/feature-user-auth/
+
+✓ Branch detected: feature/user-auth
+✓ Folder exists: .ralph/feature-user-auth/
+✓ Required files present
+✓ prd.json schema valid
+✓ spec.md structure valid
+✓ Sync check passed
+
+All checks passed. Ready to run.
+```
+
+```
+$ ralph validate
+
+Preflight checks for branch: feature/user-auth
+Feature folder: .ralph/feature-user-auth/
+
+✓ Branch detected: feature/user-auth
+✓ Folder exists: .ralph/feature-user-auth/
+✓ Required files present
+✓ prd.json schema valid
+⚠ spec.md missing "Out of Scope" section (recommended)
+✗ Sync check failed:
+    - STORY-004 in spec.md not found in prd.json
+    - STORY-002 acceptance criteria differs
+
+Resolve sync issues by running '/ralph-prd' in Claude Code.
+```
+
+**Example: Orphaned completed story detected**
+```
+$ ralph validate
+
+Preflight checks for branch: feature/user-auth
+Feature folder: .ralph/feature-user-auth/
+
+✓ Branch detected: feature/user-auth
+✓ Folder exists: .ralph/feature-user-auth/
+✓ Required files present
+✓ prd.json schema valid
+✓ spec.md structure valid
+✗ Orphan check failed:
+    - STORY-003 in prd.json (passes: true) not found in spec.md
+      ^^^ COMPLETED WORK WILL BE LOST
+
+This story was completed but is no longer in spec.md.
+Options:
+  1. Add STORY-003 back to spec.md (preserve completed work)
+  2. Run '/ralph-prd' and confirm orphan removal (discard work)
+```
+
+---
+
 ## Planning Workflow
 
 Ralph Hybrid provides Claude Code commands for guided feature planning. This separates **planning** (done interactively with Claude) from **execution** (done autonomously by Ralph loop).
@@ -334,12 +541,17 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 
 ```
 ┌─────────────┐
-│  SUMMARIZE  │ ← Understand feature request
+│  DISCOVER   │ ← Extract context from GitHub issue (if branch has issue #)
 └──────┬──────┘
        │
        ▼
 ┌─────────────┐
-│   CLARIFY   │ ← Ask 3-5 targeted questions
+│  SUMMARIZE  │ ← Combine issue context + user input
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│   CLARIFY   │ ← Ask 3-5 targeted questions (fewer if issue has details)
 └──────┬──────┘
        │
        ▼
@@ -357,6 +569,22 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 │  GENERATE   │ ← Create prd.json + progress.txt
 └─────────────┘
 ```
+
+### GitHub Issue Integration
+
+If the branch name contains an issue number (e.g., `feature/42-user-auth`), the `/ralph-plan` command will:
+
+1. **Detect** issue number from branch name patterns
+2. **Fetch** issue via `gh issue view 42 --json title,body,labels`
+3. **Extract** problem statement, acceptance criteria from issue body
+4. **Use** as starting context (reduces clarifying questions needed)
+5. **Link** spec.md back to the GitHub issue for traceability
+
+Branch patterns recognized:
+- `feature/42-description` → issue #42
+- `issue-42-description` → issue #42
+- `42-description` → issue #42
+- `fix/42-description` → issue #42
 
 ### Clarifying Questions
 
@@ -424,10 +652,12 @@ ralph run -f user-authentication
 
 ### Schema (prd.json)
 
+The prd.json file is a **derived artifact** generated from spec.md by `/ralph-prd`. It provides machine-readable task state for the Ralph loop.
+
+> **Note:** The feature identifier is derived from the current git branch name. No `feature` or `branchName` fields are needed in prd.json.
+
 ```json
 {
-  "feature": "string",
-  "branchName": "string",
   "description": "string",
   "createdAt": "ISO-8601",
   "userStories": [
@@ -448,8 +678,6 @@ ralph run -f user-authentication
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `feature` | string | Yes | Feature identifier, matches folder name |
-| `branchName` | string | Yes | Git branch to create/use |
 | `description` | string | Yes | High-level feature description |
 | `createdAt` | ISO-8601 | Yes | Creation timestamp |
 | `userStories` | array | Yes | List of stories |
@@ -458,7 +686,7 @@ ralph run -f user-authentication
 | `userStories[].description` | string | No | User story or description |
 | `userStories[].acceptanceCriteria` | array | Yes | Testable criteria |
 | `userStories[].priority` | number | Yes | 1 = highest |
-| `userStories[].passes` | boolean | Yes | Completion status |
+| `userStories[].passes` | boolean | Yes | Completion status (updated by Claude) |
 | `userStories[].notes` | string | No | Agent notes, blockers |
 
 ---
@@ -473,12 +701,12 @@ The spec.md file is a human-readable specification generated by `/ralph-plan`. I
 
 ```markdown
 ---
-feature: {feature-name}
-branch: feature/{feature-name}
 created: {ISO-8601}
 ---
 
 # {Feature Title}
+
+<!-- Feature folder: .ralph/{branch-name}/ (derived from git branch) -->
 
 ## Problem Statement
 {Description of the problem being solved}
@@ -512,9 +740,9 @@ created: {ISO-8601}
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `feature` | string | Yes | Feature identifier (kebab-case) |
-| `branch` | string | Yes | Git branch name |
 | `created` | ISO-8601 | Yes | Creation timestamp |
+
+> **Note:** No `feature` or `branch` fields. The feature is identified by the folder path, which is derived from the current git branch (e.g., branch `feature/user-auth` → folder `.ralph/feature-user-auth/`).
 
 ### Story Format
 
