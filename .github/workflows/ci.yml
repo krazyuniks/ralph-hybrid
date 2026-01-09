@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          ignore_paths: 'tests'
+          severity: warning
+
+  test:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install BATS (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+
+      - name: Install BATS (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bats-core
+
+      - name: Install jq (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y jq
+
+      - name: Install jq (macOS)
+        if: runner.os == 'macOS'
+        run: brew install jq
+
+      - name: Run unit tests
+        run: bats tests/unit/
+
+      - name: Run integration tests
+        run: bats tests/integration/
+
+  validate:
+    name: Validate Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check bash syntax
+        run: |
+          for file in ralph lib/*.sh install.sh uninstall.sh; do
+            if [[ -f "$file" ]]; then
+              echo "Checking syntax: $file"
+              bash -n "$file"
+            fi
+          done
+
+      - name: Check executable permissions
+        run: |
+          for file in ralph install.sh uninstall.sh; do
+            if [[ -f "$file" ]]; then
+              if [[ ! -x "$file" ]]; then
+                echo "Error: $file is not executable"
+                exit 1
+              fi
+              echo "OK: $file is executable"
+            fi
+          done
