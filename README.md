@@ -87,6 +87,19 @@ Each iteration:
 
 ## Why a Hybrid Implementation?
 
+### Context: An Experiment in Abstraction Layers
+
+The agentic development ecosystem is evolving rapidly. Methods like [BMAD](https://github.com/bmadcode/BMAD-METHOD) offer comprehensive, well-designed workflow solutions that integrate task tracking, dependencies, and GitHub PR/CI workflows. We've used BMAD successfully for managing multi-session work and task prioritization.
+
+However, we wanted to experiment with something more direct—a tighter feedback loop at the feature implementation level. This project explores **managing abstraction layers between agentic sessions and the wider project management workflow**.
+
+The hypothesis: by clearly separating the **inner loop** (iterative feature implementation) from the **outer loop** (project workflow, PRs, CI), we can:
+- Iterate faster on prompt engineering and TDD patterns
+- Swap implementations as the ecosystem matures
+- Integrate with any outer-loop workflow (BMAD, GitHub Issues, Linear, Beads, etc.)
+
+This is an experiment, not a replacement for comprehensive solutions like BMAD.
+
 ### The Problem
 
 No single existing implementation provides everything needed for a robust, production-ready Ralph workflow:
