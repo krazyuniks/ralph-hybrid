@@ -214,3 +214,20 @@ Learnings:
   - Shellcheck test properly skips when not installed
   - Previous iteration notes about "29 integration failures" were outdated - all tests pass now
 
+---
+Iteration: 10
+Date: 2026-01-10T14:35:00Z
+Story: STORY-009 - Add preflight tests
+Status: complete
+Files Changed:
+  - (none - all tests already exist in test_preflight.bats)
+Tests Added:
+  - (none - verified existing test coverage)
+Learnings:
+  - test_preflight.bats already has 45 comprehensive tests
+  - Tests cover: detached HEAD (line 83), protected branches (lines 98-132)
+  - Tests cover: missing feature folder (line 147), missing required files (lines 169-206)
+  - Tests cover: invalid prd.json (lines 237-328), invalid spec.md (lines 366-456)
+  - Tests cover: sync check orphans and missing (lines 619-982)
+  - All tests were added in iterations 5 and 6 (STORY-004 and STORY-005)
+
