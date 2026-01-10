@@ -164,3 +164,35 @@ Learnings:
   - cmd_validate() is simple: check git repo, then call pf_run_all_checks()
   - Pre-existing test failures (ed_check, load_config) are unrelated to validate command
 
+---
+Iteration: 8
+Date: 2026-01-10T12:45:00Z
+Story: STORY-007 - Integrate preflight into ralph run
+Status: complete
+Files Changed:
+  - ralph (added RALPH_SKIP_PREFLIGHT variable, --skip-preflight flag in parse_run_args(), preflight integration in cmd_run())
+  - tests/unit/test_story007_preflight_integration.bats (new file - 15 unit tests)
+Tests Added:
+  - test_story007_preflight_integration.bats with 15 tests covering:
+    - ralph run accepts --skip-preflight flag
+    - RALPH_SKIP_PREFLIGHT variable is set when --skip-preflight used
+    - ralph run --skip-preflight shows warning message
+    - ralph run without --skip-preflight runs preflight checks
+    - ralph run fails when preflight fails
+    - ralph run fails when prd.json is invalid
+    - ralph run fails when stories are out of sync
+    - ralph run --skip-preflight bypasses preflight when files missing
+    - ralph run --skip-preflight proceeds when preflight would fail
+    - ralph run continues to dry-run after successful preflight
+    - ralph run shows preflight success before starting
+    - ralph help mentions --skip-preflight flag
+    - ralph help describes --skip-preflight purpose
+    - ralph run fails in detached HEAD without --skip-preflight
+    - preflight runs before run_validate_setup prerequisites
+Learnings:
+  - Preflight checks must run before run_validate_setup to catch issues early
+  - --skip-preflight flag in help text already existed, just needed handler
+  - Warning message uses log_warn when skipping preflight
+  - Pre-existing test failures (ed_check, load_config) continue to be unrelated
+  - Integration tests have 29 failures - these are tracked in STORY-008
+

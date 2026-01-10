@@ -120,8 +120,8 @@
         "Unit tests pass"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed. Added --skip-preflight flag to parse_run_args(), integrated pf_run_all_checks() into cmd_run() before setup. Added 15 unit tests. Pre-existing ed_check and load_config test failures are unrelated."
     },
     {
       "id": "STORY-008",

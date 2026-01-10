@@ -40,6 +40,7 @@ RALPH_VERBOSE=false
 RALPH_NO_ARCHIVE=false
 RALPH_RESET_CIRCUIT=false
 RALPH_DRY_RUN=false
+RALPH_SKIP_PREFLIGHT=false
 RALPH_DANGEROUSLY_SKIP_PERMISSIONS="${RALPH_DANGEROUSLY_SKIP_PERMISSIONS:-false}"
 
 #=============================================================================
@@ -285,6 +286,10 @@ parse_run_args() {
                 ;;
             --dry-run)
                 RALPH_DRY_RUN=true
+                shift
+                ;;
+            --skip-preflight)
+                RALPH_SKIP_PREFLIGHT=true
                 shift
                 ;;
             --dangerously-skip-permissions)
@@ -676,6 +681,21 @@ run_single_iteration() {
 cmd_run() {
     # Parse arguments
     parse_run_args "$@" || return 1
+
+    # Run preflight checks (unless skipped)
+    if [[ "$RALPH_SKIP_PREFLIGHT" == true ]]; then
+        log_warn "Skipping preflight validation (--skip-preflight). Use with caution."
+    else
+        # Check git repo first (required for preflight)
+        if ! check_git_repo; then
+            return 1
+        fi
+
+        # Run all preflight checks
+        if ! pf_run_all_checks; then
+            return 1
+        fi
+    fi
 
     # Validate and setup (sets RUN_FEATURE_NAME, RUN_FEATURE_DIR, RUN_PRD_FILE)
     run_validate_setup || return 1
