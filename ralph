@@ -75,6 +75,7 @@ Run Options:
   --dry-run                  Show what would happen without executing
   --skip-preflight           Skip preflight validation (use with caution)
   --dangerously-skip-permissions  Pass to Claude Code
+  -m, --model MODEL          Claude model (opus, sonnet, or full name)
 
 Examples:
   ralph run -n 30 -t 20
@@ -296,6 +297,10 @@ parse_run_args() {
                 RALPH_DANGEROUSLY_SKIP_PERMISSIONS=true
                 shift
                 ;;
+            -m|--model)
+                RALPH_MODEL="${2:-}"
+                shift 2
+                ;;
             -*)
                 log_error "Unknown option: $1"
                 return 1
@@ -514,6 +519,11 @@ run_single_iteration() {
     # Note: --permission-mode bypassPermissions works with -p mode
     # while --dangerously-skip-permissions causes hangs
     local claude_args="--permission-mode bypassPermissions"
+
+    # Add model if specified
+    if [[ -n "${RALPH_MODEL:-}" ]]; then
+        claude_args+=" --model ${RALPH_MODEL}"
+    fi
 
     # Ensure logs directory exists
     mkdir -p "${feature_dir}/logs"
