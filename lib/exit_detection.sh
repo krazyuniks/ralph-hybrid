@@ -210,12 +210,17 @@ ed_check() {
     local prd_file="${2:-}"
 
     # Priority 1: Check for completion promise in output
+    # BUT only trust it if all stories are actually complete (prevents premature completion)
     if ed_check_promise "$output"; then
-        echo "complete"
-        return 0
+        if [[ -n "$prd_file" ]] && ed_check_all_complete "$prd_file"; then
+            echo "complete"
+            return 0
+        else
+            log_warn "Completion promise detected but not all stories are complete - continuing"
+        fi
     fi
 
-    # Priority 2: Check if all stories are complete
+    # Priority 2: Check if all stories are complete (even without promise)
     if [[ -n "$prd_file" ]] && ed_check_all_complete "$prd_file"; then
         echo "complete"
         return 0

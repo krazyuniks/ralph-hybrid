@@ -328,11 +328,11 @@ Error: Third error"
 # ed_check Tests (Combined Check)
 #=============================================================================
 
-@test "ed_check returns 'complete' when promise found" {
+@test "ed_check returns 'complete' when promise found and all stories complete" {
     cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
 {
   "userStories": [
-    {"id": "1", "passes": false}
+    {"id": "1", "passes": true}
   ]
 }
 EOF
@@ -340,6 +340,25 @@ EOF
     run ed_check "$output" "$TEST_TEMP_DIR/prd.json"
     [ "$status" -eq 0 ]
     [ "$output" = "complete" ]
+}
+
+@test "ed_check returns 'continue' when promise found but stories incomplete" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": false}
+  ]
+}
+EOF
+    local input="Task done <promise>COMPLETE</promise>"
+    # ed_check outputs to stdout, warnings go to stderr
+    # Use run with output capture that includes both, then check last line
+    run ed_check "$input" "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    # The last line of output should be the result (continue)
+    local result
+    result=$(echo "$output" | tail -1)
+    [ "$result" = "continue" ]
 }
 
 @test "ed_check returns 'complete' when all stories pass" {
@@ -401,11 +420,11 @@ EOF
 }
 
 @test "ed_check prioritizes complete over api_limit" {
-    # Both promise and api_limit in output - complete should win
+    # Both promise and api_limit in output - complete should win when all stories are complete
     cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
 {
   "userStories": [
-    {"id": "1", "passes": false}
+    {"id": "1", "passes": true}
   ]
 }
 EOF
@@ -413,6 +432,25 @@ EOF
     run ed_check "$output" "$TEST_TEMP_DIR/prd.json"
     [ "$status" -eq 0 ]
     [ "$output" = "complete" ]
+}
+
+@test "ed_check returns api_limit when promise found but stories incomplete with limit message" {
+    # Promise found but stories not complete, and api_limit message present
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": false}
+  ]
+}
+EOF
+    local input="<promise>COMPLETE</promise> but also usage limit reached"
+    # ed_check outputs to stdout, warnings go to stderr
+    run ed_check "$input" "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    # The last line of output should be the result (api_limit)
+    local result
+    result=$(echo "$output" | tail -1)
+    [ "$result" = "api_limit" ]
 }
 
 @test "ed_check handles missing prd file gracefully" {

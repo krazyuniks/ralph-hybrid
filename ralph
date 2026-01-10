@@ -621,7 +621,7 @@ run_single_iteration() {
             log_success "Completion signal detected!"
             if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
                 log_info "Archiving feature..."
-                cmd_archive "$feature_name"
+                cmd_archive
             fi
             return 100  # Special code for completion
             ;;
@@ -714,7 +714,7 @@ cmd_run() {
         log_success "All stories already complete!"
         if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
             log_info "Archiving feature..."
-            cmd_archive "$RUN_FEATURE_NAME"
+            cmd_archive
         fi
         return 0
     fi

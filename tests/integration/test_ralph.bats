@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 # Integration tests for the main ralph script
+# Updated for branch-based feature detection (no -f flag, no init command)
 
 #=============================================================================
 # Setup / Teardown
@@ -63,27 +64,6 @@ EOF
     chmod +x "${TEST_TEMP_DIR}/bin/claude"
 }
 
-# Create a mock claude that updates prd.json
-create_mock_claude_with_progress() {
-    local prd_file="$1"
-
-    cat > "${TEST_TEMP_DIR}/bin/claude" << 'EOF'
-#!/bin/bash
-# Read the prd file and update first false passes to true
-PRD_FILE="${TEST_TEMP_DIR}/project/.ralph/${RALPH_CURRENT_FEATURE}/prd.json"
-if [[ -f "$PRD_FILE" ]]; then
-    # Use jq to update first story with passes=false to passes=true
-    jq '(.userStories[] | select(.passes == false) | .passes) = true | limit(1;.)' "$PRD_FILE" > "${PRD_FILE}.tmp" 2>/dev/null || true
-    if [[ -s "${PRD_FILE}.tmp" ]]; then
-        mv "${PRD_FILE}.tmp" "$PRD_FILE"
-    fi
-fi
-echo "Implemented story"
-exit 0
-EOF
-    chmod +x "${TEST_TEMP_DIR}/bin/claude"
-}
-
 # Create a mock claude that signals completion
 create_mock_claude_complete() {
     cat > "${TEST_TEMP_DIR}/bin/claude" << 'EOF'
@@ -116,15 +96,19 @@ EOF
     chmod +x "${TEST_TEMP_DIR}/bin/claude"
 }
 
-# Create a test feature with prd.json
-create_test_feature() {
-    local feature_name="${1:-test-feature}"
+# Create a test feature folder with prd.json, spec.md, progress.txt
+# The folder name should match the branch name (with slashes converted to dashes)
+create_test_feature_folder() {
+    local branch_name="${1:-test-feature}"
     local passes1="${2:-false}"
     local passes2="${3:-false}"
 
-    mkdir -p "${TEST_TEMP_DIR}/project/.ralph/${feature_name}/specs"
+    # Convert branch name to folder name (slashes to dashes)
+    local folder_name="${branch_name//\//-}"
 
-    cat > "${TEST_TEMP_DIR}/project/.ralph/${feature_name}/prd.json" << EOF
+    mkdir -p "${TEST_TEMP_DIR}/project/.ralph/${folder_name}"
+
+    cat > "${TEST_TEMP_DIR}/project/.ralph/${folder_name}/prd.json" << EOF
 {
   "description": "Test feature for integration tests",
   "createdAt": "2026-01-09T12:00:00Z",
@@ -151,15 +135,47 @@ create_test_feature() {
 }
 EOF
 
-    cat > "${TEST_TEMP_DIR}/project/.ralph/${feature_name}/progress.txt" << EOF
-# Progress Log: ${feature_name}
+    cat > "${TEST_TEMP_DIR}/project/.ralph/${folder_name}/spec.md" << 'EOF'
+# Test Feature Spec
+
+## Problem Statement
+This is a test feature.
+
+## Success Criteria
+- Feature works
+
+## User Stories
+
+### STORY-001: First story
+Test story 1
+
+### STORY-002: Second story
+Test story 2
+
+## Out of Scope
+Nothing
+EOF
+
+    cat > "${TEST_TEMP_DIR}/project/.ralph/${folder_name}/progress.txt" << EOF
+# Progress Log: ${branch_name}
 # Started: 2026-01-09T12:00:00Z
 EOF
 
-    cat > "${TEST_TEMP_DIR}/project/.ralph/${feature_name}/prompt.md" << 'EOF'
+    cat > "${TEST_TEMP_DIR}/project/.ralph/${folder_name}/prompt.md" << 'EOF'
 # Test Prompt
 You are a test agent.
 EOF
+}
+
+# Create a feature branch and corresponding feature folder
+setup_feature_branch() {
+    local branch_name="${1:-feature/test}"
+    local passes1="${2:-false}"
+    local passes2="${3:-false}"
+
+    cd "${TEST_TEMP_DIR}/project"
+    git checkout -b "$branch_name" --quiet 2>/dev/null || git checkout "$branch_name" --quiet
+    create_test_feature_folder "$branch_name" "$passes1" "$passes2"
 }
 
 #=============================================================================
@@ -208,116 +224,49 @@ EOF
 }
 
 #=============================================================================
-# Init Command Tests
-#=============================================================================
-
-@test "ralph init creates feature folder structure" {
-    cd "${TEST_TEMP_DIR}/project"
-
-    run "$RALPH_SCRIPT" init my-feature
-    [ "$status" -eq 0 ]
-
-    # Check directory structure
-    [ -d ".ralph/my-feature" ]
-    [ -d ".ralph/my-feature/specs" ]
-    [ -f ".ralph/my-feature/prd.json" ]
-    [ -f ".ralph/my-feature/progress.txt" ]
-    [ -f ".ralph/my-feature/prompt.md" ]
-}
-
-@test "ralph init creates valid prd.json from template" {
-    cd "${TEST_TEMP_DIR}/project"
-
-    run "$RALPH_SCRIPT" init new-feature
-    [ "$status" -eq 0 ]
-
-    # Verify prd.json is valid JSON
-    run jq '.' ".ralph/new-feature/prd.json"
-    [ "$status" -eq 0 ]
-
-    # Check feature name is set
-    local feature_name
-    feature_name=$(jq -r '.feature' ".ralph/new-feature/prd.json")
-    [ "$feature_name" = "new-feature" ]
-}
-
-@test "ralph init fails without feature name" {
-    cd "${TEST_TEMP_DIR}/project"
-
-    run "$RALPH_SCRIPT" init
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "feature name" ]] || [[ "$output" =~ "Usage" ]]
-}
-
-@test "ralph init fails if feature already exists" {
-    cd "${TEST_TEMP_DIR}/project"
-
-    # Create feature first time
-    run "$RALPH_SCRIPT" init existing-feature
-    [ "$status" -eq 0 ]
-
-    # Try to create again
-    run "$RALPH_SCRIPT" init existing-feature
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "already exists" ]]
-}
-
-@test "ralph init creates progress.txt with header" {
-    cd "${TEST_TEMP_DIR}/project"
-
-    run "$RALPH_SCRIPT" init header-test
-    [ "$status" -eq 0 ]
-
-    # Check progress.txt has header
-    run grep -q "Progress Log" ".ralph/header-test/progress.txt"
-    [ "$status" -eq 0 ]
-}
-
-#=============================================================================
 # Status Command Tests
 #=============================================================================
 
 @test "ralph status shows feature information" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "status-test" "true" "false"
+    setup_feature_branch "feature/status-test" "true" "false"
 
-    run "$RALPH_SCRIPT" status -f status-test
+    run "$RALPH_SCRIPT" status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "status-test" ]]
+    [[ "$output" =~ "status-test" ]] || [[ "$output" =~ "feature-status-test" ]]
     [[ "$output" =~ "1/2" ]] || [[ "$output" =~ "Stories:" ]]
 }
 
 @test "ralph status shows circuit breaker state" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "cb-status"
+    setup_feature_branch "feature/cb-status"
 
     # Initialize circuit breaker state
     source "$PROJECT_ROOT/lib/circuit_breaker.sh"
-    export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph/cb-status"
+    export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph/feature-cb-status"
     cb_init
 
-    run "$RALPH_SCRIPT" status -f cb-status
+    run "$RALPH_SCRIPT" status
     [ "$status" -eq 0 ]
     # Should show circuit breaker info
     [[ "$output" =~ "Circuit" ]] || [[ "$output" =~ "breaker" ]] || [[ "$output" =~ "OK" ]]
 }
 
-@test "ralph status auto-detects single feature" {
+@test "ralph status fails when no feature folder exists" {
     cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "auto-detect"
-
-    run "$RALPH_SCRIPT" status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "auto-detect" ]]
-}
-
-@test "ralph status fails with no features" {
-    cd "${TEST_TEMP_DIR}/project"
-    # No features created
+    git checkout -b "feature/no-folder" --quiet
+    # No feature folder created
 
     run "$RALPH_SCRIPT" status
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "No feature" ]] || [[ "$output" =~ "not found" ]]
+    [[ "$output" =~ "not found" ]] || [[ "$output" =~ "does not exist" ]] || [[ "$output" =~ "No feature" ]]
+}
+
+@test "ralph status fails on protected branch" {
+    cd "${TEST_TEMP_DIR}/project"
+    # Stay on main branch (no feature branch)
+
+    run "$RALPH_SCRIPT" status
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "protected" ]] || [[ "$output" =~ "main" ]] || [[ "$output" =~ "not found" ]]
 }
 
 #=============================================================================
@@ -325,10 +274,9 @@ EOF
 #=============================================================================
 
 @test "ralph archive creates timestamped archive" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "archive-test"
+    setup_feature_branch "feature/archive-test"
 
-    run "$RALPH_SCRIPT" archive -f archive-test
+    run "$RALPH_SCRIPT" archive
     [ "$status" -eq 0 ]
 
     # Check archive was created
@@ -341,21 +289,19 @@ EOF
 }
 
 @test "ralph archive removes original feature folder" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "to-archive"
+    setup_feature_branch "feature/to-archive"
 
-    run "$RALPH_SCRIPT" archive -f to-archive
+    run "$RALPH_SCRIPT" archive
     [ "$status" -eq 0 ]
 
     # Original should be gone
-    [ ! -d ".ralph/to-archive" ]
+    [ ! -d ".ralph/feature-to-archive" ]
 }
 
 @test "ralph archive preserves prd.json and progress.txt" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "preserve-test"
+    setup_feature_branch "feature/preserve-test"
 
-    run "$RALPH_SCRIPT" archive -f preserve-test
+    run "$RALPH_SCRIPT" archive
     [ "$status" -eq 0 ]
 
     # Find the archive
@@ -373,42 +319,38 @@ EOF
 #=============================================================================
 
 @test "ralph run requires claude command" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "no-claude"
+    setup_feature_branch "feature/no-claude"
 
     # Ensure claude is not in PATH
     rm -f "${TEST_TEMP_DIR}/bin/claude"
 
-    run "$RALPH_SCRIPT" run -f no-claude --max-iterations 1
+    run "$RALPH_SCRIPT" run --max-iterations 1 --skip-preflight
     [ "$status" -eq 1 ]
     [[ "$output" =~ "claude" ]] || [[ "$output" =~ "not found" ]] || [[ "$output" =~ "Required" ]]
 }
 
 @test "ralph run --dry-run shows what would happen" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "dry-run-test"
+    setup_feature_branch "feature/dry-run-test"
     create_mock_claude "Done!"
 
-    run "$RALPH_SCRIPT" run -f dry-run-test --dry-run
+    run "$RALPH_SCRIPT" run --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dry" ]] || [[ "$output" =~ "Dry" ]] || [[ "$output" =~ "Would" ]]
 }
 
 @test "ralph run parses --max-iterations option" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "max-iter"
+    setup_feature_branch "feature/max-iter"
     create_mock_claude "Done!"
 
-    run "$RALPH_SCRIPT" run -f max-iter -n 1 --dry-run
+    run "$RALPH_SCRIPT" run -n 1 --dry-run
     [ "$status" -eq 0 ]
 }
 
 @test "ralph run parses -t timeout option" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "timeout-test"
+    setup_feature_branch "feature/timeout-test"
     create_mock_claude "Done!"
 
-    run "$RALPH_SCRIPT" run -f timeout-test -t 5 --dry-run
+    run "$RALPH_SCRIPT" run -t 5 --dry-run
     [ "$status" -eq 0 ]
 }
 
@@ -416,35 +358,31 @@ EOF
 # Run Command - Completion Tests
 #=============================================================================
 
-@test "ralph run exits 0 on completion promise" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "promise-complete"
+@test "ralph run exits 0 on completion promise when all stories complete" {
+    setup_feature_branch "feature/promise-complete" "true" "true"
     create_mock_claude_complete
 
-    run "$RALPH_SCRIPT" run -f promise-complete -n 5 --no-archive
+    run "$RALPH_SCRIPT" run -n 5 --no-archive
     [ "$status" -eq 0 ]
 }
 
 @test "ralph run exits 0 when all stories complete" {
-    cd "${TEST_TEMP_DIR}/project"
-    # Create feature with all stories already complete
-    create_test_feature "all-complete" "true" "true"
+    setup_feature_branch "feature/all-complete" "true" "true"
     create_mock_claude "Done!"
 
-    run "$RALPH_SCRIPT" run -f all-complete -n 5 --no-archive
+    run "$RALPH_SCRIPT" run -n 5 --no-archive
     [ "$status" -eq 0 ]
 }
 
 @test "ralph run archives on completion by default" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "auto-archive" "true" "true"
+    setup_feature_branch "feature/auto-archive" "true" "true"
     create_mock_claude_complete
 
-    run "$RALPH_SCRIPT" run -f auto-archive -n 5
+    run "$RALPH_SCRIPT" run -n 5
     [ "$status" -eq 0 ]
 
     # Feature should be archived
-    [ ! -d ".ralph/auto-archive" ]
+    [ ! -d ".ralph/feature-auto-archive" ]
 
     # Archive should exist
     local archive_count
@@ -453,15 +391,14 @@ EOF
 }
 
 @test "ralph run --no-archive skips archiving" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "no-archive" "true" "true"
+    setup_feature_branch "feature/no-archive" "true" "true"
     create_mock_claude_complete
 
-    run "$RALPH_SCRIPT" run -f no-archive -n 5 --no-archive
+    run "$RALPH_SCRIPT" run -n 5 --no-archive
     [ "$status" -eq 0 ]
 
     # Feature should still exist
-    [ -d ".ralph/no-archive" ]
+    [ -d ".ralph/feature-no-archive" ]
 }
 
 #=============================================================================
@@ -469,11 +406,10 @@ EOF
 #=============================================================================
 
 @test "ralph run exits 1 on max iterations" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "max-reached"
+    setup_feature_branch "feature/max-reached"
     create_mock_claude "Still working..."
 
-    run "$RALPH_SCRIPT" run -f max-reached -n 2
+    run "$RALPH_SCRIPT" run -n 2 --skip-preflight
     [ "$status" -eq 1 ]
 }
 
@@ -482,25 +418,23 @@ EOF
 #=============================================================================
 
 @test "ralph run exits 1 when circuit breaker trips on no progress" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "no-progress"
+    setup_feature_branch "feature/no-progress"
     create_mock_claude "Still working, no changes..."
 
     # Set low threshold
     export RALPH_NO_PROGRESS_THRESHOLD=2
 
-    run "$RALPH_SCRIPT" run -f no-progress -n 10
+    run "$RALPH_SCRIPT" run -n 10 --skip-preflight
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Circuit" ]] || [[ "$output" =~ "progress" ]] || [[ "$output" =~ "breaker" ]]
 }
 
 @test "ralph run --reset-circuit resets circuit breaker" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "reset-cb"
+    setup_feature_branch "feature/reset-cb" "true" "true"
     create_mock_claude_complete
 
     # Initialize with tripped state
-    export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph/reset-cb"
+    export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph/feature-reset-cb"
     mkdir -p "$RALPH_STATE_DIR"
     cat > "${RALPH_STATE_DIR}/circuit_breaker.state" << 'EOF'
 NO_PROGRESS_COUNT=5
@@ -509,7 +443,7 @@ LAST_ERROR_HASH=
 LAST_PASSES_STATE=
 EOF
 
-    run "$RALPH_SCRIPT" run -f reset-cb -n 5 --reset-circuit --no-archive
+    run "$RALPH_SCRIPT" run -n 5 --reset-circuit --no-archive
     [ "$status" -eq 0 ]
 }
 
@@ -518,11 +452,10 @@ EOF
 #=============================================================================
 
 @test "ralph run -v enables verbose output" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "verbose-test" "true" "true"
+    setup_feature_branch "feature/verbose-test" "true" "true"
     create_mock_claude_complete
 
-    run "$RALPH_SCRIPT" run -f verbose-test -n 5 -v --no-archive
+    run "$RALPH_SCRIPT" run -n 5 -v --no-archive
     [ "$status" -eq 0 ]
     # Verbose mode should have more detailed output
     [[ "$output" =~ "Iteration" ]] || [[ "$output" =~ "iteration" ]] || [[ "$output" =~ "DEBUG" ]]
@@ -533,11 +466,10 @@ EOF
 #=============================================================================
 
 @test "ralph run --dangerously-skip-permissions is shown in dry-run" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "skip-perms" "false" "false"
+    setup_feature_branch "feature/skip-perms"
     create_mock_claude "Done!"
 
-    run "$RALPH_SCRIPT" run -f skip-perms -n 5 --dangerously-skip-permissions --dry-run
+    run "$RALPH_SCRIPT" run -n 5 --dangerously-skip-permissions --dry-run
     [ "$status" -eq 0 ]
     # Dry-run should show Skip permissions setting
     [[ "$output" =~ "Skip permissions: true" ]]
@@ -548,8 +480,7 @@ EOF
 #=============================================================================
 
 @test "ralph run -p uses custom prompt file" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "custom-prompt" "true" "true"
+    setup_feature_branch "feature/custom-prompt" "true" "true"
     create_mock_claude_complete
 
     # Create custom prompt
@@ -558,64 +489,80 @@ EOF
 This is a custom prompt.
 EOF
 
-    run "$RALPH_SCRIPT" run -f custom-prompt -p "${TEST_TEMP_DIR}/custom.md" -n 5 --no-archive
+    run "$RALPH_SCRIPT" run -p "${TEST_TEMP_DIR}/custom.md" -n 5 --no-archive
     [ "$status" -eq 0 ]
 }
 
 @test "ralph run fails with non-existent prompt file" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "bad-prompt"
+    setup_feature_branch "feature/bad-prompt"
     create_mock_claude "Done!"
 
-    run "$RALPH_SCRIPT" run -f bad-prompt -p "/nonexistent/prompt.md" -n 1
+    run "$RALPH_SCRIPT" run -p "/nonexistent/prompt.md" -n 1 --skip-preflight
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not found" ]] || [[ "$output" =~ "does not exist" ]]
 }
 
 #=============================================================================
-# Feature Auto-Detection Tests
+# Branch-Based Feature Detection Tests
 #=============================================================================
 
-@test "ralph run auto-detects single feature" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "single-feature" "true" "true"
+@test "ralph run uses branch name for feature detection" {
+    setup_feature_branch "feature/branch-detect" "true" "true"
     create_mock_claude_complete
 
     run "$RALPH_SCRIPT" run -n 5 --no-archive
     [ "$status" -eq 0 ]
 }
 
-@test "ralph run fails with multiple features and no -f flag" {
+@test "ralph run fails on protected branch (main)" {
     cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "feature-one"
-    create_test_feature "feature-two"
-    create_mock_claude "Done!"
+    # Stay on main/master branch
 
     run "$RALPH_SCRIPT" run -n 1
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "multiple" ]] || [[ "$output" =~ "specify" ]] || [[ "$output" =~ "-f" ]]
+    [[ "$output" =~ "protected" ]] || [[ "$output" =~ "main" ]] || [[ "$output" =~ "master" ]] || [[ "$output" =~ "not found" ]]
 }
 
-#=============================================================================
-# Branch Setup Tests
-#=============================================================================
-
-@test "ralph run creates branch from prd.json branchName" {
+@test "ralph run converts slashes to dashes in feature folder" {
     cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "branch-test" "true" "true"
+    git checkout -b "feature/nested/path/test" --quiet
+
+    # Create folder with converted name
+    mkdir -p ".ralph/feature-nested-path-test"
+    cat > ".ralph/feature-nested-path-test/prd.json" << 'EOF'
+{
+  "description": "Test",
+  "createdAt": "2026-01-09T12:00:00Z",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Test story",
+      "acceptanceCriteria": ["Test"],
+      "priority": 1,
+      "passes": true
+    }
+  ]
+}
+EOF
+    cat > ".ralph/feature-nested-path-test/spec.md" << 'EOF'
+# Spec
+## Problem Statement
+Test
+## Success Criteria
+Test
+## User Stories
+### STORY-001: Test
+Test
+## Out of Scope
+None
+EOF
+    cat > ".ralph/feature-nested-path-test/progress.txt" << 'EOF'
+# Progress
+EOF
     create_mock_claude_complete
 
-    # Verify we're on main/master
-    local initial_branch
-    initial_branch=$(git branch --show-current)
-
-    run "$RALPH_SCRIPT" run -f branch-test -n 5 --no-archive
+    run "$RALPH_SCRIPT" run -n 5 --no-archive
     [ "$status" -eq 0 ]
-
-    # Check we're on the feature branch
-    local current_branch
-    current_branch=$(git branch --show-current)
-    [[ "$current_branch" == "feature/branch-test" ]]
 }
 
 #=============================================================================
@@ -623,11 +570,9 @@ EOF
 #=============================================================================
 
 @test "ralph run records progress when prd.json changes" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "progress-track"
+    setup_feature_branch "feature/progress-track"
 
     # Create mock claude that makes progress and completes
-    local call_count=0
     cat > "${TEST_TEMP_DIR}/bin/claude" << 'OUTER'
 #!/bin/bash
 CALL_FILE="${TEST_TEMP_DIR}/call_count"
@@ -651,7 +596,7 @@ OUTER
     chmod +x "${TEST_TEMP_DIR}/bin/claude"
     export TEST_TEMP_DIR
 
-    run "$RALPH_SCRIPT" run -f progress-track -n 5 --no-archive
+    run "$RALPH_SCRIPT" run -n 5 --no-archive --skip-preflight
     # May exit 0 or 1 depending on progress detection
     [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
 }
@@ -661,11 +606,10 @@ OUTER
 #=============================================================================
 
 @test "ralph run respects rate limit settings" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "rate-limit" "true" "true"
+    setup_feature_branch "feature/rate-limit" "true" "true"
     create_mock_claude_complete
 
-    run "$RALPH_SCRIPT" run -f rate-limit -r 50 -n 5 --no-archive
+    run "$RALPH_SCRIPT" run -r 50 -n 5 --no-archive
     [ "$status" -eq 0 ]
 }
 
@@ -680,8 +624,7 @@ OUTER
 }
 
 @test "ralph run handles invalid option gracefully" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "invalid-opt"
+    setup_feature_branch "feature/invalid-opt"
 
     run "$RALPH_SCRIPT" run --invalid-option
     [ "$status" -eq 1 ]
@@ -691,36 +634,80 @@ OUTER
 # Git Integration Tests
 #=============================================================================
 
-@test "ralph init outside git repo warns or fails" {
+@test "ralph fails gracefully outside git repo" {
     cd "${TEST_TEMP_DIR}"
     mkdir -p non-git-dir
     cd non-git-dir
 
-    run "$RALPH_SCRIPT" init test-feature
-    # Should either fail or warn
-    [[ "$status" -eq 1 ]] || [[ "$output" =~ "git" ]] || [[ "$output" =~ "warning" ]]
+    run "$RALPH_SCRIPT" status
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "git" ]] || [[ "$output" =~ "repository" ]] || [[ "$output" =~ "not found" ]]
 }
 
 #=============================================================================
 # Prerequisite Checks Tests
 #=============================================================================
 
-@test "ralph run checks for jq" {
-    cd "${TEST_TEMP_DIR}/project"
-    create_test_feature "jq-check"
+@test "ralph run checks prerequisites in dry-run" {
+    setup_feature_branch "feature/prereq-check"
     create_mock_claude "Done!"
 
-    # Create a mock that removes jq from path
-    local original_path="$PATH"
+    # Verify the script runs prerequisite checks
+    run "$RALPH_SCRIPT" run --dry-run
+    [ "$status" -eq 0 ]
+}
 
-    # Create a wrapper script that hides jq
-    cat > "${TEST_TEMP_DIR}/bin/test_jq_missing" << 'EOF'
-#!/bin/bash
-# This test verifies jq is checked
-exit 0
+#=============================================================================
+# Preflight Integration Tests
+#=============================================================================
+
+@test "ralph run runs preflight by default" {
+    setup_feature_branch "feature/preflight-default" "true" "true"
+    create_mock_claude_complete
+
+    run "$RALPH_SCRIPT" run -n 5 --no-archive
+    [ "$status" -eq 0 ]
+    # Preflight should pass and not show errors
+}
+
+@test "ralph run --skip-preflight bypasses checks" {
+    setup_feature_branch "feature/skip-preflight"
+    create_mock_claude "Done!"
+
+    # Remove spec.md to break sync check
+    rm -f ".ralph/feature-skip-preflight/spec.md"
+
+    run "$RALPH_SCRIPT" run -n 1 --skip-preflight
+    # Should run (even though preflight would fail) because we skipped it
+    # Will fail for other reasons (max iterations, etc.)
+    [[ "$output" =~ "Skipping preflight" ]] || [ "$status" -eq 1 ]
+}
+
+@test "ralph validate runs all preflight checks" {
+    setup_feature_branch "feature/validate-test"
+
+    run "$RALPH_SCRIPT" validate
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pass" ]] || [[ "$output" =~ "OK" ]] || [[ "$output" =~ "success" ]]
+}
+
+@test "ralph validate fails when sync check fails" {
+    setup_feature_branch "feature/validate-sync-fail"
+
+    # Add a story to prd.json that's not in spec.md
+    cat > ".ralph/feature-validate-sync-fail/prd.json" << 'EOF'
+{
+  "description": "Test",
+  "createdAt": "2026-01-09T12:00:00Z",
+  "userStories": [
+    {"id": "STORY-001", "passes": false},
+    {"id": "STORY-002", "passes": false},
+    {"id": "STORY-999", "passes": false}
+  ]
+}
 EOF
 
-    # Can't easily remove jq, just verify the script runs prerequisite checks
-    run "$RALPH_SCRIPT" run -f jq-check --dry-run
-    [ "$status" -eq 0 ]
+    run "$RALPH_SCRIPT" validate
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "STORY-999" ]] || [[ "$output" =~ "orphan" ]] || [[ "$output" =~ "sync" ]]
 }

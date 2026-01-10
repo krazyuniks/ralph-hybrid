@@ -193,6 +193,9 @@ EOF
     export RALPH_PROJECT_CONFIG="$TEST_TEMP_DIR/.ralph/config.yaml"
     export RALPH_GLOBAL_CONFIG="$TEST_TEMP_DIR/nonexistent/config.yaml"
 
+    # Unset existing values to ensure clean test
+    unset RALPH_MAX_ITERATIONS RALPH_TIMEOUT_MINUTES RALPH_NO_PROGRESS_THRESHOLD
+
     load_config
 
     [ "$RALPH_MAX_ITERATIONS" = "25" ]
