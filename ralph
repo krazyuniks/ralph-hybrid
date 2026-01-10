@@ -21,6 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #=============================================================================
 
 source "${SCRIPT_DIR}/lib/utils.sh"
+source "${SCRIPT_DIR}/lib/preflight.sh"
 source "${SCRIPT_DIR}/lib/circuit_breaker.sh"
 source "${SCRIPT_DIR}/lib/rate_limiter.sh"
 source "${SCRIPT_DIR}/lib/exit_detection.sh"
@@ -78,6 +79,7 @@ Examples:
   ralph run -n 30 -t 20
   ralph status
   ralph archive
+  ralph validate
 
 For more information, see: https://github.com/krazyuniks/ralph-hybrid
 EOF
@@ -222,6 +224,27 @@ cmd_archive() {
 
     log_success "Feature archived to: ${archive_path}"
     return 0
+}
+
+#=============================================================================
+# Validate Command
+#=============================================================================
+
+cmd_validate() {
+    # No arguments expected - feature auto-detected from branch
+    if [[ $# -gt 0 ]]; then
+        log_error "Unknown option: $1"
+        return 1
+    fi
+
+    # Check git repo first
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Run all preflight checks (feature_dir auto-detected from branch)
+    pf_run_all_checks
+    return $?
 }
 
 #=============================================================================
@@ -747,6 +770,9 @@ main() {
             ;;
         archive)
             cmd_archive "$@"
+            ;;
+        validate)
+            cmd_validate "$@"
             ;;
         run)
             cmd_run "$@"

@@ -129,3 +129,38 @@ Learnings:
   - Error messages include specific story IDs for easy debugging
   - Pre-existing test failures (261, 305) are unrelated to sync check implementation
 
+---
+Iteration: 7
+Date: 2026-01-10T10:15:00Z
+Story: STORY-006 - Add ralph validate command
+Status: complete
+Files Changed:
+  - ralph (added lib/preflight.sh source, cmd_validate() function, validate case in main, added example)
+  - tests/unit/test_story006_validate.bats (new file - 19 unit tests)
+Tests Added:
+  - test_story006_validate.bats with 19 tests covering:
+    - ralph validate command is recognized
+    - ralph validate returns exit code 0 on success
+    - ralph validate outputs success message when all checks pass
+    - ralph validate runs branch check
+    - ralph validate runs folder existence check
+    - ralph validate runs required files check
+    - ralph validate runs prd.json schema check
+    - ralph validate runs spec.md structure check
+    - ralph validate runs sync check
+    - ralph validate returns non-zero when feature folder missing
+    - ralph validate returns non-zero when prd.json missing
+    - ralph validate returns non-zero when prd.json invalid
+    - ralph validate returns non-zero when stories out of sync
+    - ralph validate shows clear failure message on error
+    - ralph validate shows which files are missing
+    - ralph help includes validate command
+    - ralph help describes validate command purpose
+    - ralph validate shows warning on main branch
+    - ralph validate fails in detached HEAD state
+Learnings:
+  - lib/preflight.sh was already complete with pf_run_all_checks() function
+  - Help text already included validate command, just needed case handler
+  - cmd_validate() is simple: check git repo, then call pf_run_all_checks()
+  - Pre-existing test failures (ed_check, load_config) are unrelated to validate command
+
