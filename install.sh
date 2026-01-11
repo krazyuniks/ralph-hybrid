@@ -200,6 +200,21 @@ copy_templates_directory() {
     fi
 }
 
+copy_commands_directory() {
+    local src="${SCRIPT_DIR}/.claude/commands"
+
+    if [[ -d "$src" ]]; then
+        local action="Installed"
+        [[ -d "${INSTALL_DIR}/commands" ]] && action="Updated"
+        # Remove existing commands to ensure clean copy
+        rm -rf "${INSTALL_DIR}/commands"
+        cp -r "$src" "${INSTALL_DIR}/commands"
+        print_info "${action} commands/ (Claude slash commands)"
+    else
+        print_warn ".claude/commands/ not found in source - skipping"
+    fi
+}
+
 create_default_config() {
     local config_file="${INSTALL_DIR}/config.yaml"
     local template="${SCRIPT_DIR}/templates/config.yaml.example"
@@ -237,6 +252,7 @@ install_files() {
     copy_ralph_executable
     copy_lib_directory
     copy_templates_directory
+    copy_commands_directory
     create_default_config
 }
 
@@ -305,11 +321,11 @@ print_success() {
     else
         echo -e "${GREEN}Installation complete!${NC}"
         echo ""
-        echo "To use ralph:"
+        echo "To use ralph in a project:"
         echo "  1. Restart your shell or run: source ~/.zshrc"
         echo "  2. Navigate to your project"
-        echo "  3. Create .ralph/<feature>/spec.md with your requirements"
-        echo "  4. Run: /ralph-prd to generate prd.json"
+        echo "  3. Run: ralph setup  (installs /ralph-plan, /ralph-prd, etc.)"
+        echo "  4. In Claude Code, run: /ralph-plan <description>"
         echo "  5. Run: ralph run"
     fi
     echo ""

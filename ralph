@@ -58,11 +58,12 @@ Commands:
   status                 Show current feature status
   archive                Archive a completed feature
   validate               Run preflight checks without starting loop
+  setup                  Install Claude commands (/ralph-plan, etc.) to project
   help                   Show this help message
   version                Show version information
 
 Note: Feature folder is automatically derived from current git branch.
-      Use /ralph-plan in Claude Code to create feature files.
+      Run 'ralph setup' first, then use /ralph-plan in Claude Code.
 
 Run Options:
   -n, --max-iterations N     Maximum iterations (default: 20)
@@ -247,6 +248,74 @@ cmd_validate() {
     # Run all preflight checks (feature_dir auto-detected from branch)
     pf_run_all_checks
     return $?
+}
+
+#=============================================================================
+# Setup Command - Install Claude Commands to Project
+#=============================================================================
+
+cmd_setup() {
+    local ralph_home="${HOME}/.ralph"
+    local commands_src="${ralph_home}/commands"
+    local project_dir="${PWD}"
+    local commands_dest="${project_dir}/.claude/commands"
+
+    # Check if ralph is installed
+    if [[ ! -d "$ralph_home" ]]; then
+        log_error "Ralph not installed. Run install.sh first."
+        return 1
+    fi
+
+    # Check if commands exist in ralph home
+    if [[ ! -d "$commands_src" ]]; then
+        log_error "Commands not found in ${commands_src}"
+        log_info "Re-run install.sh to install command files"
+        return 1
+    fi
+
+    # Check if we're in a git repo
+    if ! git rev-parse --git-dir &>/dev/null; then
+        log_warn "Not in a git repository. Continuing anyway..."
+    fi
+
+    # Create .claude/commands if needed
+    mkdir -p "$commands_dest"
+
+    # Copy command files
+    local copied=0
+    local updated=0
+    for cmd_file in "${commands_src}"/*.md; do
+        if [[ -f "$cmd_file" ]]; then
+            local filename
+            filename=$(basename "$cmd_file")
+            if [[ -f "${commands_dest}/${filename}" ]]; then
+                updated=$((updated + 1))
+            else
+                copied=$((copied + 1))
+            fi
+            cp "$cmd_file" "${commands_dest}/${filename}"
+        fi
+    done
+
+    if [[ $copied -eq 0 && $updated -eq 0 ]]; then
+        log_warn "No command files found to install"
+        return 1
+    fi
+
+    log_success "Installed Claude commands to ${commands_dest}/"
+    if [[ $copied -gt 0 ]]; then
+        log_info "  Added: ${copied} command(s)"
+    fi
+    if [[ $updated -gt 0 ]]; then
+        log_info "  Updated: ${updated} command(s)"
+    fi
+    echo ""
+    log_info "Available commands in Claude Code:"
+    log_info "  /ralph-plan   - Interactive feature planning"
+    log_info "  /ralph-prd    - Generate prd.json from spec.md"
+    log_info "  /ralph-amend  - Amend requirements during implementation"
+
+    return 0
 }
 
 #=============================================================================
@@ -803,6 +872,9 @@ main() {
             ;;
         validate)
             cmd_validate "$@"
+            ;;
+        setup)
+            cmd_setup "$@"
             ;;
         run)
             cmd_run "$@"
