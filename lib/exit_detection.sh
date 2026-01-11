@@ -20,6 +20,12 @@ fi
 # shellcheck source=./utils.sh
 source "${_ED_LIB_DIR}/utils.sh"
 
+# Source quality_check.sh for quality gate verification
+# shellcheck source=./quality_check.sh
+if [[ -f "${_ED_LIB_DIR}/quality_check.sh" ]]; then
+    source "${_ED_LIB_DIR}/quality_check.sh"
+fi
+
 #=============================================================================
 # Constants and Patterns
 #=============================================================================
@@ -345,11 +351,11 @@ ed_check_story_complete() {
     return 1
 }
 
-# Check if all stories in prd.json have passes=true
+# Check if all stories in prd.json have passes=true AND quality checks pass
 # Arguments:
 #   $1 - Path to prd.json file
 # Returns:
-#   0 if all complete, 1 otherwise
+#   0 if all complete AND quality checks pass, 1 otherwise
 ed_check_all_complete() {
     local prd_file="${1:-}"
 
@@ -358,13 +364,25 @@ ed_check_all_complete() {
         return 1
     fi
 
-    # Use the all_stories_complete function from utils.sh
-    if all_stories_complete "$prd_file"; then
-        log_debug "All stories complete in $prd_file"
-        return 0
+    # First check if all stories have passes=true in prd.json
+    if ! all_stories_complete "$prd_file"; then
+        return 1
     fi
 
-    return 1
+    log_debug "All stories marked complete in $prd_file"
+
+    # Now verify with quality checks (if qc_verify_all_complete is available)
+    if declare -f qc_verify_all_complete &>/dev/null; then
+        if ! qc_verify_all_complete "$prd_file"; then
+            log_error "Quality checks failed! Story completion cannot be trusted."
+            log_error "Claude should fix issues and re-run quality checks."
+            return 1
+        fi
+    else
+        log_debug "Quality check module not loaded, skipping verification"
+    fi
+
+    return 0
 }
 
 # Check for API limit messages in output
@@ -599,9 +617,25 @@ ed_check() {
 
     # Priority 3: Check for story completion signal (one story done)
     # This triggers a fresh context for the next story
+    # BUT we verify quality checks pass before accepting completion
     if ed_check_story_complete "$output"; then
-        echo "story_complete"
-        return 0
+        # Verify quality checks before accepting story completion
+        if declare -f qc_run &>/dev/null && qc_is_configured; then
+            if qc_run; then
+                log_info "Story completion verified - quality checks passed"
+                echo "story_complete"
+                return 0
+            else
+                log_error "Story marked complete but quality checks FAILED!"
+                log_error "Claude should fix issues. Continuing iteration..."
+                echo "continue"
+                return 0
+            fi
+        else
+            # No quality checks configured, accept completion
+            echo "story_complete"
+            return 0
+        fi
     fi
 
     # Priority 4: Check for API limit
