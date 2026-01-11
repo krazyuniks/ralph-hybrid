@@ -176,6 +176,16 @@ with the same rigor as original stories.
 7. **Read before edit** - Always read files before modifying
 8. **Treat amendments equally** - Amended stories are just as important as original stories
 
+## Parallel Execution
+
+When you have multiple independent tasks (e.g., searching for patterns, exploring the codebase, running tests), use sub-agents to execute them in parallel:
+
+- **Use the Task tool** with `subagent_type=Explore` for codebase searches
+- **Spawn multiple agents** in a single message when tasks are independent
+- **Run tests in background** while continuing other work
+
+This keeps your main context focused and speeds up execution.
+
 ## If Blocked
 
 If you cannot complete a story:
