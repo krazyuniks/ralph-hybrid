@@ -105,6 +105,20 @@ If all checks pass:
      - [Gotchas encountered]
    ```
 
+5. **Commit tracking files:**
+   ```bash
+   git add .ralph/
+   git commit -m "chore: Update progress for [STORY-ID]"
+   ```
+
+6. **Rebase on main:**
+   ```bash
+   git fetch origin main
+   git rebase origin/main
+   ```
+   - If conflicts occur, resolve them and `git rebase --continue`
+   - If rebase fails and cannot be resolved, run `git rebase --abort`, document the issue in progress.txt, and continue to signal completion
+
 ### 6. Signal Completion and STOP
 
 **After completing the story, you MUST signal and stop immediately:**
