@@ -767,16 +767,33 @@ _progress_bar() {
 }
 
 # Display the title bar with feature and story context
-# Args: feature_name prd_file iteration max_iterations
+# Args: feature_name prd_file iteration max_iterations [start_time] [timeout_minutes]
 _display_title_bar() {
     local feature_name="$1"
     local prd_file="$2"
     local iteration="$3"
     local max_iterations="$4"
+    local start_time="${5:-}"
+    local timeout_minutes="${6:-${RALPH_TIMEOUT_MINUTES:-15}}"
 
     local term_width
     term_width=$(_get_terminal_width)
     local bar_width=$((term_width - 4))
+
+    # Calculate timeout countdown if start_time provided
+    local timeout_display=""
+    if [[ -n "$start_time" ]]; then
+        local now elapsed remaining_secs remaining_mins remaining_secs_part
+        now=$(date +%s)
+        elapsed=$((now - start_time))
+        remaining_secs=$((timeout_minutes * 60 - elapsed))
+        if [[ $remaining_secs -lt 0 ]]; then
+            remaining_secs=0
+        fi
+        remaining_mins=$((remaining_secs / 60))
+        remaining_secs_part=$((remaining_secs % 60))
+        timeout_display=$(printf "⏱ %02d:%02d" "$remaining_mins" "$remaining_secs_part")
+    fi
 
     # Get story info
     local total_stories passed_stories current_idx current_title current_id
@@ -786,8 +803,9 @@ _display_title_bar() {
     current_title=$(prd_get_current_story_title "$prd_file")
     current_id=$(prd_get_current_story_id "$prd_file")
 
-    # Truncate title if too long
-    local max_title_len=$((term_width - 40))
+    # Truncate title if too long (account for timeout display)
+    local timeout_len=${#timeout_display}
+    local max_title_len=$((term_width - 40 - timeout_len))
     if [[ ${#current_title} -gt $max_title_len ]]; then
         current_title="${current_title:0:$((max_title_len - 3))}..."
     fi
@@ -810,7 +828,7 @@ _display_title_bar() {
     local padding1=$((bar_width - line1_len))
     printf "${UI_BORDER}│${UI_RESET}${UI_TITLE}%s%*s${UI_RESET}${UI_BORDER}│${UI_RESET}\n" "$line1" "$padding1" ""
 
-    # Line 2: Current story
+    # Line 2: Current story with timeout countdown
     local line2
     if [[ "$current_idx" -gt 0 ]]; then
         line2="  Story ${current_idx}/${total_stories}: ${current_id} - ${current_title}"
@@ -818,8 +836,16 @@ _display_title_bar() {
         line2="  All stories complete!"
     fi
     local line2_len=${#line2}
-    local padding2=$((bar_width - line2_len))
-    printf "${UI_BORDER}│${UI_RESET}${UI_SUBTITLE}%s%*s${UI_RESET}${UI_BORDER}│${UI_RESET}\n" "$line2" "$padding2" ""
+    local timeout_len=${#timeout_display}
+    local gap2=$((bar_width - line2_len - timeout_len - 2))
+    if [[ $gap2 -lt 0 ]]; then gap2=2; fi
+
+    if [[ -n "$timeout_display" ]]; then
+        printf "${UI_BORDER}│${UI_RESET}${UI_SUBTITLE}%s${UI_RESET}%*s${UI_MUTED}%s${UI_RESET}  ${UI_BORDER}│${UI_RESET}\n" "$line2" "$gap2" "" "$timeout_display"
+    else
+        local padding2=$((bar_width - line2_len))
+        printf "${UI_BORDER}│${UI_RESET}${UI_SUBTITLE}%s%*s${UI_RESET}${UI_BORDER}│${UI_RESET}\n" "$line2" "$padding2" ""
+    fi
 
     # Line 3: Progress bar and iteration
     local iter_info="Iteration ${iteration}/${max_iterations}"
@@ -1185,8 +1211,12 @@ _run_iteration() {
     local timeout_cmd="$4"
     local feature_name="$5"
 
-    # Display the title bar with full context
-    _display_title_bar "$feature_name" "$prd_file" "$iteration" "$RALPH_MAX_ITERATIONS"
+    # Record iteration start time for timeout countdown
+    local iteration_start_time
+    iteration_start_time=$(date +%s)
+
+    # Display the title bar with full context and timeout countdown
+    _display_title_bar "$feature_name" "$prd_file" "$iteration" "$RALPH_MAX_ITERATIONS" "$iteration_start_time" "$RALPH_TIMEOUT_MINUTES"
 
     # Export iteration number for hooks
     export RALPH_ITERATION="$iteration"
