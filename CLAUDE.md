@@ -13,28 +13,43 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 | README.md | Complete - Philosophy, rationale, source material |
 | SPEC.md | Complete - Technical specification |
 | templates/ | Complete - Prompt templates, examples |
-| .claude/commands/ | Complete - `/ralph-plan` and `/ralph-prd` commands |
-| Implementation | Not started |
+| .claude/commands/ | Complete - `/ralph-plan`, `/ralph-prd`, `/ralph-amend` commands |
+| lib/ | Complete - All library functions |
+| ralph | Complete - Main CLI script |
+| install.sh | Complete - Global installation |
+| tests/ | Complete - 430 BATS tests |
 
-## Claude Commands
+## CLI Commands
+
+| Command | Purpose |
+|---------|---------|
+| `ralph setup` | Install Claude commands to project's `.claude/commands/` |
+| `ralph run [options]` | Execute the development loop |
+| `ralph status` | Show current feature status |
+| `ralph validate` | Run preflight checks |
+| `ralph archive` | Archive completed feature |
+
+## Claude Commands (installed via `ralph setup`)
 
 | Command | Purpose |
 |---------|---------|
 | `/ralph-plan <description>` | Interactive planning workflow: SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE |
-| `/ralph-prd [feature]` | Generate/regenerate prd.json from existing spec.md |
+| `/ralph-prd` | Generate/regenerate prd.json from existing spec.md |
+| `/ralph-amend` | Safely modify requirements during implementation |
 
-## Next Steps (Implementation Order)
+## Quick Start
 
-1. `lib/utils.sh` - Shared utilities (logging, config loading, branch detection)
-2. `lib/preflight.sh` - Preflight validation and sync check
-3. `lib/circuit_breaker.sh` - Stuck loop detection
-4. `lib/rate_limiter.sh` - API call throttling
-5. `lib/exit_detection.sh` - Completion signal detection
-6. `lib/archive.sh` - Feature archiving
-7. `lib/monitor.sh` - tmux monitoring dashboard
-8. `ralph` - Main script (orchestrates everything)
-9. `install.sh` / `uninstall.sh` - Installation scripts
-10. `tests/*.bats` - BATS test suite
+```bash
+# Install globally (once)
+./install.sh
+
+# In each project
+ralph setup                    # Install Claude commands
+git checkout -b feature/xyz    # Create feature branch
+/ralph-plan "description"      # Plan the feature (in Claude Code)
+ralph run                      # Run implementation loop
+ralph run --model opus         # Or with specific model
+```
 
 ## Key Decisions Made
 

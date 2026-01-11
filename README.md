@@ -395,54 +395,95 @@ A bash-based autonomous development loop that:
 **The Ralph tool** (installed globally):
 ```
 ~/.ralph/
-├── ralph.sh              # Main loop script
+├── ralph                 # Main loop script
 ├── lib/                  # Circuit breaker, rate limiter, etc.
-└── templates/            # Default prompts, prd.json example
+├── templates/            # Default prompts, prd.json example
+├── commands/             # Claude slash commands (/ralph-plan, etc.)
+└── config.yaml           # Global configuration
 ```
 
 **Per-project usage**:
 ```
 your-project/
+├── .claude/
+│   └── commands/             # Installed via 'ralph setup'
+│       ├── ralph-plan.md     # /ralph-plan command
+│       ├── ralph-prd.md      # /ralph-prd command
+│       └── ralph-amend.md    # /ralph-amend command
 └── .ralph/
     ├── config.yaml           # Project settings (optional)
-    └── <feature-name>/       # One folder per feature
-        ├── prd.json          # User stories with passes field
+    └── <feature-name>/       # One folder per feature (from git branch)
+        ├── spec.md           # Source of truth requirements
+        ├── prd.json          # Derived task state (from spec.md)
         ├── progress.txt      # Iteration log (agent reads this)
-        ├── prompt.md         # Custom prompt (optional)
-        └── specs/            # Detailed requirements
+        └── specs/            # Additional spec files (optional)
 ```
 
 ### Status
 
-**Work in Progress**
+**Implementation Complete**
 
 - [x] Specification complete ([SPEC.md](SPEC.md))
 - [x] Templates created
-- [ ] Core loop implementation (ralph.sh)
-- [ ] Library functions (lib/)
-- [ ] Tests (BATS)
-- [ ] Installation script
+- [x] Core loop implementation (ralph)
+- [x] Library functions (lib/)
+- [x] Tests (430 BATS tests)
+- [x] Installation script
 
 ---
 
 ## Getting Started
 
-*Coming soon - implementation in progress.*
+### Prerequisites
+
+- Bash 4.0+
+- [Claude Code CLI](https://claude.ai/code)
+- jq
+- Git
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/krazyuniks/ralph-hybrid.git
+cd ralph-hybrid
+
+# Install globally (to ~/.ralph/)
+./install.sh
+
+# Restart your shell or run:
+source ~/.zshrc  # or ~/.bashrc
+```
+
+### Project Setup
+
+```bash
+# Navigate to your project
+cd your-project
+
+# Install Claude commands to your project
+ralph setup
+
+# This creates:
+#   .claude/commands/ralph-plan.md
+#   .claude/commands/ralph-prd.md
+#   .claude/commands/ralph-amend.md
+```
 
 ### Quick Start
 
 ```bash
-# Install (once)
-./install.sh
-
-# In your project, on a feature branch
+# Create a feature branch
 git checkout -b feature/my-feature
 
-# Plan the feature (interactive)
-/ralph-plan
+# Plan the feature (interactive, in Claude Code)
+/ralph-plan "Add user authentication"
 
 # Run the implementation loop
 ralph run
+
+# Or with a specific model
+ralph run --model opus
 
 # Monitor progress
 ralph status

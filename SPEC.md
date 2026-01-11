@@ -174,6 +174,7 @@ ralph-hybrid/
 ### Commands
 
 ```bash
+ralph setup                     # Install Claude commands to project (.claude/commands/)
 ralph run [options]             # Execute the loop (includes preflight validation)
 ralph status                    # Show current state
 ralph monitor                   # Launch tmux monitoring dashboard
@@ -182,7 +183,7 @@ ralph validate                  # Run preflight checks without starting loop
 ralph help                      # Show help
 ```
 
-> **Note:** There is no `ralph init` command. Use `/ralph-plan` in a Claude Code session to create the feature folder and files. The feature folder is derived from the current git branch name.
+> **Note:** Run `ralph setup` first in each project to install the `/ralph-plan`, `/ralph-prd`, and `/ralph-amend` commands. The feature folder is derived from the current git branch name.
 
 ### Run Options
 
@@ -192,6 +193,7 @@ ralph help                      # Show help
 | `-t, --timeout` | 15 | Per-iteration timeout (minutes) |
 | `-r, --rate-limit` | 100 | Max API calls per hour |
 | `-p, --prompt` | default | Custom prompt file |
+| `-m, --model` | (none) | Claude model (opus, sonnet, or full name) |
 | `-v, --verbose` | false | Detailed output |
 | `--no-archive` | false | Don't archive on completion |
 | `--reset-circuit` | false | Reset circuit breaker state |
@@ -1379,6 +1381,7 @@ The live dashboard shows:
 ### Install
 
 ```bash
+# Clone and install globally
 git clone https://github.com/krazyuniks/ralph-hybrid.git
 cd ralph-hybrid
 ./install.sh                # installs to ~/.ralph/
@@ -1386,11 +1389,21 @@ source ~/.bashrc            # or ~/.zshrc, or open new terminal
 ```
 
 The install script:
-1. Copies files to `~/.ralph/`
+1. Copies files to `~/.ralph/` (ralph, lib/, templates/, commands/)
 2. Adds `~/.ralph` to PATH in shell rc file
-3. Creates default config
+3. Creates default config.yaml
 
 After installation, the cloned repo can be deleted.
+
+### Project Setup
+
+```bash
+# In each project where you want to use Ralph:
+cd your-project
+ralph setup                 # installs Claude commands to .claude/commands/
+```
+
+The setup command copies `/ralph-plan`, `/ralph-prd`, and `/ralph-amend` to your project's `.claude/commands/` directory. This is idempotent - running it again updates the commands.
 
 ### Uninstall
 
