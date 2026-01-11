@@ -78,7 +78,7 @@ qc_is_configured() {
 #   $1 - Optional: Quality check command (defaults to configured command)
 # Returns:
 #   0 if all checks pass
-#   1 if any check fails or quality check not configured
+#   1 if any check fails
 qc_run() {
     local qc_command="${1:-}"
 
@@ -93,7 +93,7 @@ qc_run() {
         log_warn "Story completion will be accepted without verification."
         log_warn "To enable quality checks, add to .ralph/config.yaml:"
         log_warn "  quality_checks:"
-        log_warn "    all: \"just check\"  # or your project's check command"
+        log_warn "    all: \"your-check-command\""
         return 0
     fi
 

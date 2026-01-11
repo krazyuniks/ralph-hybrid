@@ -861,6 +861,93 @@ _display_title_bar() {
     echo ""
 }
 
+# Global to track the countdown timer background process
+_COUNTDOWN_TIMER_PID=""
+
+# Get current cursor row position
+# Output: row number (1-based)
+_get_cursor_row() {
+    local row=1
+    # Request cursor position and read response
+    # Response format: ESC[row;colR
+    if [[ -t 0 ]]; then
+        local oldstty
+        oldstty=$(stty -g 2>/dev/null) || true
+        stty raw -echo min 0 2>/dev/null || true
+        printf '\e[6n' > /dev/tty
+        local response=""
+        # Read until 'R' character
+        while IFS= read -rsn1 char; do
+            response+="$char"
+            [[ "$char" == "R" ]] && break
+        done < /dev/tty
+        stty "$oldstty" 2>/dev/null || true
+        # Parse response: ESC[row;colR
+        if [[ "$response" =~ \[([0-9]+)\;([0-9]+)R ]]; then
+            row="${BASH_REMATCH[1]}"
+        fi
+    fi
+    echo "$row"
+}
+
+# Update the countdown timer in the title bar
+# Args: timer_row start_time timeout_minutes term_width
+# This function updates just the timer portion using cursor positioning
+_update_countdown_timer() {
+    local timer_row="$1"
+    local start_time="$2"
+    local timeout_minutes="$3"
+    local term_width="$4"
+
+    local now elapsed remaining_secs remaining_mins remaining_secs_part
+    now=$(date +%s)
+    elapsed=$((now - start_time))
+    remaining_secs=$((timeout_minutes * 60 - elapsed))
+
+    if [[ $remaining_secs -lt 0 ]]; then
+        remaining_secs=0
+    fi
+
+    remaining_mins=$((remaining_secs / 60))
+    remaining_secs_part=$((remaining_secs % 60))
+    local timeout_display
+    timeout_display=$(printf "⏱ %02d:%02d" "$remaining_mins" "$remaining_secs_part")
+
+    # Calculate column position (timer is right-aligned with 2 char padding before border)
+    local timer_col=$((term_width - ${#timeout_display} - 2))
+
+    # Save cursor, move to timer position, print timer, restore cursor
+    printf '\e7\e[%d;%dH%s\e8' "$timer_row" "$timer_col" "$timeout_display"
+}
+
+# Start the countdown timer updater in background
+# Args: timer_row start_time timeout_minutes term_width
+# Sets: _COUNTDOWN_TIMER_PID
+_start_countdown_timer() {
+    local timer_row="$1"
+    local start_time="$2"
+    local timeout_minutes="$3"
+    local term_width="$4"
+
+    # Run timer update loop in background
+    (
+        while true; do
+            _update_countdown_timer "$timer_row" "$start_time" "$timeout_minutes" "$term_width"
+            sleep 1
+        done
+    ) &
+    _COUNTDOWN_TIMER_PID=$!
+}
+
+# Stop the countdown timer updater
+_stop_countdown_timer() {
+    if [[ -n "${_COUNTDOWN_TIMER_PID:-}" ]]; then
+        kill "$_COUNTDOWN_TIMER_PID" 2>/dev/null || true
+        wait "$_COUNTDOWN_TIMER_PID" 2>/dev/null || true
+        _COUNTDOWN_TIMER_PID=""
+    fi
+}
+
 #=============================================================================
 # Run Command - Validation and Setup
 #=============================================================================
@@ -1071,16 +1158,21 @@ _run_invoke_claude() {
                         buffer=("${buffer[@]:1}")
                     done
 
-                    # Calculate elapsed time
-                    local elapsed=$(( $(date +%s) - start_time ))
+                    # Calculate elapsed and remaining time
+                    local now_secs=$(date +%s)
+                    local elapsed=$(( now_secs - start_time ))
                     local elapsed_str=$(printf "%02d:%02d" $((elapsed/60)) $((elapsed%60)))
+                    local timeout_secs=$((${RALPH_TIMEOUT_MINUTES:-15} * 60))
+                    local remaining=$((timeout_secs - elapsed))
+                    [[ $remaining -lt 0 ]] && remaining=0
+                    local remaining_str=$(printf "%02d:%02d" $((remaining/60)) $((remaining%60)))
 
                     # Move cursor up and redraw window
                     printf '\e[%dA' "$((window_size + 1))"  # Move up (extra line for header)
                     printf '\e[J'                    # Clear to end of screen
 
-                    # Print status header
-                    printf "${UI_MUTED}${UI_BORDER}━━━ Claude Activity ━━━ ${UI_TEXT}Tools: %d | Time: %s${UI_RESET}\n" "$tool_count" "$elapsed_str"
+                    # Print status header with elapsed and remaining time
+                    printf "${UI_MUTED}${UI_BORDER}━━━ Claude Activity ━━━ ${UI_TEXT}Tools: %d | Elapsed: %s | Remaining: %s${UI_RESET}\n" "$tool_count" "$elapsed_str" "$remaining_str"
 
                     # Print buffer with padding
                     for ((i=0; i<window_size; i++)); do
@@ -1219,6 +1311,15 @@ _run_iteration() {
     # Display the title bar with full context and timeout countdown
     _display_title_bar "$feature_name" "$prd_file" "$iteration" "$RALPH_MAX_ITERATIONS" "$iteration_start_time" "$RALPH_TIMEOUT_MINUTES"
 
+    # Start background countdown timer updater
+    # Timer is on line 4 from the end of the title bar (blank, border, progress, timer)
+    local term_width
+    term_width=$(_get_terminal_width)
+    local current_row
+    current_row=$(_get_cursor_row)
+    local timer_row=$((current_row - 4))
+    _start_countdown_timer "$timer_row" "$iteration_start_time" "$RALPH_TIMEOUT_MINUTES" "$term_width"
+
     # Export iteration number for hooks
     export RALPH_ITERATION="$iteration"
 
@@ -1229,6 +1330,7 @@ _run_iteration() {
 
     # Check circuit breaker
     if ! cb_check; then
+        _stop_countdown_timer  # Stop timer before early return
         log_error "Circuit breaker tripped! Stopping loop."
         cb_get_status
         # Execute on_error hooks
@@ -1243,8 +1345,12 @@ _run_iteration() {
     # Check rate limit
     rl_check_hour_reset
     if ! rl_check; then
+        _stop_countdown_timer  # Stop timer during rate limit wait
         log_warn "Rate limit reached."
         rl_wait_for_reset
+        # Restart timer after wait (reset start time)
+        iteration_start_time=$(date +%s)
+        _start_countdown_timer "$timer_row" "$iteration_start_time" "$RALPH_TIMEOUT_MINUTES" "$term_width"
     fi
 
     # Snapshot passes state before
@@ -1261,6 +1367,9 @@ _run_iteration() {
 
     # Invoke Claude CLI
     _run_invoke_claude "$prompt_content" "$timeout_cmd" "$log_file" "$iteration"
+
+    # Stop the countdown timer updater
+    _stop_countdown_timer
 
     # Handle timeout
     if [[ $INVOKE_EXIT_CODE -eq $RALPH_EXIT_TIMEOUT ]]; then
