@@ -56,7 +56,7 @@ ralph run --model opus         # Or with specific model
 
 ### Architecture
 - **Inner-loop only** - Ralph handles feature implementation, not project workflow (PRs, CI, etc.)
-- **Outer-loop agnostic** - Integrates with any workflow (BMAD, Beads, GitHub Issues, etc.)
+- **Outer-loop agnostic** - Integrates with any workflow (BMAD, GitHub Issues, etc.)
 - **Fresh context per iteration** - Each loop starts new Claude session (not the plugin approach which uses single session)
 - **Memory via files** - prd.json, progress.txt, git history provide continuity
 

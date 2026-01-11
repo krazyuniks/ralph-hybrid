@@ -11,7 +11,7 @@ This document tracks the development roadmap for Ralph Hybrid, organized by prio
 | 1 | Critical Fixes | #28, #22, #23, #26 |
 | 2 | Core Refactors | #21, #7 |
 | 3 | Enhanced Feedback | #24, #27 |
-| 4 | New Features | #20, #25, #18, #13 |
+| 4 | New Features | #20, #18, #13 |
 | 5 | Backlog | #14, #9, #10, #11, #17, #16 |
 
 ---
@@ -104,11 +104,6 @@ New capabilities to enhance the Ralph experience.
 - **Display:** Iteration count, status, API usage, rate limit countdown, progress, recent logs
 - **Implementation:** `lib/monitor.sh`, `status.json` per feature
 - **Files:** `lib/monitor.sh` (new), `ralph`
-
-### #25 - Beads integration for /ralph-plan
-- **Problem:** /ralph-plan tries to extract GitHub issue numbers but doesn't know about Beads
-- **Fix:** Check for `bd` CLI and extract bead context before GitHub fallback
-- **Files:** `.claude/commands/ralph-plan.md`
 
 ### #18 - Document specs/ directory patterns
 - **Problem:** specs/ directory pattern exists but isn't documented

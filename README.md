@@ -228,7 +228,7 @@ However, we wanted to experiment with something more direct—a tighter feedback
 The hypothesis: by clearly separating the **inner loop** (iterative feature implementation) from the **outer loop** (project workflow, PRs, CI), we can:
 - Iterate faster on prompt engineering and TDD patterns
 - Swap implementations as the ecosystem matures
-- Integrate with any outer-loop workflow (BMAD, GitHub Issues, Linear, [Beads](https://github.com/beads-project/beads-cli), etc.)
+- Integrate with any outer-loop workflow (BMAD, GitHub Issues, Linear, etc.)
 
 This is an experiment, not a replacement for otherw comprehensive solutions.
 
@@ -298,7 +298,7 @@ This implementation is deliberately **outer-loop agnostic**. It focuses exclusiv
 ```
 
 **Outer Loop** (your existing workflow):
-- Issue tracking (GitHub, Linear, Beads)
+- Issue tracking (GitHub, Linear)
 - Branch/worktree management
 - Pull request creation
 - Code review
