@@ -121,33 +121,8 @@ EOF
     [ "$output" = "" ]
 }
 
-#=============================================================================
-# Feature Name Tests
-#=============================================================================
-
-@test "get_feature_name extracts feature from prd.json" {
-    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
-{
-  "feature": "my-awesome-feature",
-  "userStories": []
-}
-EOF
-    run get_feature_name "$TEST_TEMP_DIR/prd.json"
-    [ "$status" -eq 0 ]
-    [ "$output" = "my-awesome-feature" ]
-}
-
-@test "get_feature_name handles hyphenated names" {
-    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
-{
-  "feature": "user-authentication-v2",
-  "userStories": []
-}
-EOF
-    run get_feature_name "$TEST_TEMP_DIR/prd.json"
-    [ "$status" -eq 0 ]
-    [ "$output" = "user-authentication-v2" ]
-}
+# Note: get_feature_name tests removed - feature identity now comes from folder path (STORY-003)
+# Use get_feature_dir() from utils.sh instead
 
 #=============================================================================
 # All Stories Complete Tests

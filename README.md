@@ -7,13 +7,14 @@
 ## Table of Contents
 
 1. [The Ralph Wiggum Technique](#the-ralph-wiggum-technique)
-2. [Origins and Source Material](#origins-and-source-material)
-3. [Why a Hybrid Implementation?](#why-a-hybrid-implementation)
-4. [Foundational Principles](#foundational-principles)
-5. [Feature Comparison](#feature-comparison)
-6. [This Implementation](#this-implementation)
-7. [Getting Started](#getting-started)
-8. [Documentation](#documentation)
+2. [Plans Are Living Documents](#plans-are-living-documents)
+3. [Origins and Source Material](#origins-and-source-material)
+4. [Why a Hybrid Implementation?](#why-a-hybrid-implementation)
+5. [Foundational Principles](#foundational-principles)
+6. [Feature Comparison](#feature-comparison)
+7. [This Implementation](#this-implementation)
+8. [Getting Started](#getting-started)
+9. [Documentation](#documentation)
 
 ---
 
@@ -47,6 +48,137 @@ Each iteration:
 **The agent chooses the task** - You define the end state (PRD with success criteria). Ralph figures out how to get there.
 
 **Tests as success criteria** - TDD workflow where passing tests define "done." The feedback loop (tests, types, linting) keeps the agent on track.
+
+---
+
+## Plans Are Living Documents
+
+> **"No plan survives first contact with implementation."**
+
+First drafts are incomplete. Edge cases emerge during coding. Stakeholders clarify requirements mid-sprint. **This is normal.** Ralph Hybrid embraces this reality with first-class support for iterative planning.
+
+### The Problem with Static Plans
+
+Traditional AI coding workflows assume:
+1. You write a complete, correct spec upfront
+2. The AI implements it exactly
+3. Done
+
+**Reality:**
+- Hour 1: "Oh, we also need error handling for X"
+- Hour 2: "Actually, the API should return Y, not Z"
+- Hour 3: "Let's defer feature W to next sprint"
+
+Most tools force you to either:
+- Hack the prd.json manually (risky, loses context)
+- Start over with a new plan (loses progress)
+- Just tell the AI and hope it remembers (it won't)
+
+### The Solution: `/ralph-amend`
+
+Ralph Hybrid treats scope changes as **expected, not exceptional**:
+
+```bash
+# Discover new requirement mid-implementation
+/ralph-amend add "Users need CSV export for reporting"
+
+# Stakeholder clarifies a requirement
+/ralph-amend correct STORY-003 "Email validation should use RFC 5322"
+
+# Descope for MVP
+/ralph-amend remove STORY-005 "Defer to v2, tracked in issue #89"
+
+# See all changes
+/ralph-amend status
+```
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ITERATIVE PLANNING                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  /ralph-plan          Initial planning session                  │
+│       │               Creates spec.md + prd.json                │
+│       ▼                                                         │
+│  ┌─────────┐                                                    │
+│  │  ralph  │◄────────────────────────────────────┐              │
+│  │   run   │         Implementation loop         │              │
+│  └────┬────┘                                     │              │
+│       │                                          │              │
+│       ▼                                          │              │
+│  ┌─────────────────────────────────────┐         │              │
+│  │ Discovery during implementation:    │         │              │
+│  │ "We also need X" or "Y is wrong"    │         │              │
+│  └────────────────┬────────────────────┘         │              │
+│                   │                              │              │
+│                   ▼                              │              │
+│  /ralph-amend     Safely modify requirements    │              │
+│       │           Preserves completed work       │              │
+│       │           Full audit trail               │              │
+│       │                                          │              │
+│       └──────────────────────────────────────────┘              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### What Gets Preserved
+
+| Scenario | Without /ralph-amend | With /ralph-amend |
+|----------|---------------------|-------------------|
+| Add new requirement | Manual prd.json edit, no acceptance criteria | Mini-planning session, proper AC, audit trail |
+| Fix existing story | Edit and hope, may break things | Warns if resetting completed work, logs change |
+| Descope story | Delete from prd.json, no record | Archived with reason, audit trail preserved |
+| Track changes | Nothing | spec.md Amendments section + progress.txt |
+
+### Audit Trail
+
+Every amendment is tracked:
+
+**In spec.md:**
+```markdown
+## Amendments
+
+### AMD-001: CSV Export (2026-01-09T14:32:00Z)
+Type: ADD
+Reason: User needs data export for external reporting
+
+### AMD-002: STORY-003 Correction (2026-01-09T15:10:00Z)
+Type: CORRECT
+Target: STORY-003
+Changes: Email validation clarified to RFC 5322
+```
+
+**In prd.json:**
+```json
+{
+  "amendment": {
+    "id": "AMD-001",
+    "type": "add",
+    "timestamp": "2026-01-09T14:32:00Z",
+    "reason": "User needs data export"
+  }
+}
+```
+
+**In progress.txt:**
+```
+## Amendment AMD-001: 2026-01-09T14:32:00Z
+Type: ADD
+Story: STORY-004 - Export data as CSV
+Context: Discovered during STORY-002 that users need export for reporting
+```
+
+### Why This Matters
+
+1. **Plans evolve** - Embrace it instead of fighting it
+2. **No lost progress** - Completed stories stay completed
+3. **Full traceability** - Know what changed, when, and why
+4. **Safe corrections** - Warnings before resetting completed work
+5. **Learning data** - Amendments show where initial planning fell short
+
+> **Key insight:** The quality of your planning improves over time as you learn from amendments. They're data points, not failures.
 
 ---
 
@@ -197,7 +329,8 @@ This implementation is deliberately **outer-loop agnostic**. It focuses exclusiv
 | **Tests as success criteria** | TDD workflow where passing tests define "done" |
 | **One story per iteration** | Focused work within single context window |
 | **Fail fast with safety nets** | Circuit breaker, timeouts, max iterations prevent runaway |
-| **Learn from iterations** | progress.txt enables retrospective analysis and prompt refinement |
+| **Plans are living documents** | Scope changes are expected; `/ralph-amend` handles them safely |
+| **Learn from iterations** | progress.txt and amendments enable retrospective analysis |
 
 ---
 
@@ -222,6 +355,7 @@ This implementation is deliberately **outer-loop agnostic**. It focuses exclusiv
 | **Feature folder isolation** | No | No | No | **Yes** |
 | **TDD-first workflow** | No | No | No | **Yes** |
 | **Spec files support** | No | No | Yes (specs/) | **Yes (specs/)** |
+| **Mid-implementation amendments** | No | No | No | **Yes (/ralph-amend)** |
 | **Test suite** | No | No | 145 tests | **Planned** |
 
 ### Why Each Feature Matters
@@ -240,6 +374,7 @@ This implementation is deliberately **outer-loop agnostic**. It focuses exclusiv
 | **Feature folders** | Multiple features don't conflict |
 | **TDD workflow** | Tests define done, quality built-in |
 | **Spec files** | Detailed requirements without bloating prd.json |
+| **Mid-implementation amendments** | Plans evolve; handle scope changes without losing progress |
 
 ---
 
@@ -260,54 +395,125 @@ A bash-based autonomous development loop that:
 **The Ralph tool** (installed globally):
 ```
 ~/.ralph/
-├── ralph.sh              # Main loop script
+├── ralph                 # Main loop script
 ├── lib/                  # Circuit breaker, rate limiter, etc.
-└── templates/            # Default prompts, prd.json example
+├── templates/            # Default prompts, prd.json example
+├── commands/             # Claude slash commands (/ralph-plan, etc.)
+└── config.yaml           # Global configuration
 ```
 
 **Per-project usage**:
 ```
 your-project/
+├── .claude/
+│   └── commands/             # Installed via 'ralph setup'
+│       ├── ralph-plan.md     # /ralph-plan command
+│       ├── ralph-prd.md      # /ralph-prd command
+│       └── ralph-amend.md    # /ralph-amend command
 └── .ralph/
     ├── config.yaml           # Project settings (optional)
-    └── <feature-name>/       # One folder per feature
-        ├── prd.json          # User stories with passes field
+    └── <feature-name>/       # One folder per feature (from git branch)
+        ├── spec.md           # Source of truth requirements
+        ├── prd.json          # Derived task state (from spec.md)
         ├── progress.txt      # Iteration log (agent reads this)
-        ├── prompt.md         # Custom prompt (optional)
-        └── specs/            # Detailed requirements
+        └── specs/            # Additional spec files (optional)
 ```
 
 ### Status
 
-**Work in Progress**
+**Implementation Complete**
 
 - [x] Specification complete ([SPEC.md](SPEC.md))
 - [x] Templates created
-- [ ] Core loop implementation (ralph.sh)
-- [ ] Library functions (lib/)
-- [ ] Tests (BATS)
-- [ ] Installation script
+- [x] Core loop implementation (ralph)
+- [x] Library functions (lib/)
+- [x] Tests (430 BATS tests)
+- [x] Installation script
 
 ---
 
 ## Getting Started
 
-*Coming soon - implementation in progress.*
+### Prerequisites
+
+- Bash 4.0+
+- [Claude Code CLI](https://claude.ai/code)
+- jq
+- Git
+
+### Installation
 
 ```bash
-# Install (once)
+# Clone the repository
+git clone https://github.com/krazyuniks/ralph-hybrid.git
+cd ralph-hybrid
+
+# Install globally (to ~/.ralph/)
 ./install.sh
 
-# In your project
-ralph init my-feature
-# Edit .ralph/my-feature/prd.json with your user stories
-# Add detailed specs to .ralph/my-feature/specs/
+# Restart your shell or run:
+source ~/.zshrc  # or ~/.bashrc
+```
 
-# Run
-ralph run --max-iterations 20
+### Project Setup
 
-# Monitor
+```bash
+# Navigate to your project
+cd your-project
+
+# Install Claude commands to your project
+ralph setup
+
+# This creates:
+#   .claude/commands/ralph-plan.md
+#   .claude/commands/ralph-prd.md
+#   .claude/commands/ralph-amend.md
+```
+
+### Quick Start
+
+```bash
+# Create a feature branch
+git checkout -b feature/my-feature
+
+# Plan the feature (interactive, in Claude Code)
+/ralph-plan "Add user authentication"
+
+# Run the implementation loop
+ralph run
+
+# Or with a specific model
+ralph run --model opus
+
+# Monitor progress
 ralph status
+```
+
+### When Requirements Change (They Will)
+
+```bash
+# Discover you need something new
+/ralph-amend add "Also need CSV export"
+
+# Stakeholder clarifies a requirement
+/ralph-amend correct STORY-003 "Email should use RFC 5322"
+
+# Descope for MVP
+/ralph-amend remove STORY-005 "Defer to v2"
+
+# Continue implementation
+ralph run
+```
+
+### Full Workflow
+
+```
+1. Create branch          git checkout -b feature/my-feature
+2. Plan feature           /ralph-plan
+3. Run implementation     ralph run
+4. [Optional] Amend       /ralph-amend add|correct|remove
+5. Continue               ralph run
+6. Complete               Feature auto-archives when all stories pass
 ```
 
 ---
@@ -318,6 +524,9 @@ ralph status
 |----------|-------------|
 | [SPEC.md](SPEC.md) | Complete technical specification |
 | [templates/](templates/) | Prompt templates, prd.json example, config example |
+| [.claude/commands/ralph-plan.md](.claude/commands/ralph-plan.md) | Feature planning workflow |
+| [.claude/commands/ralph-amend.md](.claude/commands/ralph-amend.md) | Mid-implementation scope changes |
+| [.claude/commands/ralph-prd.md](.claude/commands/ralph-prd.md) | PRD regeneration from spec |
 
 ---
 

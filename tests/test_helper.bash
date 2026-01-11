@@ -48,8 +48,6 @@ create_mock_prd() {
 
     cat > "${dir}/prd.json" <<EOF
 {
-  "feature": "test-feature",
-  "branchName": "feature/test-feature",
   "description": "A test feature for BATS testing",
   "createdAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
   "userStories": [
@@ -79,8 +77,6 @@ create_mock_prd_multi_story() {
 
     cat > "${dir}/prd.json" <<EOF
 {
-  "feature": "multi-story-feature",
-  "branchName": "feature/multi-story-feature",
   "description": "A test feature with multiple stories",
   "createdAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
   "userStories": [
@@ -158,8 +154,6 @@ create_mock_feature() {
     # Create prd.json
     cat > "${feature_dir}/prd.json" <<EOF
 {
-  "feature": "${feature_name}",
-  "branchName": "feature/${feature_name}",
   "description": "Mock feature: ${feature_name}",
   "createdAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
   "userStories": [
@@ -354,7 +348,7 @@ assert_failure() {
 
 # Get a value from a JSON file
 # Usage: json_get <file> <jq_path>
-# Example: json_get prd.json '.feature'
+# Example: json_get prd.json '.description'
 json_get() {
     local file="$1"
     local path="$2"

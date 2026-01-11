@@ -82,7 +82,7 @@ teardown() {
     # Create a valid feature structure
     local feature_dir="$RALPH_DIR/test-feature"
     mkdir -p "$feature_dir"
-    echo '{"feature": "test-feature"}' > "$feature_dir/prd.json"
+    echo '{"description": "test-feature"}' > "$feature_dir/prd.json"
     echo "Progress log" > "$feature_dir/progress.txt"
 
     run ar_validate_feature "test-feature" "$RALPH_DIR"
@@ -108,7 +108,7 @@ teardown() {
 @test "ar_validate_feature fails when progress.txt is missing" {
     local feature_dir="$RALPH_DIR/no-progress-feature"
     mkdir -p "$feature_dir"
-    echo '{"feature": "no-progress-feature"}' > "$feature_dir/prd.json"
+    echo '{"description": "no-progress-feature"}' > "$feature_dir/prd.json"
 
     run ar_validate_feature "no-progress-feature" "$RALPH_DIR"
     [ "$status" -eq 1 ]
@@ -134,7 +134,7 @@ teardown() {
     local archive_dir="$RALPH_DIR/archive/test-archive"
     mkdir -p "$feature_dir"
     mkdir -p "$archive_dir"
-    echo '{"feature": "copy-test"}' > "$feature_dir/prd.json"
+    echo '{"description": "copy-test"}' > "$feature_dir/prd.json"
     echo "Progress log" > "$feature_dir/progress.txt"
 
     run ar_copy_feature_files "$feature_dir" "$archive_dir"
@@ -147,7 +147,7 @@ teardown() {
     local archive_dir="$RALPH_DIR/archive/test-archive2"
     mkdir -p "$feature_dir"
     mkdir -p "$archive_dir"
-    echo '{"feature": "copy-test2"}' > "$feature_dir/prd.json"
+    echo '{"description": "copy-test2"}' > "$feature_dir/prd.json"
     echo "Progress log content" > "$feature_dir/progress.txt"
 
     run ar_copy_feature_files "$feature_dir" "$archive_dir"
@@ -162,7 +162,7 @@ teardown() {
     local archive_dir="$RALPH_DIR/archive/test-archive3"
     mkdir -p "$feature_dir"
     mkdir -p "$archive_dir"
-    echo '{"feature": "copy-test3"}' > "$feature_dir/prd.json"
+    echo '{"description": "copy-test3"}' > "$feature_dir/prd.json"
     echo "Progress log" > "$feature_dir/progress.txt"
     echo "Custom prompt content" > "$feature_dir/prompt.md"
 
@@ -177,7 +177,7 @@ teardown() {
     local archive_dir="$RALPH_DIR/archive/test-archive4"
     mkdir -p "$feature_dir"
     mkdir -p "$archive_dir"
-    echo '{"feature": "copy-test4"}' > "$feature_dir/prd.json"
+    echo '{"description": "copy-test4"}' > "$feature_dir/prd.json"
     echo "Progress log" > "$feature_dir/progress.txt"
 
     run ar_copy_feature_files "$feature_dir" "$archive_dir"
@@ -264,7 +264,7 @@ teardown() {
 @test "ar_cleanup_feature removes feature folder" {
     local feature_dir="$RALPH_DIR/cleanup-test"
     mkdir -p "$feature_dir/specs"
-    echo '{"feature": "cleanup-test"}' > "$feature_dir/prd.json"
+    echo '{"description": "cleanup-test"}' > "$feature_dir/prd.json"
     echo "Progress" > "$feature_dir/progress.txt"
     echo "Spec" > "$feature_dir/specs/spec.md"
 
@@ -298,7 +298,7 @@ teardown() {
     # Setup a complete feature
     local feature_dir="$RALPH_DIR/full-feature"
     mkdir -p "$feature_dir/specs"
-    echo '{"feature": "full-feature"}' > "$feature_dir/prd.json"
+    echo '{"description": "full-feature"}' > "$feature_dir/prd.json"
     echo "Progress log" > "$feature_dir/progress.txt"
     echo "# Spec" > "$feature_dir/specs/spec.md"
 
@@ -319,7 +319,7 @@ teardown() {
 @test "ar_create_archive creates archive directory if needed" {
     local feature_dir="$RALPH_DIR/new-archive-feature"
     mkdir -p "$feature_dir"
-    echo '{"feature": "new-archive-feature"}' > "$feature_dir/prd.json"
+    echo '{"description": "new-archive-feature"}' > "$feature_dir/prd.json"
     echo "Progress" > "$feature_dir/progress.txt"
 
     [ ! -d "$RALPH_DIR/archive" ]  # Verify archive dir doesn't exist
@@ -332,7 +332,7 @@ teardown() {
 @test "ar_create_archive outputs archive path" {
     local feature_dir="$RALPH_DIR/path-feature"
     mkdir -p "$feature_dir"
-    echo '{"feature": "path-feature"}' > "$feature_dir/prd.json"
+    echo '{"description": "path-feature"}' > "$feature_dir/prd.json"
     echo "Progress" > "$feature_dir/progress.txt"
 
     run ar_create_archive "path-feature" "$RALPH_DIR"
@@ -349,7 +349,7 @@ teardown() {
 @test "ar_create_archive includes prompt.md if present" {
     local feature_dir="$RALPH_DIR/prompt-feature"
     mkdir -p "$feature_dir"
-    echo '{"feature": "prompt-feature"}' > "$feature_dir/prd.json"
+    echo '{"description": "prompt-feature"}' > "$feature_dir/prd.json"
     echo "Progress" > "$feature_dir/progress.txt"
     echo "Custom prompt" > "$feature_dir/prompt.md"
 
@@ -446,7 +446,7 @@ teardown() {
     # Setup feature
     local feature_dir="$RALPH_DIR/integration-feature"
     mkdir -p "$feature_dir/specs"
-    echo '{"feature": "integration-feature", "status": "complete"}' > "$feature_dir/prd.json"
+    echo '{"description": "integration-feature", "status": "complete"}' > "$feature_dir/prd.json"
     echo "Progress log with important info" > "$feature_dir/progress.txt"
     echo "# Integration Spec" > "$feature_dir/specs/integration.md"
     echo "Custom prompt for integration" > "$feature_dir/prompt.md"
@@ -461,7 +461,7 @@ teardown() {
     [ -d "$archive_dir" ]
 
     # Verify all files copied correctly
-    grep -q '"feature": "integration-feature"' "$archive_dir/prd.json"
+    grep -q '"description": "integration-feature"' "$archive_dir/prd.json"
     grep -q "Progress log with important info" "$archive_dir/progress.txt"
     grep -q "# Integration Spec" "$archive_dir/specs/integration.md"
     grep -q "Custom prompt for integration" "$archive_dir/prompt.md"
@@ -474,7 +474,7 @@ teardown() {
     # Setup feature
     local feature_dir="$RALPH_DIR/cleanup-integration"
     mkdir -p "$feature_dir"
-    echo '{"feature": "cleanup-integration"}' > "$feature_dir/prd.json"
+    echo '{"description": "cleanup-integration"}' > "$feature_dir/prd.json"
     echo "Progress" > "$feature_dir/progress.txt"
 
     # Create archive
@@ -496,7 +496,7 @@ teardown() {
     # Setup feature
     local feature_dir="$RALPH_DIR/multi-archive"
     mkdir -p "$feature_dir"
-    echo '{"feature": "multi-archive"}' > "$feature_dir/prd.json"
+    echo '{"description": "multi-archive"}' > "$feature_dir/prd.json"
     echo "Progress 1" > "$feature_dir/progress.txt"
 
     # Create first archive

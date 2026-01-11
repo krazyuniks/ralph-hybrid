@@ -3,7 +3,9 @@
 # Autonomous development loop orchestrator for Claude Code
 #
 # Usage: ralph <command> [options]
-# Commands: init, run, status, archive, help, version
+# Commands: run, status, archive, validate, help, version
+#
+# Note: Feature folder is automatically derived from current git branch.
 
 set -euo pipefail
 
@@ -19,18 +21,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #=============================================================================
 
 source "${SCRIPT_DIR}/lib/utils.sh"
+source "${SCRIPT_DIR}/lib/preflight.sh"
 source "${SCRIPT_DIR}/lib/circuit_breaker.sh"
 source "${SCRIPT_DIR}/lib/rate_limiter.sh"
 source "${SCRIPT_DIR}/lib/exit_detection.sh"
 source "${SCRIPT_DIR}/lib/archive.sh"
-source "${SCRIPT_DIR}/lib/branch.sh"
 
 #=============================================================================
 # Global Variables (set by parse_args or load_config)
 #=============================================================================
 
 # Run options
-RALPH_FEATURE=""
 RALPH_MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-20}"
 RALPH_TIMEOUT_MINUTES="${RALPH_TIMEOUT_MINUTES:-15}"
 RALPH_RATE_LIMIT="${RALPH_RATE_LIMIT:-100}"
@@ -39,6 +40,7 @@ RALPH_VERBOSE=false
 RALPH_NO_ARCHIVE=false
 RALPH_RESET_CIRCUIT=false
 RALPH_DRY_RUN=false
+RALPH_SKIP_PREFLIGHT=false
 RALPH_DANGEROUSLY_SKIP_PERMISSIONS="${RALPH_DANGEROUSLY_SKIP_PERMISSIONS:-false}"
 
 #=============================================================================
@@ -52,30 +54,35 @@ Ralph Hybrid - Autonomous Development Loop for Claude Code
 Usage: ralph <command> [options]
 
 Commands:
-  init <feature-name>    Initialize a new feature folder
   run [options]          Execute the development loop
-  status [-f feature]    Show current feature status
-  archive [-f feature]   Archive a completed feature
+  status                 Show current feature status
+  archive                Archive a completed feature
+  validate               Run preflight checks without starting loop
+  setup                  Install Claude commands (/ralph-plan, etc.) to project
   help                   Show this help message
   version                Show version information
+
+Note: Feature folder is automatically derived from current git branch.
+      Run 'ralph setup' first, then use /ralph-plan in Claude Code.
 
 Run Options:
   -n, --max-iterations N     Maximum iterations (default: 20)
   -t, --timeout N            Per-iteration timeout in minutes (default: 15)
   -r, --rate-limit N         Max API calls per hour (default: 100)
-  -f, --feature NAME         Feature folder to use (auto-detect if single)
   -p, --prompt FILE          Custom prompt file
   -v, --verbose              Enable verbose output
   --no-archive               Don't archive on completion
   --reset-circuit            Reset circuit breaker state before running
   --dry-run                  Show what would happen without executing
+  --skip-preflight           Skip preflight validation (use with caution)
   --dangerously-skip-permissions  Pass to Claude Code
+  -m, --model MODEL          Claude model (opus, sonnet, or full name)
 
 Examples:
-  ralph init my-feature
-  ralph run -f my-feature -n 30 -t 20
+  ralph run -n 30 -t 20
   ralph status
-  ralph archive -f my-feature
+  ralph archive
+  ralph validate
 
 For more information, see: https://github.com/krazyuniks/ralph-hybrid
 EOF
@@ -128,205 +135,28 @@ check_git_repo() {
     return 0
 }
 
-#=============================================================================
-# Feature Resolution
-#=============================================================================
-
-# Get the .ralph directory path
-get_ralph_dir() {
-    echo ".ralph"
-}
-
-# List all active features (non-archive directories in .ralph/)
-list_features() {
-    local ralph_dir
-    ralph_dir=$(get_ralph_dir)
-
-    if [[ ! -d "$ralph_dir" ]]; then
-        return 0
-    fi
-
-    for dir in "$ralph_dir"/*/; do
-        if [[ -d "$dir" ]]; then
-            local dirname
-            dirname=$(basename "$dir")
-            # Skip archive directory
-            if [[ "$dirname" != "archive" ]] && [[ -f "${dir}prd.json" ]]; then
-                echo "$dirname"
-            fi
-        fi
-    done
-}
-
-# Count active features
-count_features() {
-    local count=0
-    while IFS= read -r feature; do
-        if [[ -n "$feature" ]]; then
-            count=$((count + 1))
-        fi
-    done < <(list_features)
-    echo "$count"
-}
-
-# Resolve feature name (auto-detect if possible)
-resolve_feature() {
-    local specified_feature="${1:-}"
-    local ralph_dir
-    ralph_dir=$(get_ralph_dir)
-
-    # If feature specified, verify it exists
-    if [[ -n "$specified_feature" ]]; then
-        if [[ ! -d "${ralph_dir}/${specified_feature}" ]]; then
-            log_error "Feature not found: ${specified_feature}"
-            return 1
-        fi
-        echo "$specified_feature"
-        return 0
-    fi
-
-    # Auto-detect
-    local feature_count
-    feature_count=$(count_features)
-
-    if [[ "$feature_count" -eq 0 ]]; then
-        log_error "No features found. Use 'ralph init <feature-name>' to create one."
-        return 1
-    elif [[ "$feature_count" -eq 1 ]]; then
-        list_features | head -1
-        return 0
-    else
-        log_error "Multiple features found. Please specify with -f <feature-name>:"
-        list_features | while read -r f; do
-            echo "  - $f" >&2
-        done
-        return 1
-    fi
-}
-
-#=============================================================================
-# Init Command
-#=============================================================================
-
-cmd_init() {
-    local feature_name="${1:-}"
-
-    if [[ -z "$feature_name" ]]; then
-        log_error "Feature name is required."
-        echo "Usage: ralph init <feature-name>" >&2
-        return 1
-    fi
-
-    # Check we're in a git repo
-    if ! check_git_repo; then
-        return 1
-    fi
-
-    local ralph_dir
-    ralph_dir=$(get_ralph_dir)
-    local feature_dir="${ralph_dir}/${feature_name}"
-
-    # Check if feature already exists
-    if [[ -d "$feature_dir" ]]; then
-        log_error "Feature already exists: ${feature_name}"
-        return 1
-    fi
-
-    # Create directory structure
-    mkdir -p "${feature_dir}/specs"
-
-    # Copy prd.json template and customize
-    local template_dir="${SCRIPT_DIR}/templates"
-    if [[ -f "${template_dir}/prd.json.example" ]]; then
-        # Customize the template with the feature name and current timestamp
-        local timestamp
-        timestamp=$(get_timestamp)
-        jq --arg name "$feature_name" \
-           --arg branch "feature/${feature_name}" \
-           --arg ts "$timestamp" \
-           '.feature = $name | .branchName = $branch | .createdAt = $ts' \
-           "${template_dir}/prd.json.example" > "${feature_dir}/prd.json"
-    else
-        # Create minimal prd.json
-        local timestamp
-        timestamp=$(get_timestamp)
-        cat > "${feature_dir}/prd.json" << EOF
-{
-  "feature": "${feature_name}",
-  "branchName": "feature/${feature_name}",
-  "description": "Description of ${feature_name}",
-  "createdAt": "${timestamp}",
-  "userStories": [
-    {
-      "id": "STORY-001",
-      "title": "First user story",
-      "description": "As a user, I want ...",
-      "acceptanceCriteria": ["Criterion 1"],
-      "priority": 1,
-      "passes": false,
-      "notes": ""
-    }
-  ]
-}
-EOF
-    fi
-
-    # Create progress.txt with header
-    local timestamp
-    timestamp=$(get_timestamp)
-    cat > "${feature_dir}/progress.txt" << EOF
-# Progress Log: ${feature_name}
-# Started: ${timestamp}
-EOF
-
-    # Copy prompt template
-    if [[ -f "${template_dir}/prompt-tdd.md" ]]; then
-        cp "${template_dir}/prompt-tdd.md" "${feature_dir}/prompt.md"
-    elif [[ -f "${template_dir}/prompt.md" ]]; then
-        cp "${template_dir}/prompt.md" "${feature_dir}/prompt.md"
-    else
-        # Create minimal prompt
-        cat > "${feature_dir}/prompt.md" << 'EOF'
-# Ralph Agent Instructions
-
-You are an autonomous development agent working through a PRD.
-
-## Context Files
-- **prd.json**: User stories with `passes: true/false`
-- **progress.txt**: Previous iteration log
-- **specs/**: Detailed requirements
-
-## Workflow
-1. Read prd.json, find highest priority story where `passes: false`
-2. Implement the story
-3. Run tests and quality checks
-4. If all pass: commit, set `passes: true`, append to progress.txt
-5. If ALL stories pass: output `<promise>COMPLETE</promise>`
-EOF
-    fi
-
-    log_success "Feature initialized: ${feature_name}"
-    log_info "Edit .ralph/${feature_name}/prd.json to define your user stories"
-    log_info "Add specs to .ralph/${feature_name}/specs/"
-    log_info "Then run: ralph run -f ${feature_name}"
-
-    return 0
-}
+# Note: get_ralph_dir() and get_feature_dir() are now provided by lib/utils.sh
 
 #=============================================================================
 # Status Command
 #=============================================================================
 
 cmd_status() {
-    local feature_name="${1:-}"
+    # No arguments expected - feature auto-detected from branch
+    if [[ $# -gt 0 ]]; then
+        log_error "Unknown option: $1"
+        return 1
+    fi
 
-    # Resolve feature
-    feature_name=$(resolve_feature "$feature_name") || return 1
+    # Get feature directory from current git branch
+    local feature_dir
+    feature_dir=$(get_feature_dir) || return 1
 
-    local ralph_dir
-    ralph_dir=$(get_ralph_dir)
-    local feature_dir="${ralph_dir}/${feature_name}"
     local prd_file="${feature_dir}/prd.json"
+
+    # Get feature name from directory for display
+    local feature_name
+    feature_name=$(basename "$feature_dir")
 
     if [[ ! -f "$prd_file" ]]; then
         log_error "prd.json not found for feature: ${feature_name}"
@@ -338,22 +168,15 @@ cmd_status() {
     total=$(get_prd_total_stories "$prd_file")
     passed=$(get_prd_passes_count "$prd_file")
 
-    # Get current branch
+    # Get current branch (for display only - feature is derived from folder)
     local current_branch
     current_branch=$(git branch --show-current 2>/dev/null || echo "unknown")
-
-    # Get expected branch from prd
-    local expected_branch
-    expected_branch=$(jq -r '.branchName // empty' "$prd_file" 2>/dev/null || echo "")
 
     echo "=========================================="
     echo "Feature: ${feature_name}"
     echo "=========================================="
     echo "Stories: ${passed}/${total} complete"
     echo "Current branch: ${current_branch}"
-    if [[ -n "$expected_branch" ]]; then
-        echo "Expected branch: ${expected_branch}"
-    fi
     echo ""
 
     # Show circuit breaker state if it exists
@@ -378,13 +201,22 @@ cmd_status() {
 #=============================================================================
 
 cmd_archive() {
-    local feature_name="${1:-}"
+    # No arguments expected - feature auto-detected from branch
+    if [[ $# -gt 0 ]]; then
+        log_error "Unknown option: $1"
+        return 1
+    fi
 
-    # Resolve feature
-    feature_name=$(resolve_feature "$feature_name") || return 1
+    # Get feature directory from current git branch
+    local feature_dir
+    feature_dir=$(get_feature_dir) || return 1
 
     local ralph_dir
     ralph_dir=$(get_ralph_dir)
+
+    # Get feature name from directory
+    local feature_name
+    feature_name=$(basename "$feature_dir")
 
     # Use archive library
     local archive_path
@@ -394,6 +226,95 @@ cmd_archive() {
     ar_cleanup_feature "$feature_name" "$ralph_dir" || return 1
 
     log_success "Feature archived to: ${archive_path}"
+    return 0
+}
+
+#=============================================================================
+# Validate Command
+#=============================================================================
+
+cmd_validate() {
+    # No arguments expected - feature auto-detected from branch
+    if [[ $# -gt 0 ]]; then
+        log_error "Unknown option: $1"
+        return 1
+    fi
+
+    # Check git repo first
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Run all preflight checks (feature_dir auto-detected from branch)
+    pf_run_all_checks
+    return $?
+}
+
+#=============================================================================
+# Setup Command - Install Claude Commands to Project
+#=============================================================================
+
+cmd_setup() {
+    local ralph_home="${HOME}/.ralph"
+    local commands_src="${ralph_home}/commands"
+    local project_dir="${PWD}"
+    local commands_dest="${project_dir}/.claude/commands"
+
+    # Check if ralph is installed
+    if [[ ! -d "$ralph_home" ]]; then
+        log_error "Ralph not installed. Run install.sh first."
+        return 1
+    fi
+
+    # Check if commands exist in ralph home
+    if [[ ! -d "$commands_src" ]]; then
+        log_error "Commands not found in ${commands_src}"
+        log_info "Re-run install.sh to install command files"
+        return 1
+    fi
+
+    # Check if we're in a git repo
+    if ! git rev-parse --git-dir &>/dev/null; then
+        log_warn "Not in a git repository. Continuing anyway..."
+    fi
+
+    # Create .claude/commands if needed
+    mkdir -p "$commands_dest"
+
+    # Copy command files
+    local copied=0
+    local updated=0
+    for cmd_file in "${commands_src}"/*.md; do
+        if [[ -f "$cmd_file" ]]; then
+            local filename
+            filename=$(basename "$cmd_file")
+            if [[ -f "${commands_dest}/${filename}" ]]; then
+                updated=$((updated + 1))
+            else
+                copied=$((copied + 1))
+            fi
+            cp "$cmd_file" "${commands_dest}/${filename}"
+        fi
+    done
+
+    if [[ $copied -eq 0 && $updated -eq 0 ]]; then
+        log_warn "No command files found to install"
+        return 1
+    fi
+
+    log_success "Installed Claude commands to ${commands_dest}/"
+    if [[ $copied -gt 0 ]]; then
+        log_info "  Added: ${copied} command(s)"
+    fi
+    if [[ $updated -gt 0 ]]; then
+        log_info "  Updated: ${updated} command(s)"
+    fi
+    echo ""
+    log_info "Available commands in Claude Code:"
+    log_info "  /ralph-plan   - Interactive feature planning"
+    log_info "  /ralph-prd    - Generate prd.json from spec.md"
+    log_info "  /ralph-amend  - Amend requirements during implementation"
+
     return 0
 }
 
@@ -414,10 +335,6 @@ parse_run_args() {
                 ;;
             -r|--rate-limit)
                 RALPH_RATE_LIMIT="${2:-}"
-                shift 2
-                ;;
-            -f|--feature)
-                RALPH_FEATURE="${2:-}"
                 shift 2
                 ;;
             -p|--prompt)
@@ -441,20 +358,26 @@ parse_run_args() {
                 RALPH_DRY_RUN=true
                 shift
                 ;;
+            --skip-preflight)
+                RALPH_SKIP_PREFLIGHT=true
+                shift
+                ;;
             --dangerously-skip-permissions)
                 RALPH_DANGEROUSLY_SKIP_PERMISSIONS=true
                 shift
+                ;;
+            -m|--model)
+                RALPH_MODEL="${2:-}"
+                shift 2
                 ;;
             -*)
                 log_error "Unknown option: $1"
                 return 1
                 ;;
             *)
-                # Positional argument
-                if [[ -z "$RALPH_FEATURE" ]]; then
-                    RALPH_FEATURE="$1"
-                fi
-                shift
+                # No positional arguments expected
+                log_error "Unknown argument: $1"
+                return 1
                 ;;
         esac
     done
@@ -472,6 +395,7 @@ build_prompt() {
 
     local prd_file="${feature_dir}/prd.json"
     local progress_file="${feature_dir}/progress.txt"
+    local specs_dir="${feature_dir}/specs"
     local default_prompt="${feature_dir}/prompt.md"
 
     # Determine which prompt to use
@@ -484,13 +408,49 @@ build_prompt() {
         prompt_path="${SCRIPT_DIR}/templates/prompt-tdd.md"
     fi
 
-    # Build the combined prompt
+    # Build the combined prompt with inline file contents
+    # Note: @ file references don't work with claude -p mode, so we inline everything
     cat << EOF
-@${prd_file}
-@${progress_file}
-@${feature_dir}/specs/
-
 $(cat "$prompt_path")
+
+---
+
+## prd.json
+
+\`\`\`json
+$(cat "$prd_file")
+\`\`\`
+
+---
+
+## progress.txt
+
+\`\`\`
+$(cat "$progress_file")
+\`\`\`
+
+---
+
+## specs/
+
+$(
+    if [[ -d "$specs_dir" ]]; then
+        for spec_file in "$specs_dir"/*; do
+            if [[ -f "$spec_file" ]]; then
+                local fname
+                fname=$(basename "$spec_file")
+                echo "### $fname"
+                echo ""
+                echo '```'
+                cat "$spec_file"
+                echo '```'
+                echo ""
+            fi
+        done
+    else
+        echo "(no specs directory)"
+    fi
+)
 EOF
 }
 
@@ -498,7 +458,7 @@ EOF
 # Run Command - Validation and Setup
 #=============================================================================
 
-# Validate prerequisites, git repo, and resolve feature
+# Validate prerequisites, git repo, and get feature from branch
 # Sets: RUN_FEATURE_NAME, RUN_FEATURE_DIR, RUN_PRD_FILE
 # Returns: 0 on success, 1 on failure
 run_validate_setup() {
@@ -518,12 +478,9 @@ run_validate_setup() {
     # Override config with CLI args (already done via parse_run_args)
     export RALPH_RATE_LIMIT
 
-    # Resolve feature
-    RUN_FEATURE_NAME=$(resolve_feature "$RALPH_FEATURE") || return 1
-
-    local ralph_dir
-    ralph_dir=$(get_ralph_dir)
-    RUN_FEATURE_DIR="${ralph_dir}/${RUN_FEATURE_NAME}"
+    # Get feature directory from current git branch
+    RUN_FEATURE_DIR=$(get_feature_dir) || return 1
+    RUN_FEATURE_NAME=$(basename "$RUN_FEATURE_DIR")
     RUN_PRD_FILE="${RUN_FEATURE_DIR}/prd.json"
 
     # Verify prd.json exists
@@ -574,11 +531,9 @@ run_show_dry_run() {
 # Run Command - State Initialization
 #=============================================================================
 
-# Initialize circuit breaker, rate limiter, and setup branch
+# Initialize circuit breaker and rate limiter
 # Returns: 0 on success
 run_initialize_state() {
-    local prd_file="$1"
-
     # Reset circuit breaker if requested
     if [[ "$RALPH_RESET_CIRCUIT" == true ]]; then
         cb_reset
@@ -587,18 +542,6 @@ run_initialize_state() {
     # Initialize circuit breaker and rate limiter
     cb_load_state
     rl_load_state
-
-    # Setup branch from prd.json
-    if jq -e '.branchName' "$prd_file" &>/dev/null; then
-        local branch_name
-        branch_name=$(jq -r '.branchName' "$prd_file")
-        if [[ -n "$branch_name" ]] && [[ "$branch_name" != "null" ]]; then
-            log_info "Setting up branch: ${branch_name}"
-            br_ensure_branch "$branch_name" || {
-                log_warn "Could not switch to branch ${branch_name}, continuing on current branch"
-            }
-        fi
-    fi
 
     return 0
 }
@@ -642,20 +585,100 @@ run_single_iteration() {
     prompt_content=$(build_prompt "$feature_dir" "$RALPH_PROMPT_FILE")
 
     # Build claude command args
-    local claude_args=""
-    if [[ "$RALPH_DANGEROUSLY_SKIP_PERMISSIONS" == "true" ]]; then
-        claude_args="--dangerously-skip-permissions"
+    # Note: --permission-mode bypassPermissions works with -p mode
+    # while --dangerously-skip-permissions causes hangs
+    local claude_args="--permission-mode bypassPermissions"
+
+    # Add model if specified
+    if [[ -n "${RALPH_MODEL:-}" ]]; then
+        claude_args+=" --model ${RALPH_MODEL}"
     fi
 
-    # Run Claude with timeout
+    # Ensure logs directory exists
+    mkdir -p "${feature_dir}/logs"
+    local log_file="${feature_dir}/logs/iteration-${iteration}.log"
+
+    # Run Claude with timeout and real-time output
     log_info "Running Claude Code..."
-    local output=""
     local exit_code=0
 
+    # Initialize log file
+    echo "=== Iteration ${iteration} ===" > "$log_file"
+    echo "Timestamp: $(get_timestamp)" >> "$log_file"
+    echo "" >> "$log_file"
+
     set +e
-    output=$($timeout_cmd "${RALPH_TIMEOUT_MINUTES}m" claude --print "$prompt_content" $claude_args 2>&1)
-    exit_code=$?
+    # Use stream-json for real-time visibility, tee to log file
+    # Parse JSON stream to show activity while also saving raw output
+    echo "$prompt_content" | $timeout_cmd "${RALPH_TIMEOUT_MINUTES}m" \
+        claude -p $claude_args --output-format stream-json --verbose 2>&1 | \
+        tee -a "$log_file" | \
+        {
+            # Scrolling window - keep last 8 lines visible
+            declare -a buffer=()
+            local window_size=8
+            local line_count=0
+
+            # Hide cursor during updates
+            printf '\e[?25l'
+
+            # Print empty lines to create window space
+            for ((i=0; i<window_size; i++)); do echo ""; done
+
+            while IFS= read -r line; do
+                # Parse JSON and extract display text
+                local display=""
+                if echo "$line" | jq -e '.message.content' &>/dev/null; then
+                    display=$(echo "$line" | jq -r '
+                        .message.content[]? |
+                        if .type == "text" then
+                            "  💬 " + (.text | split("\n")[0] | .[0:90])
+                        elif .type == "tool_use" then
+                            "  🔧 " + .name + ": " + (.input | tostring | .[0:50])
+                        else empty end
+                    ' 2>/dev/null)
+                elif echo "$line" | jq -e '.type == "result"' &>/dev/null; then
+                    display=$(echo "$line" | jq -r '"  ✅ Done: " + (.result | .[0:70])' 2>/dev/null)
+                fi
+
+                # Add to buffer if we have display text
+                if [[ -n "$display" ]]; then
+                    while IFS= read -r dline; do
+                        [[ -n "$dline" ]] && buffer+=("$dline")
+                    done <<< "$display"
+
+                    # Keep only last window_size lines
+                    while [[ ${#buffer[@]} -gt $window_size ]]; do
+                        buffer=("${buffer[@]:1}")
+                    done
+
+                    # Move cursor up and redraw window
+                    printf '\e[%dA' "$window_size"  # Move up
+                    printf '\e[J'                    # Clear to end of screen
+
+                    # Print buffer with padding
+                    for ((i=0; i<window_size; i++)); do
+                        if [[ $i -lt ${#buffer[@]} ]]; then
+                            printf '%s\n' "${buffer[$i]}"
+                        else
+                            echo ""
+                        fi
+                    done
+                fi
+            done
+
+            # Show cursor again
+            printf '\e[?25h'
+        }
+    exit_code=${PIPESTATUS[1]}
     set -e
+
+    echo "Exit code: ${exit_code}" >> "$log_file"
+    log_info "Output saved to: ${log_file}"
+
+    # Read output from log for completion detection
+    local output
+    output=$(cat "$log_file")
 
     # Record API call
     rl_record_call
@@ -677,7 +700,7 @@ run_single_iteration() {
             log_success "Completion signal detected!"
             if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
                 log_info "Archiving feature..."
-                cmd_archive "$feature_name"
+                cmd_archive
             fi
             return 100  # Special code for completion
             ;;
@@ -738,6 +761,21 @@ cmd_run() {
     # Parse arguments
     parse_run_args "$@" || return 1
 
+    # Run preflight checks (unless skipped)
+    if [[ "$RALPH_SKIP_PREFLIGHT" == true ]]; then
+        log_warn "Skipping preflight validation (--skip-preflight). Use with caution."
+    else
+        # Check git repo first (required for preflight)
+        if ! check_git_repo; then
+            return 1
+        fi
+
+        # Run all preflight checks
+        if ! pf_run_all_checks; then
+            return 1
+        fi
+    fi
+
     # Validate and setup (sets RUN_FEATURE_NAME, RUN_FEATURE_DIR, RUN_PRD_FILE)
     run_validate_setup || return 1
 
@@ -755,7 +793,7 @@ cmd_run() {
         log_success "All stories already complete!"
         if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
             log_info "Archiving feature..."
-            cmd_archive "$RUN_FEATURE_NAME"
+            cmd_archive
         fi
         return 0
     fi
@@ -826,42 +864,17 @@ main() {
             show_version
             return 0
             ;;
-        init)
-            cmd_init "$@"
-            ;;
         status)
-            # Parse -f flag for status
-            local feature=""
-            while [[ $# -gt 0 ]]; do
-                case "$1" in
-                    -f|--feature)
-                        feature="${2:-}"
-                        shift 2
-                        ;;
-                    *)
-                        feature="$1"
-                        shift
-                        ;;
-                esac
-            done
-            cmd_status "$feature"
+            cmd_status "$@"
             ;;
         archive)
-            # Parse -f flag for archive
-            local feature=""
-            while [[ $# -gt 0 ]]; do
-                case "$1" in
-                    -f|--feature)
-                        feature="${2:-}"
-                        shift 2
-                        ;;
-                    *)
-                        feature="$1"
-                        shift
-                        ;;
-                esac
-            done
-            cmd_archive "$feature"
+            cmd_archive "$@"
+            ;;
+        validate)
+            cmd_validate "$@"
+            ;;
+        setup)
+            cmd_setup "$@"
             ;;
         run)
             cmd_run "$@"
@@ -875,8 +888,21 @@ main() {
     esac
 }
 
+# Cleanup function to kill child processes
+cleanup() {
+    # Show cursor again (in case we were in scrolling window)
+    printf '\e[?25h'
+    echo ""
+    log_warn "Interrupted by user"
+    # Kill all child processes in our process group
+    pkill -P $$ 2>/dev/null
+    # Also kill any claude processes we spawned
+    pkill -f "claude -p --permission-mode" 2>/dev/null
+    exit 130
+}
+
 # Handle Ctrl+C gracefully
-trap 'echo ""; log_warn "Interrupted by user"; exit 130' INT
+trap cleanup INT TERM
 
 # Run main
 main "$@"

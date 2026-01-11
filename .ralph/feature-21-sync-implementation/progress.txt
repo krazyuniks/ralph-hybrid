@@ -1,0 +1,233 @@
+# Progress Log
+# Branch: feature/21-sync-implementation
+# Started: 2026-01-09T21:30:00+10:00
+# Spec: spec.md
+# Source: GitHub Issue #21
+
+---
+Iteration: 1
+Date: 2026-01-09T23:09:00Z
+Story: STORY-001 - Remove branch.sh and init command
+Status: complete
+Files Changed:
+  - ralph (removed init command case, removed -f flag handling in status/archive)
+  - tests/unit/test_story001_removal.bats (fixed shellcheck skip logic)
+Tests Added:
+  - (tests already existed in test_story001_removal.bats)
+Learnings:
+  - lib/branch.sh was already deleted
+  - Source statement for branch.sh was already removed
+  - Main changes were removing init command case and -f flag handling in status/archive
+  - Added argument validation to cmd_status() and cmd_archive() to reject unknown options
+  - Fixed shellcheck test to properly skip when shellcheck is a non-working shim
+Commit: 14510ad
+
+---
+Iteration: 2
+Date: 2026-01-09T23:14:14Z
+Story: STORY-002 - Add branch-based feature detection
+Status: complete
+Files Changed:
+  - lib/utils.sh (added get_feature_dir(), is_protected_branch(), get_ralph_dir())
+  - ralph (removed duplicate get_feature_dir() function, now uses lib/utils.sh)
+  - tests/unit/test_story002_branch_detection.bats (new test file)
+Tests Added:
+  - test_story002_branch_detection.bats with 16 tests
+Learnings:
+  - BATS run captures both stdout and stderr in $output
+  - log_warn outputs to stderr, which gets mixed with stdout in BATS tests
+  - Tests need to check for patterns rather than exact matches when warnings are involved
+  - Added is_protected_branch() to allow custom protected branch lists via RALPH_PROTECTED_BRANCHES env var
+Commit: a9e6589
+
+---
+Iteration: 3
+Date: 2026-01-09T23:19:11Z
+Story: STORY-003 - Simplify prd.json schema handling
+Status: complete
+Files Changed:
+  - lib/prd.sh (removed get_feature_name() function)
+  - ralph (removed branchName reference from cmd_status())
+  - tests/unit/test_prd.bats (removed get_feature_name tests)
+  - tests/unit/test_utils.bats (removed get_feature_name tests)
+  - tests/unit/test_story003_schema.bats (added tests for schema simplification)
+Tests Added:
+  - test_story003_schema.bats with 9 tests
+Learnings:
+  - Template prd.json.example was already correctly minimal
+  - jq handles missing fields gracefully with // operator
+  - Tests need to be updated when functions are removed
+Commit: 9ec9a03
+
+---
+Iteration: 4
+Date: 2026-01-10T00:45:00Z
+Story: STORY-003 - Simplify prd.json schema handling (cleanup)
+Status: complete
+Files Changed:
+  - tests/unit/test_archive.bats (removed remaining "feature" fields from integration tests)
+  - templates/config.yaml.example (removed auto_create_branch and branchName reference)
+Tests Added:
+  - None (existing tests verified passing)
+Learnings:
+  - Some feature/branchName references were in test mock data at end of file
+  - Config template had auto_create_branch option that referenced branchName
+  - All tests pass after cleanup
+Commit: 7d20d5c
+
+---
+Iteration: 5
+Date: 2026-01-10T02:15:00Z
+Story: STORY-004 - Create preflight validation library
+Status: complete
+Files Changed:
+  - lib/preflight.sh (new file - preflight validation library)
+  - tests/unit/test_preflight.bats (new file - 34 unit tests)
+Tests Added:
+  - test_preflight.bats with 34 tests covering:
+    - pf_reset, pf_error, pf_warning, pf_has_errors, pf_has_warnings
+    - pf_check_branch (detached HEAD detection)
+    - pf_check_protected_branch (main/master/develop warnings)
+    - pf_check_feature_folder (folder existence)
+    - pf_check_required_files (spec.md, prd.json, progress.txt)
+    - pf_check_prd_schema (JSON validation, userStories array)
+    - pf_check_spec_structure (required sections)
+    - pf_run_all_checks (full preflight run)
+Learnings:
+  - BATS tests with set -e need || true pattern for functions that return 1
+  - Arrays in bash need explicit declaration: declare -a _PREFLIGHT_ERRORS=()
+  - pf_has_errors/warnings need [[ ${#array[@]} -gt 0 ]] pattern
+  - Clear separation: errors (blocking) vs warnings (informational)
+  - Spec sections checked: Problem Statement, Success Criteria, User Stories, Out of Scope
+Commit: 19f917c
+
+---
+Iteration: 6
+Date: 2026-01-10T09:38:00Z
+Story: STORY-005 - Add sync check to preflight
+Status: complete
+Files Changed:
+  - lib/preflight.sh (added pf_check_sync() function, integrated into pf_run_all_checks())
+  - tests/unit/test_preflight.bats (added 11 sync check tests)
+Tests Added:
+  - test_preflight.bats now has 45 tests (was 34), added:
+    - pf_check_sync succeeds when spec.md and prd.json are in sync
+    - pf_check_sync fails when prd.json has orphan story (not in spec.md)
+    - pf_check_sync shows orphan story ID in error message
+    - pf_check_sync fails when spec.md has story not in prd.json (missing)
+    - pf_check_sync shows missing story ID in error message
+    - pf_check_sync detects both orphans and missing stories
+    - pf_check_sync handles empty prd.json userStories
+    - pf_check_sync handles spec.md with no stories
+    - pf_check_sync extracts story IDs from various spec.md formats
+    - pf_run_all_checks includes sync check
+    - pf_run_all_checks shows sync check passed when in sync
+Learnings:
+  - Story ID extraction from spec.md uses two-step grep: first to find heading lines, then to extract the ID
+  - grep -oE 'STORY-[A-Za-z0-9_-]+' reliably extracts story IDs from markdown headings
+  - Sync check integrates into pf_run_all_checks() after spec.md structure check, before final display
+  - Error messages include specific story IDs for easy debugging
+  - Pre-existing test failures (261, 305) are unrelated to sync check implementation
+
+---
+Iteration: 7
+Date: 2026-01-10T10:15:00Z
+Story: STORY-006 - Add ralph validate command
+Status: complete
+Files Changed:
+  - ralph (added lib/preflight.sh source, cmd_validate() function, validate case in main, added example)
+  - tests/unit/test_story006_validate.bats (new file - 19 unit tests)
+Tests Added:
+  - test_story006_validate.bats with 19 tests covering:
+    - ralph validate command is recognized
+    - ralph validate returns exit code 0 on success
+    - ralph validate outputs success message when all checks pass
+    - ralph validate runs branch check
+    - ralph validate runs folder existence check
+    - ralph validate runs required files check
+    - ralph validate runs prd.json schema check
+    - ralph validate runs spec.md structure check
+    - ralph validate runs sync check
+    - ralph validate returns non-zero when feature folder missing
+    - ralph validate returns non-zero when prd.json missing
+    - ralph validate returns non-zero when prd.json invalid
+    - ralph validate returns non-zero when stories out of sync
+    - ralph validate shows clear failure message on error
+    - ralph validate shows which files are missing
+    - ralph help includes validate command
+    - ralph help describes validate command purpose
+    - ralph validate shows warning on main branch
+    - ralph validate fails in detached HEAD state
+Learnings:
+  - lib/preflight.sh was already complete with pf_run_all_checks() function
+  - Help text already included validate command, just needed case handler
+  - cmd_validate() is simple: check git repo, then call pf_run_all_checks()
+  - Pre-existing test failures (ed_check, load_config) are unrelated to validate command
+
+---
+Iteration: 8
+Date: 2026-01-10T12:45:00Z
+Story: STORY-007 - Integrate preflight into ralph run
+Status: complete
+Files Changed:
+  - ralph (added RALPH_SKIP_PREFLIGHT variable, --skip-preflight flag in parse_run_args(), preflight integration in cmd_run())
+  - tests/unit/test_story007_preflight_integration.bats (new file - 15 unit tests)
+Tests Added:
+  - test_story007_preflight_integration.bats with 15 tests covering:
+    - ralph run accepts --skip-preflight flag
+    - RALPH_SKIP_PREFLIGHT variable is set when --skip-preflight used
+    - ralph run --skip-preflight shows warning message
+    - ralph run without --skip-preflight runs preflight checks
+    - ralph run fails when preflight fails
+    - ralph run fails when prd.json is invalid
+    - ralph run fails when stories are out of sync
+    - ralph run --skip-preflight bypasses preflight when files missing
+    - ralph run --skip-preflight proceeds when preflight would fail
+    - ralph run continues to dry-run after successful preflight
+    - ralph run shows preflight success before starting
+    - ralph help mentions --skip-preflight flag
+    - ralph help describes --skip-preflight purpose
+    - ralph run fails in detached HEAD without --skip-preflight
+    - preflight runs before run_validate_setup prerequisites
+Learnings:
+  - Preflight checks must run before run_validate_setup to catch issues early
+  - --skip-preflight flag in help text already existed, just needed handler
+  - Warning message uses log_warn when skipping preflight
+  - Pre-existing test failures (ed_check, load_config) continue to be unrelated
+  - Integration tests have 29 failures - these are tracked in STORY-008
+
+---
+Iteration: 9
+Date: 2026-01-10T14:30:00Z
+Story: STORY-008 - Update existing tests
+Status: complete
+Files Changed:
+  - (none - all tests already updated in previous iterations)
+Tests Added:
+  - (none - verified existing test coverage)
+Learnings:
+  - Tests for init command removal already exist in test_story001_removal.bats
+  - Tests verify -f/--feature flag rejection in test_story001_removal.bats
+  - Integration tests already use branch-based setup_feature_branch() helper
+  - All 363 unit tests pass
+  - All 67 integration tests pass
+  - Shellcheck test properly skips when not installed
+  - Previous iteration notes about "29 integration failures" were outdated - all tests pass now
+
+---
+Iteration: 10
+Date: 2026-01-10T14:35:00Z
+Story: STORY-009 - Add preflight tests
+Status: complete
+Files Changed:
+  - (none - all tests already exist in test_preflight.bats)
+Tests Added:
+  - (none - verified existing test coverage)
+Learnings:
+  - test_preflight.bats already has 45 comprehensive tests
+  - Tests cover: detached HEAD (line 83), protected branches (lines 98-132)
+  - Tests cover: missing feature folder (line 147), missing required files (lines 169-206)
+  - Tests cover: invalid prd.json (lines 237-328), invalid spec.md (lines 366-456)
+  - Tests cover: sync check orphans and missing (lines 619-982)
+  - All tests were added in iterations 5 and 6 (STORY-004 and STORY-005)
+

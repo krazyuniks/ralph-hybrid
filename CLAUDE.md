@@ -13,19 +13,43 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 | README.md | Complete - Philosophy, rationale, source material |
 | SPEC.md | Complete - Technical specification |
 | templates/ | Complete - Prompt templates, examples |
-| Implementation | Not started |
+| .claude/commands/ | Complete - `/ralph-plan`, `/ralph-prd`, `/ralph-amend` commands |
+| lib/ | Complete - All library functions |
+| ralph | Complete - Main CLI script |
+| install.sh | Complete - Global installation |
+| tests/ | Complete - 430 BATS tests |
 
-## Next Steps (Implementation Order)
+## CLI Commands
 
-1. `lib/utils.sh` - Shared utilities (logging, config loading)
-2. `lib/circuit_breaker.sh` - Stuck loop detection
-3. `lib/rate_limiter.sh` - API call throttling
-4. `lib/exit_detection.sh` - Completion signal detection
-5. `lib/archive.sh` - Feature archiving
-6. `lib/branch.sh` - Git branch management
-7. `ralph` - Main script (orchestrates everything)
-8. `install.sh` / `uninstall.sh` - Installation scripts
-9. `tests/*.bats` - BATS test suite
+| Command | Purpose |
+|---------|---------|
+| `ralph setup` | Install Claude commands to project's `.claude/commands/` |
+| `ralph run [options]` | Execute the development loop |
+| `ralph status` | Show current feature status |
+| `ralph validate` | Run preflight checks |
+| `ralph archive` | Archive completed feature |
+
+## Claude Commands (installed via `ralph setup`)
+
+| Command | Purpose |
+|---------|---------|
+| `/ralph-plan <description>` | Interactive planning workflow: SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE |
+| `/ralph-prd` | Generate/regenerate prd.json from existing spec.md |
+| `/ralph-amend` | Safely modify requirements during implementation |
+
+## Quick Start
+
+```bash
+# Install globally (once)
+./install.sh
+
+# In each project
+ralph setup                    # Install Claude commands
+git checkout -b feature/xyz    # Create feature branch
+/ralph-plan "description"      # Plan the feature (in Claude Code)
+ralph run                      # Run implementation loop
+ralph run --model opus         # Or with specific model
+```
 
 ## Key Decisions Made
 
@@ -38,7 +62,9 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 ### Implementation Choices
 - **Bash 4.0+** - Simple, minimal dependencies
 - **No extension on main script** - `ralph` not `ralph.sh` for cleaner CLI
-- **Feature folders** - `.ralph/<feature-name>/` isolates per-feature files
+- **Branch-based feature folders** - `.ralph/{branch-name}/` derived from git branch (no manual init)
+- **spec.md as source of truth** - prd.json is derived via `/ralph-prd`
+- **Preflight validation** - Sync check ensures spec.md and prd.json match before running
 - **TDD-first workflow** - Default prompt template emphasizes tests first
 - **YAML config** - Global (~/.ralph/config.yaml) and project-level (.ralph/config.yaml)
 
@@ -59,7 +85,8 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 |----------|---------|
 | [README.md](README.md) | Philosophy, source material, rationale, feature comparison |
 | [SPEC.md](SPEC.md) | Technical specification - requirements, architecture, CLI, formats |
-| [templates/](templates/) | Prompt templates, prd.json example, config example |
+| [templates/](templates/) | Prompt templates, prd.json example, config example, spec.md example |
+| [.claude/commands/](.claude/commands/) | Claude Code slash commands for planning workflow |
 
 ## Source Implementations Studied
 

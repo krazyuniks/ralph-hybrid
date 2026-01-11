@@ -13,13 +13,19 @@
 4. [CLI Interface](#cli-interface)
 5. [Configuration](#configuration)
 6. [Core Loop Logic](#core-loop-logic)
-7. [PRD Format](#prd-format)
-8. [Progress Tracking](#progress-tracking)
-9. [Prompt Template](#prompt-template)
-10. [Safety Mechanisms](#safety-mechanisms)
-11. [Exit Conditions](#exit-conditions)
-12. [Installation](#installation)
-13. [Testing](#testing)
+7. [File Ownership](#file-ownership)
+8. [Preflight Validation](#preflight-validation)
+9. [Planning Workflow](#planning-workflow)
+10. [Amendment System](#amendment-system)
+11. [PRD Format](#prd-format)
+12. [Spec Format](#spec-format)
+13. [Progress Tracking](#progress-tracking)
+14. [Prompt Template](#prompt-template)
+15. [Safety Mechanisms](#safety-mechanisms)
+16. [Monitoring Dashboard](#monitoring-dashboard-tmux)
+17. [Exit Conditions](#exit-conditions)
+18. [Installation](#installation)
+19. [Testing](#testing)
 
 ---
 
@@ -39,6 +45,10 @@
 | F8 | Support per-iteration timeout |
 | F9 | Archive completed features with timestamp |
 | F10 | Isolate features in separate folders |
+| F11 | Support mid-implementation amendments (ADD/CORRECT/REMOVE) |
+| F12 | Preserve completed work when adding amendments |
+| F13 | Track amendment history with sequential IDs (AMD-NNN) |
+| F14 | Warn before resetting completed stories during correction |
 
 ### Safety Requirements
 
@@ -123,7 +133,8 @@ ralph-hybrid/
 │   ├── rate_limiter.sh
 │   ├── exit_detection.sh
 │   ├── archive.sh
-│   ├── branch.sh
+│   ├── monitor.sh
+│   ├── preflight.sh
 │   └── utils.sh
 ├── templates/
 │   ├── prompt.md
@@ -143,7 +154,10 @@ ralph-hybrid/
     ├── <feature-name>/                     # Active feature folder
     │   ├── prd.json                        # User stories with passes field
     │   ├── progress.txt                    # Append-only iteration log
+    │   ├── status.json                     # Machine-readable status (for monitor)
     │   ├── prompt.md                       # Custom prompt (optional)
+    │   ├── logs/                           # Iteration logs
+    │   │   └── iteration-N.log
     │   └── specs/                          # Detailed requirements
     │       └── *.md
     └── archive/                            # Completed features
@@ -160,12 +174,16 @@ ralph-hybrid/
 ### Commands
 
 ```bash
-ralph init <feature-name>       # Initialize feature folder
-ralph run [options]             # Execute the loop
+ralph setup                     # Install Claude commands to project (.claude/commands/)
+ralph run [options]             # Execute the loop (includes preflight validation)
 ralph status                    # Show current state
+ralph monitor                   # Launch tmux monitoring dashboard
 ralph archive                   # Archive current feature
+ralph validate                  # Run preflight checks without starting loop
 ralph help                      # Show help
 ```
+
+> **Note:** Run `ralph setup` first in each project to install the `/ralph-plan`, `/ralph-prd`, and `/ralph-amend` commands. The feature folder is derived from the current git branch name.
 
 ### Run Options
 
@@ -174,13 +192,17 @@ ralph help                      # Show help
 | `-n, --max-iterations` | 20 | Maximum iterations |
 | `-t, --timeout` | 15 | Per-iteration timeout (minutes) |
 | `-r, --rate-limit` | 100 | Max API calls per hour |
-| `-f, --feature` | auto-detect | Feature folder to use |
 | `-p, --prompt` | default | Custom prompt file |
+| `-m, --model` | (none) | Claude model (opus, sonnet, or full name) |
 | `-v, --verbose` | false | Detailed output |
 | `--no-archive` | false | Don't archive on completion |
 | `--reset-circuit` | false | Reset circuit breaker state |
 | `--dry-run` | false | Show what would happen |
+| `--monitor` | false | Launch with tmux monitoring dashboard |
+| `--skip-preflight` | false | Skip preflight validation (use with caution) |
 | `--dangerously-skip-permissions` | false | Pass to Claude Code |
+
+> **Note:** The feature folder is automatically derived from the current git branch name. No `-f` flag is needed.
 
 ---
 
@@ -216,14 +238,38 @@ quality_checks:
   backend: "docker compose exec backend pytest tests/"
   frontend: "docker compose exec frontend pnpm check"
 
-branch:
-  prefix: "feature/"
-  auto_create: true
+# Protected branches - ralph will warn if running on these
+protected_branches:
+  - main
+  - master
+  - develop
 ```
 
 ---
 
 ## Core Loop Logic
+
+### Feature Detection
+
+The feature folder is derived from the current git branch name:
+
+```bash
+get_feature_dir() {
+    local branch=$(git branch --show-current)
+
+    # Error if detached HEAD
+    [[ -z "$branch" ]] && error "Not on a branch (detached HEAD)"
+
+    # Warn if on protected branch
+    if is_protected_branch "$branch"; then
+        warn "Running on protected branch '$branch'"
+    fi
+
+    # Sanitize: feature/user-auth → feature-user-auth
+    local feature_name="${branch//\//-}"
+    echo ".ralph/${feature_name}"
+}
+```
 
 ### Main Loop (Pseudocode)
 
@@ -231,9 +277,12 @@ branch:
 main() {
     load_config
     check_prerequisites
-    resolve_feature_folder
-    maybe_archive_previous_run
-    maybe_create_branch
+
+    # Derive feature folder from branch
+    FEATURE_DIR=$(get_feature_dir)
+
+    # Preflight validation
+    run_preflight_checks || exit 1
 
     iteration=0
     no_progress_count=0
@@ -246,6 +295,9 @@ main() {
         # Safety checks
         check_circuit_breaker || exit 1
         check_rate_limit || wait_for_reset
+
+        # Update status for monitor
+        update_status "running" "$iteration"
 
         # Snapshot before
         prd_before=$(get_passes_state)
@@ -310,14 +362,614 @@ EOF
 
 ---
 
+## File Ownership
+
+Clear separation of what writes each file:
+
+| File | Written By | Read By | Purpose |
+|------|------------|---------|---------|
+| `spec.md` | `/ralph-plan`, `/ralph-amend` (Claude) | `/ralph-prd`, Claude agent | Source of truth for requirements |
+| `prd.json` | `/ralph-prd`, `/ralph-amend` (Claude) | Ralph loop, Claude agent | Machine-readable task state |
+| `progress.txt` | Claude agent (appends), `/ralph-amend` | Claude agent | Iteration history, learnings, amendments |
+| `status.json` | Ralph loop (bash) | Monitor script | Real-time loop status |
+| `logs/iteration-N.log` | Ralph loop (bash) | Monitor script, debugging | Raw Claude output per iteration |
+
+### Source of Truth Hierarchy
+
+```
+spec.md (human-readable requirements)
+    ↓
+    /ralph-prd generates (or /ralph-amend updates)
+    ↓
+prd.json (machine-readable, derived)
+    ↓
+    Claude updates passes field
+    ↓
+progress.txt (append-only history + amendment log)
+```
+
+**Important:** `spec.md` is the source of truth. For requirement changes:
+- **During planning:** Edit `spec.md` and regenerate with `/ralph-prd`
+- **During implementation:** Use `/ralph-amend` to safely modify requirements
+
+---
+
+## Preflight Validation
+
+Before starting the loop, `ralph run` performs preflight checks. These can also be run standalone with `ralph validate`.
+
+### Checks Performed
+
+| Check | Severity | Description |
+|-------|----------|-------------|
+| Branch detected | ERROR | Must be on a branch (not detached HEAD) |
+| Protected branch | WARN | Warn if on main/master/develop |
+| Folder exists | ERROR | `.ralph/{branch}/` must exist |
+| Required files | ERROR | spec.md, prd.json, progress.txt must exist |
+| prd.json schema | ERROR | Valid JSON with required fields |
+| spec.md structure | WARN | Has Problem Statement, Success Criteria, Stories |
+| **Sync check** | ERROR | spec.md and prd.json must be in sync |
+
+### Sync Check
+
+The sync check ensures `prd.json` reflects the current `spec.md`:
+
+```bash
+sync_check() {
+    # Generate temp prd.json from current spec.md
+    temp_prd=$(generate_prd_from_spec "$FEATURE_DIR/spec.md")
+
+    # Compare stories (ignoring passes field and notes)
+    current_stories=$(jq '[.userStories[] | {id, title, acceptanceCriteria}]' "$FEATURE_DIR/prd.json")
+    spec_stories=$(jq '[.userStories[] | {id, title, acceptanceCriteria}]' <<< "$temp_prd")
+
+    if [[ "$current_stories" != "$spec_stories" ]]; then
+        error "spec.md and prd.json are out of sync"
+        diff_stories "$current_stories" "$spec_stories"
+        echo "Run '/ralph-prd' to regenerate prd.json from spec.md"
+        return 1
+    fi
+}
+```
+
+### Sync Scenarios
+
+| Scenario | Detection | Severity | Resolution |
+|----------|-----------|----------|------------|
+| New story in spec.md | Story in spec not in prd | ERROR | Run `/ralph-prd` |
+| Acceptance criteria changed | Criteria arrays differ | ERROR | Run `/ralph-prd` |
+| Orphaned story (passes: false) | Story in prd not in spec | WARN | Run `/ralph-prd` or add to spec |
+| **Orphaned story (passes: true)** | Completed story in prd not in spec | **ERROR** | Requires explicit confirmation |
+| Only `passes` field differs | Ignored | OK | Expected (work in progress) |
+| Only `notes` field differs | Ignored | OK | Agent notes are ephemeral |
+
+### Orphaned Story Handling
+
+Orphaned stories are stories present in `prd.json` but not in `spec.md`. This usually means:
+1. Story was removed from spec.md (intentional)
+2. Story was manually added to prd.json without spec (bad practice)
+3. Merge conflict or accidental deletion
+
+**Critical:** If an orphaned story has `passes: true`, this represents **completed work that will be discarded**. This requires explicit user confirmation.
+
+```bash
+orphan_check() {
+    prd_ids=$(jq -r '.userStories[].id' "$FEATURE_DIR/prd.json")
+    spec_ids=$(extract_story_ids "$FEATURE_DIR/spec.md")
+
+    for id in $prd_ids; do
+        if ! echo "$spec_ids" | grep -q "^$id$"; then
+            passes=$(jq -r ".userStories[] | select(.id==\"$id\") | .passes" "$FEATURE_DIR/prd.json")
+            if [[ "$passes" == "true" ]]; then
+                error "Orphaned COMPLETED story: $id"
+                echo "  This story has passes:true but is not in spec.md"
+                echo "  Options:"
+                echo "    1. Add story back to spec.md (preserve work)"
+                echo "    2. Run '/ralph-prd --confirm-orphan-removal' (discard work)"
+                return 1
+            else
+                warn "Orphaned story: $id (passes: false, will be removed)"
+            fi
+        fi
+    done
+}
+```
+
+### Preflight Output
+
+```
+$ ralph validate
+
+Preflight checks for branch: feature/user-auth
+Feature folder: .ralph/feature-user-auth/
+
+✓ Branch detected: feature/user-auth
+✓ Folder exists: .ralph/feature-user-auth/
+✓ Required files present
+✓ prd.json schema valid
+✓ spec.md structure valid
+✓ Sync check passed
+
+All checks passed. Ready to run.
+```
+
+```
+$ ralph validate
+
+Preflight checks for branch: feature/user-auth
+Feature folder: .ralph/feature-user-auth/
+
+✓ Branch detected: feature/user-auth
+✓ Folder exists: .ralph/feature-user-auth/
+✓ Required files present
+✓ prd.json schema valid
+⚠ spec.md missing "Out of Scope" section (recommended)
+✗ Sync check failed:
+    - STORY-004 in spec.md not found in prd.json
+    - STORY-002 acceptance criteria differs
+
+Resolve sync issues by running '/ralph-prd' in Claude Code.
+```
+
+**Example: Orphaned completed story detected**
+```
+$ ralph validate
+
+Preflight checks for branch: feature/user-auth
+Feature folder: .ralph/feature-user-auth/
+
+✓ Branch detected: feature/user-auth
+✓ Folder exists: .ralph/feature-user-auth/
+✓ Required files present
+✓ prd.json schema valid
+✓ spec.md structure valid
+✗ Orphan check failed:
+    - STORY-003 in prd.json (passes: true) not found in spec.md
+      ^^^ COMPLETED WORK WILL BE LOST
+
+This story was completed but is no longer in spec.md.
+Options:
+  1. Add STORY-003 back to spec.md (preserve completed work)
+  2. Run '/ralph-prd' and confirm orphan removal (discard work)
+```
+
+---
+
+## Planning Workflow
+
+Ralph Hybrid provides Claude Code commands for guided feature planning. This separates **planning** (done interactively with Claude) from **execution** (done autonomously by Ralph loop).
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/ralph-plan <description>` | Interactive planning workflow |
+| `/ralph-prd` | Generate prd.json from existing spec.md |
+
+### Workflow States
+
+```
+┌─────────────┐
+│  DISCOVER   │ ← Extract context from GitHub issue (if branch has issue #)
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  SUMMARIZE  │ ← Combine issue context + user input
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│   CLARIFY   │ ← Ask 3-5 targeted questions (fewer if issue has details)
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│    DRAFT    │ ← Generate spec.md
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  DECOMPOSE  │ ← Break into properly-sized stories
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  GENERATE   │ ← Create prd.json + progress.txt
+└─────────────┘
+```
+
+### GitHub Issue Integration
+
+If the branch name contains an issue number (e.g., `feature/42-user-auth`), the `/ralph-plan` command will:
+
+1. **Detect** issue number from branch name patterns
+2. **Fetch** issue via `gh issue view 42 --json title,body,labels`
+3. **Extract** problem statement, acceptance criteria from issue body
+4. **Use** as starting context (reduces clarifying questions needed)
+5. **Link** spec.md back to the GitHub issue for traceability
+
+Branch patterns recognized:
+- `feature/42-description` → issue #42
+- `issue-42-description` → issue #42
+- `42-description` → issue #42
+- `fix/42-description` → issue #42
+
+### Clarifying Questions
+
+Focus on critical ambiguities:
+
+1. **Problem Definition**: "What specific problem does this solve?"
+2. **Scope Boundaries**: "What should it NOT do?" (prevents scope creep)
+3. **Success Criteria**: "How do we know it's done?"
+4. **Technical Constraints**: "Any existing patterns to follow?"
+5. **Dependencies**: "What does this depend on?"
+
+### Story Sizing Rule
+
+> Each story must be completable in ONE Ralph iteration (one context window).
+
+**Split indicators:**
+- Description exceeds 2-3 sentences
+- More than 6 acceptance criteria
+- Changes more than 3 files
+
+### Acceptance Criteria Format
+
+**Required for ALL stories:**
+- `Typecheck passes`
+- `Unit tests pass` (or specific test file)
+
+**For UI stories, add:**
+- `Verify in browser` or E2E test reference
+
+**Good criteria are:**
+
+| Trait | Good Example | Bad Example |
+|-------|--------------|-------------|
+| Verifiable | "Email format is validated" | "Works correctly" |
+| Measurable | "Response time < 200ms" | "Is fast" |
+| Specific | "GET /api/users returns 200" | "API works" |
+
+### Output Files
+
+After `/ralph-plan` completes:
+
+```
+.ralph/{feature}/
+├── spec.md           # Full specification (human-readable)
+├── prd.json          # Machine-readable task list
+├── progress.txt      # Empty, ready for iterations
+└── specs/            # Additional detailed specs (optional)
+```
+
+### Usage
+
+```bash
+# In Claude Code session:
+/ralph-plan Add user authentication with JWT
+
+# Follow interactive prompts...
+
+# After planning completes:
+ralph run
+```
+
+---
+
+## Amendment System
+
+Plans evolve during implementation. Edge cases emerge. Stakeholders clarify requirements. The amendment system handles scope changes without losing progress.
+
+### Philosophy
+
+> **"No plan survives first contact with implementation."**
+
+Traditional workflows force a choice between:
+- Manual prd.json edits (risky, loses context)
+- Starting over (loses progress)
+- Hoping the AI remembers verbal changes (it won't)
+
+Ralph Hybrid treats scope changes as **expected, not exceptional**.
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/ralph-amend add <description>` | Add new requirement discovered during implementation |
+| `/ralph-amend correct <story-id> <description>` | Fix or clarify existing story |
+| `/ralph-amend remove <story-id> <reason>` | Descope story (archived, not deleted) |
+| `/ralph-amend status` | View amendment history and current state |
+
+### Amendment Modes
+
+#### ADD Mode
+
+Adds new requirements discovered during implementation.
+
+**Workflow:**
+```
+1. VALIDATE   - Confirm feature folder exists
+2. CLARIFY    - Mini-planning session (2-3 questions max)
+3. DEFINE     - Create acceptance criteria
+4. SIZE       - Check if story needs splitting
+5. INTEGRATE  - Update spec.md and prd.json
+6. LOG        - Record amendment in progress.txt
+7. CONFIRM    - Show summary
+```
+
+**Key behaviors:**
+- Asks focused clarifying questions (max 3)
+- Generates proper acceptance criteria
+- Assigns priority (usually after existing stories)
+- Preserves all existing `passes: true` stories
+
+#### CORRECT Mode
+
+Fixes or clarifies existing story requirements.
+
+**Workflow:**
+```
+1. VALIDATE   - Confirm story exists
+2. SHOW       - Display current definition
+3. IDENTIFY   - What needs to change?
+4. WARN       - If passes: true, warn about reset
+5. UPDATE     - Modify spec.md and prd.json
+6. LOG        - Record correction in progress.txt
+7. CONFIRM    - Show diff and summary
+```
+
+**Key behaviors:**
+- Shows current story before changes
+- Warns if correcting completed (`passes: true`) story
+- Resets `passes` to `false` if story was complete (requires re-verification)
+- Logs before/after for audit trail
+
+#### REMOVE Mode
+
+Descopes a story (moves elsewhere, no longer needed, etc.).
+
+**Workflow:**
+```
+1. VALIDATE   - Confirm story exists
+2. SHOW       - Display story and status
+3. CONFIRM    - Require reason for removal
+4. ARCHIVE    - Move to Descoped section (never deleted)
+5. UPDATE     - Remove from active prd.json stories
+6. LOG        - Record removal in progress.txt
+7. CONFIRM    - Show summary
+```
+
+**Key behaviors:**
+- Stories are **never deleted** - moved to "Descoped Stories" section
+- Requires explicit reason
+- Warns about dependencies (if other stories depend on this one)
+- Full audit trail preserved
+
+### Amendment ID Format
+
+```
+AMD-001  # First amendment
+AMD-002  # Second amendment
+AMD-NNN  # Sequential within feature
+```
+
+**Rules:**
+- Unique per feature (not global)
+- Never reused (even if amendment is reverted)
+- Referenced in spec.md, prd.json, and progress.txt
+
+### File Updates
+
+Each amendment updates three files consistently:
+
+#### spec.md Updates
+
+Amendments are recorded in a dedicated section:
+
+```markdown
+---
+
+## Amendments
+
+### AMD-001: CSV Export (2026-01-09T14:32:00Z)
+
+**Type:** ADD
+**Reason:** User needs data export for external reporting
+**Added by:** /ralph-amend
+
+#### STORY-004: Export data as CSV
+
+**As a** user
+**I want to** export my data as CSV
+**So that** I can analyze it in spreadsheets
+
+**Acceptance Criteria:**
+- [ ] Export button visible on data list view
+- [ ] Clicking export downloads CSV file
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Priority:** 2
+
+---
+
+### AMD-002: STORY-003 Correction (2026-01-09T15:10:00Z)
+
+**Type:** CORRECT
+**Target:** STORY-003 - Validate user input
+**Reason:** Email validation was underspecified
+
+**Changes:**
+| Field | Before | After |
+|-------|--------|-------|
+| Acceptance Criteria #1 | Email field is required | Email validated against RFC 5322 |
+
+**Status Impact:** passes reset to false
+
+---
+
+## Descoped Stories
+
+### STORY-005: Advanced filtering (Removed AMD-003)
+
+**Removed:** 2026-01-09T16:00:00Z
+**Reason:** Moved to separate issue #47 for Phase 2
+**Status at removal:** passes: false
+
+**Original Definition:**
+[full story preserved here]
+```
+
+#### prd.json Updates
+
+Stories include amendment metadata:
+
+```json
+{
+  "id": "STORY-004",
+  "title": "Export data as CSV",
+  "description": "As a user I want to export my data as CSV...",
+  "acceptanceCriteria": ["..."],
+  "priority": 2,
+  "passes": false,
+  "notes": "",
+  "amendment": {
+    "id": "AMD-001",
+    "type": "add",
+    "timestamp": "2026-01-09T14:32:00Z",
+    "reason": "User needs data export for external reporting"
+  }
+}
+```
+
+For corrections:
+
+```json
+{
+  "amendment": {
+    "id": "AMD-002",
+    "type": "correct",
+    "timestamp": "2026-01-09T15:10:00Z",
+    "reason": "Email validation was underspecified",
+    "changes": {
+      "acceptanceCriteria": {
+        "before": ["Email field is required"],
+        "after": ["Email validated against RFC 5322"]
+      },
+      "passesReset": true
+    }
+  }
+}
+```
+
+#### progress.txt Updates
+
+Amendments are logged with full context:
+
+```
+---
+## Amendment AMD-001: 2026-01-09T14:32:00Z
+
+Type: ADD
+Command: /ralph-amend add "Users need CSV export for reporting"
+
+Added Stories:
+  - STORY-004: Export data as CSV (priority: 2)
+
+Reason: User needs data export for external reporting
+
+Files Updated:
+  - spec.md: Added Amendments section
+  - prd.json: Added STORY-004
+
+Context: Discovered during STORY-002 implementation that users
+need to export filtered results for monthly reporting.
+
+---
+```
+
+### Edge Cases
+
+#### Adding to Completed Feature
+
+```
+/ralph-amend add "One more thing..."
+
+⚠️  All stories currently pass. Adding new story will:
+  - Mark feature incomplete
+  - Require additional Ralph runs
+
+Proceed? (y/N)
+```
+
+#### Correcting a Blocking Story
+
+```
+/ralph-amend correct STORY-001 "Change API contract"
+
+⚠️  STORY-001 is a dependency for:
+  - STORY-002 (passes: true)
+  - STORY-003 (passes: false)
+
+Correcting may invalidate dependent stories.
+Reset all dependent stories? (y/N/select)
+```
+
+#### Removing a Story with Dependents
+
+```
+/ralph-amend remove STORY-002 "Not needed"
+
+⚠️  STORY-002 blocks:
+  - STORY-003 (passes: false)
+  - STORY-004 (passes: false)
+
+Options:
+  A) Remove STORY-002, keep dependent stories
+  B) Remove STORY-002 and all dependent stories
+  C) Cancel
+
+Choice:
+```
+
+### Integration with Ralph Loop
+
+The prompt template acknowledges amendments:
+
+```markdown
+## Amendment Awareness
+
+When you see stories with `amendment` field in prd.json:
+- These were added/modified after initial planning
+- Check progress.txt for context on why
+- Amendments marked with AMD-XXX in spec.md have full details
+
+Amendments are normal. Plans evolve. Implement them like any other story.
+```
+
+### Preflight Validation
+
+The sync check (see [Preflight Validation](#preflight-validation)) validates amendments:
+
+| Check | Severity | Description |
+|-------|----------|-------------|
+| Amendment IDs unique | ERROR | No duplicate AMD-NNN within feature |
+| Amendment referenced | WARN | Stories with `amendment` field should have matching AMD in spec.md |
+| Descoped stories archived | ERROR | Removed stories must be in Descoped section |
+
+---
+
 ## PRD Format
 
 ### Schema (prd.json)
 
+The prd.json file is a **derived artifact** generated from spec.md by `/ralph-prd`. It provides machine-readable task state for the Ralph loop.
+
+> **Note:** The feature identifier is derived from the current git branch name. No `feature` or `branchName` fields are needed in prd.json.
+
 ```json
 {
-  "feature": "string",
-  "branchName": "string",
   "description": "string",
   "createdAt": "ISO-8601",
   "userStories": [
@@ -338,8 +990,6 @@ EOF
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `feature` | string | Yes | Feature identifier, matches folder name |
-| `branchName` | string | Yes | Git branch to create/use |
 | `description` | string | Yes | High-level feature description |
 | `createdAt` | ISO-8601 | Yes | Creation timestamp |
 | `userStories` | array | Yes | List of stories |
@@ -348,8 +998,116 @@ EOF
 | `userStories[].description` | string | No | User story or description |
 | `userStories[].acceptanceCriteria` | array | Yes | Testable criteria |
 | `userStories[].priority` | number | Yes | 1 = highest |
-| `userStories[].passes` | boolean | Yes | Completion status |
+| `userStories[].passes` | boolean | Yes | Completion status (updated by Claude) |
 | `userStories[].notes` | string | No | Agent notes, blockers |
+| `userStories[].amendment` | object | No | Amendment metadata (if added/modified via /ralph-amend) |
+| `userStories[].amendment.id` | string | Yes* | Amendment ID (e.g., AMD-001) |
+| `userStories[].amendment.type` | string | Yes* | "add", "correct", or "remove" |
+| `userStories[].amendment.timestamp` | ISO-8601 | Yes* | When amendment was made |
+| `userStories[].amendment.reason` | string | Yes* | Why the amendment was made |
+| `userStories[].amendment.changes` | object | No | For corrections: before/after values |
+
+*Required if `amendment` object is present
+
+---
+
+## Spec Format
+
+### Schema (spec.md)
+
+The spec.md file is a human-readable specification generated by `/ralph-plan`. It serves as the source of truth for feature requirements.
+
+### Structure
+
+```markdown
+---
+created: {ISO-8601}
+---
+
+# {Feature Title}
+
+<!-- Feature folder: .ralph/{branch-name}/ (derived from git branch) -->
+
+## Problem Statement
+{Description of the problem being solved}
+
+## Success Criteria
+- [ ] {High-level measurable outcome}
+
+## User Stories
+
+### STORY-001: {Title}
+**As a** {user type}
+**I want to** {goal}
+**So that** {benefit}
+
+**Acceptance Criteria:**
+- [ ] {Specific, testable criterion}
+- [ ] Typecheck passes
+- [ ] Unit tests pass
+
+**Technical Notes:**
+- {Implementation hints}
+
+## Out of Scope
+- {Explicitly excluded features}
+
+## Open Questions
+- {Unresolved decisions}
+
+---
+
+## Amendments
+<!-- Added by /ralph-amend - DO NOT manually edit this section -->
+
+### AMD-001: {Title} ({ISO-8601})
+
+**Type:** ADD | CORRECT | REMOVE
+**Reason:** {Why the amendment was made}
+**Added by:** /ralph-amend
+
+{Story definition for ADD, change table for CORRECT}
+
+---
+
+## Descoped Stories
+<!-- Stories removed via /ralph-amend remove - preserved for audit trail -->
+
+### {STORY-ID}: {Title} (Removed {AMD-ID})
+
+**Removed:** {ISO-8601}
+**Reason:** {Why removed}
+**Status at removal:** passes: true|false
+
+**Original Definition:**
+{Full story preserved here}
+```
+
+### Frontmatter Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created` | ISO-8601 | Yes | Creation timestamp |
+
+> **Note:** No `feature` or `branch` fields. The feature is identified by the folder path, which is derived from the current git branch (e.g., branch `feature/user-auth` → folder `.ralph/feature-user-auth/`).
+
+### Story Format
+
+Each story follows the user story format with structured sections:
+
+| Section | Purpose |
+|---------|---------|
+| **As a / I want / So that** | User perspective and motivation |
+| **Acceptance Criteria** | Testable requirements |
+| **Technical Notes** | Implementation guidance |
+
+### Best Practices
+
+1. **Keep stories small**: One context window per story
+2. **Be specific**: Avoid vague criteria like "works correctly"
+3. **Include tech checks**: Always include typecheck/test criteria
+4. **Document exclusions**: "Out of Scope" prevents scope creep
+5. **Capture decisions**: Document resolved "Open Questions"
 
 ---
 
@@ -375,14 +1133,50 @@ Learnings:
 Commit: <hash>
 ```
 
+### Amendment Log Format
+
+Amendments are logged in progress.txt with a distinct format:
+
+```
+---
+## Amendment AMD-001: <ISO-8601>
+
+Type: ADD | CORRECT | REMOVE
+Command: /ralph-amend <mode> "<description>"
+
+Added Stories:           # For ADD
+  - <ID>: <Title> (priority: N)
+
+Corrected Story:         # For CORRECT
+  - <ID>: <Title>
+  - Changes: <summary>
+  - Status Reset: yes|no
+
+Removed Story:           # For REMOVE
+  - <ID>: <Title>
+  - Previous Status: passes: true|false
+
+Reason: <why the amendment was made>
+
+Files Updated:
+  - spec.md: <what changed>
+  - prd.json: <what changed>
+
+Context: <additional context from the amendment session>
+
+---
+```
+
 ### Purpose
 
 | Use | Description |
 |-----|-------------|
 | Agent continuity | Agent reads to understand prior work |
 | Progress detection | Compare iterations to detect stuck loops |
-| Post-mortem analysis | Review iteration patterns |
+| **Amendment history** | Track scope changes and their rationale |
+| Post-mortem analysis | Review iteration patterns and amendments |
 | Prompt refinement | Identify what causes many iterations |
+| **Learning data** | Amendments show where initial planning fell short |
 
 ---
 
@@ -398,8 +1192,9 @@ You are an autonomous development agent working through a PRD using TDD.
 ## Context Files
 
 - **prd.json**: User stories with `passes: true/false`
-- **progress.txt**: Previous iteration log
+- **progress.txt**: Previous iteration log (includes amendment history)
 - **specs/**: Detailed requirements
+- **spec.md**: Full specification (includes Amendments section)
 
 ## Workflow
 
@@ -416,12 +1211,26 @@ You are an autonomous development agent working through a PRD using TDD.
    - Append to progress.txt
 6. If ALL stories pass: output `<promise>COMPLETE</promise>`
 
+## Amendment Awareness
+
+Stories may have an `amendment` field in prd.json. This means they were added
+or modified after initial planning via `/ralph-amend`.
+
+When you see amended stories:
+- Check progress.txt for "## Amendment AMD-XXX" entries explaining why
+- Check spec.md "## Amendments" section for full context
+- Implement them like any other story - amendments are normal
+
+**Amendments are expected.** Plans evolve during implementation. Treat amended
+stories with the same rigor as original stories.
+
 ## Rules
 
 - ONE story per iteration
 - Tests first
 - Never commit broken code
 - Document learnings in progress.txt
+- Treat amended stories the same as original stories
 ```
 
 ---
@@ -460,6 +1269,92 @@ You are an autonomous development agent working through a PRD using TDD.
 
 ---
 
+## Monitoring Dashboard (tmux)
+
+Ralph Hybrid provides an optional tmux-based monitoring dashboard for real-time visibility into loop execution. This feature is adapted from [frankbria/ralph-claude-code](https://github.com/frankbria/ralph-claude-code).
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `ralph run --monitor` | Start loop with integrated tmux dashboard |
+| `ralph monitor` | Launch standalone dashboard (attach to running loop) |
+
+### Dashboard Display
+
+The live dashboard shows:
+
+| Metric | Description |
+|--------|-------------|
+| Loop count | Current iteration number / max iterations |
+| Status | Running, paused, completed, or failed |
+| API usage | Calls used vs. rate limit (e.g., 45/100) |
+| Rate limit countdown | Time until limit resets |
+| Recent logs | Last N log entries from current iteration |
+| Progress | Stories completed vs. total |
+
+### Layout
+
+```
+┌─────────────────────────────────┬─────────────────────────────────┐
+│                                 │                                 │
+│        RALPH LOOP               │        MONITOR                  │
+│                                 │                                 │
+│  Claude Code output             │  Iteration: 5/20                │
+│  appears here                   │  Status: Running                │
+│                                 │  API: 45/100 (resets in 23m)    │
+│                                 │  Progress: 2/6 stories          │
+│                                 │                                 │
+│                                 │  Recent:                        │
+│                                 │  [12:34] Started STORY-003      │
+│                                 │  [12:35] Running tests...       │
+│                                 │  [12:36] Tests passed           │
+│                                 │                                 │
+└─────────────────────────────────┴─────────────────────────────────┘
+```
+
+### tmux Controls
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+B D` | Detach from session (loop continues in background) |
+| `Ctrl+B ←/→` | Switch between panes |
+| `tmux attach -t ralph` | Reattach to detached session |
+| `tmux list-sessions` | List all active sessions |
+
+### Implementation
+
+| File | Purpose |
+|------|---------|
+| `lib/monitor.sh` | Dashboard rendering and update logic |
+| `logs/` | Directory for iteration logs |
+| `status.json` | Machine-readable status (for programmatic access) |
+
+### Status File Format (status.json)
+
+```json
+{
+  "iteration": 5,
+  "maxIterations": 20,
+  "status": "running",
+  "feature": "user-authentication",
+  "storiesComplete": 2,
+  "storiesTotal": 6,
+  "apiCallsUsed": 45,
+  "apiCallsLimit": 100,
+  "rateLimitResetsAt": "2026-01-09T13:00:00Z",
+  "startedAt": "2026-01-09T12:00:00Z",
+  "lastUpdated": "2026-01-09T12:36:00Z"
+}
+```
+
+### Prerequisites
+
+- tmux must be installed (`brew install tmux` or `apt-get install tmux`)
+- If tmux is not available, `--monitor` flag is ignored with a warning
+
+---
+
 ## Exit Conditions
 
 | Condition | Exit Code | Description |
@@ -486,6 +1381,7 @@ You are an autonomous development agent working through a PRD using TDD.
 ### Install
 
 ```bash
+# Clone and install globally
 git clone https://github.com/krazyuniks/ralph-hybrid.git
 cd ralph-hybrid
 ./install.sh                # installs to ~/.ralph/
@@ -493,11 +1389,21 @@ source ~/.bashrc            # or ~/.zshrc, or open new terminal
 ```
 
 The install script:
-1. Copies files to `~/.ralph/`
+1. Copies files to `~/.ralph/` (ralph, lib/, templates/, commands/)
 2. Adds `~/.ralph` to PATH in shell rc file
-3. Creates default config
+3. Creates default config.yaml
 
 After installation, the cloned repo can be deleted.
+
+### Project Setup
+
+```bash
+# In each project where you want to use Ralph:
+cd your-project
+ralph setup                 # installs Claude commands to .claude/commands/
+```
+
+The setup command copies `/ralph-plan`, `/ralph-prd`, and `/ralph-amend` to your project's `.claude/commands/` directory. This is idempotent - running it again updates the commands.
 
 ### Uninstall
 
@@ -549,6 +1455,20 @@ tests/
 | Archive | Creates timestamped directory |
 | Archive | Copies all feature files |
 | CLI | Parses all arguments correctly |
+| **Amendment** | ADD mode creates new story |
+| **Amendment** | ADD mode preserves existing passes:true stories |
+| **Amendment** | ADD mode generates sequential AMD-NNN IDs |
+| **Amendment** | CORRECT mode updates story |
+| **Amendment** | CORRECT mode warns on passes:true story |
+| **Amendment** | CORRECT mode resets passes to false |
+| **Amendment** | REMOVE mode archives to Descoped section |
+| **Amendment** | REMOVE mode never deletes story |
+| **Amendment** | STATUS mode shows amendment history |
+| **Amendment** | Updates spec.md Amendments section |
+| **Amendment** | Updates prd.json with amendment metadata |
+| **Amendment** | Logs to progress.txt |
+| **Preflight** | Validates amendment ID uniqueness |
+| **Preflight** | Validates descoped stories are archived |
 
 ### Running Tests
 

@@ -142,8 +142,10 @@ check_prerequisites() {
 
 create_install_dir() {
     if [[ -d "$INSTALL_DIR" ]]; then
-        print_info "Using existing ${INSTALL_DIR}/"
+        INSTALL_MODE="upgrade"
+        print_info "Upgrading existing ${INSTALL_DIR}/"
     else
+        INSTALL_MODE="fresh"
         mkdir -p "$INSTALL_DIR"
         print_info "Created ${INSTALL_DIR}/"
     fi
@@ -153,9 +155,11 @@ copy_ralph_executable() {
     local src="${SCRIPT_DIR}/ralph"
 
     if [[ -f "$src" ]]; then
+        local action="Installed"
+        [[ -f "${INSTALL_DIR}/ralph" ]] && action="Updated"
         cp "$src" "${INSTALL_DIR}/ralph"
         chmod +x "${INSTALL_DIR}/ralph"
-        print_info "Copied ralph executable"
+        print_info "${action} ralph executable"
     else
         # Create a placeholder if ralph doesn't exist yet
         print_warn "ralph not found in source - skipping"
@@ -166,12 +170,14 @@ copy_lib_directory() {
     local src="${SCRIPT_DIR}/lib"
 
     if [[ -d "$src" ]]; then
+        local action="Installed"
+        [[ -d "${INSTALL_DIR}/lib" ]] && action="Updated"
         # Remove existing lib to ensure clean copy
         rm -rf "${INSTALL_DIR}/lib"
         cp -r "$src" "${INSTALL_DIR}/lib"
         # Ensure shell scripts are readable
         find "${INSTALL_DIR}/lib" -name "*.sh" -exec chmod +r {} \; 2>/dev/null || true
-        print_info "Copied lib/"
+        print_info "${action} lib/"
     else
         mkdir -p "${INSTALL_DIR}/lib"
         print_warn "lib/ not found in source - created empty"
@@ -182,13 +188,30 @@ copy_templates_directory() {
     local src="${SCRIPT_DIR}/templates"
 
     if [[ -d "$src" ]]; then
+        local action="Installed"
+        [[ -d "${INSTALL_DIR}/templates" ]] && action="Updated"
         # Remove existing templates to ensure clean copy
         rm -rf "${INSTALL_DIR}/templates"
         cp -r "$src" "${INSTALL_DIR}/templates"
-        print_info "Copied templates/"
+        print_info "${action} templates/"
     else
         mkdir -p "${INSTALL_DIR}/templates"
         print_warn "templates/ not found in source - created empty"
+    fi
+}
+
+copy_commands_directory() {
+    local src="${SCRIPT_DIR}/.claude/commands"
+
+    if [[ -d "$src" ]]; then
+        local action="Installed"
+        [[ -d "${INSTALL_DIR}/commands" ]] && action="Updated"
+        # Remove existing commands to ensure clean copy
+        rm -rf "${INSTALL_DIR}/commands"
+        cp -r "$src" "${INSTALL_DIR}/commands"
+        print_info "${action} commands/ (Claude slash commands)"
+    else
+        print_warn ".claude/commands/ not found in source - skipping"
     fi
 }
 
@@ -229,6 +252,7 @@ install_files() {
     copy_ralph_executable
     copy_lib_directory
     copy_templates_directory
+    copy_commands_directory
     create_default_config
 }
 
@@ -290,14 +314,20 @@ update_shell_config() {
 
 print_success() {
     echo ""
-    echo -e "${GREEN}Installation complete!${NC}"
-    echo ""
-    echo "To use ralph:"
-    echo "  1. Restart your shell or run: source ~/.zshrc"
-    echo "  2. Navigate to your project"
-    echo "  3. Run: ralph init my-feature"
-    echo "  4. Edit .ralph/my-feature/prd.json"
-    echo "  5. Run: ralph run"
+    if [[ "${INSTALL_MODE:-fresh}" == "upgrade" ]]; then
+        echo -e "${GREEN}Upgrade complete!${NC}"
+        echo ""
+        echo "Ralph has been updated. Your config.yaml was preserved."
+    else
+        echo -e "${GREEN}Installation complete!${NC}"
+        echo ""
+        echo "To use ralph in a project:"
+        echo "  1. Restart your shell or run: source ~/.zshrc"
+        echo "  2. Navigate to your project"
+        echo "  3. Run: ralph setup  (installs /ralph-plan, /ralph-prd, etc.)"
+        echo "  4. In Claude Code, run: /ralph-plan <description>"
+        echo "  5. Run: ralph run"
+    fi
     echo ""
 }
 
