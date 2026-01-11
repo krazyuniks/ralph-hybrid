@@ -1134,6 +1134,7 @@ _run_archive_with_deferred_check() {
 
     # Proceed with archive (using -y to skip interactive prompt)
     cmd_archive -y
+    return $?
 }
 
 # Handle completion signals and archiving
@@ -1487,24 +1488,31 @@ main() {
             ;;
         status)
             cmd_status "$@"
+            return $?
             ;;
         monitor)
             cmd_monitor "$@"
+            return $?
             ;;
         archive)
             cmd_archive "$@"
+            return $?
             ;;
         validate)
             cmd_validate "$@"
+            return $?
             ;;
         setup)
             cmd_setup "$@"
+            return $?
             ;;
         import)
             cmd_import "$@"
+            return $?
             ;;
         run)
             cmd_run "$@"
+            return $?
             ;;
         *)
             log_error "Unknown command: ${command}"
