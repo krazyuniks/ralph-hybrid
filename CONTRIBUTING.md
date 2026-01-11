@@ -76,6 +76,61 @@ Thank you for your interest in contributing to Ralph Hybrid! This document provi
 - Quote variables: `"$variable"` not `$variable`
 - Use `[[ ]]` for conditionals instead of `[ ]`
 
+### Naming Conventions
+
+Ralph Hybrid follows strict naming conventions to maintain consistency across all library modules.
+
+#### Function Naming
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Public functions | `{prefix}_{function_name}` | `ut_get_feature_dir`, `prd_get_passes_count` |
+| Private/internal | `_{prefix}_{function_name}` | `_cb_hash_error`, `_ed_is_tool_output` |
+
+#### Module Prefixes
+
+Each library module uses a unique prefix for its functions:
+
+| Module | Prefix | Description |
+|--------|--------|-------------|
+| `utils.sh` | `ut_` | Utility functions, feature detection |
+| `prd.sh` | `prd_` | PRD/JSON helpers |
+| `config.sh` | `cfg_` | Configuration loading |
+| `logging.sh` | `log_` | Logging and timestamps |
+| `archive.sh` | `ar_` | Feature archiving |
+| `circuit_breaker.sh` | `cb_` | Circuit breaker logic |
+| `rate_limiter.sh` | `rl_` | Rate limiting |
+| `exit_detection.sh` | `ed_` | Exit and completion detection |
+| `preflight.sh` | `pf_` | Preflight validation |
+| `monitor.sh` | `mon_` | Monitoring dashboard |
+| `hooks.sh` | `hk_` | Hooks system |
+| `deps.sh` | `deps_` | Dependencies abstraction |
+| `import.sh` | `im_` | PRD import |
+| `platform.sh` | `plat_` | Platform detection |
+
+#### Constant Naming
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Public constants | `RALPH_{NAME}` | `RALPH_VERSION`, `RALPH_DEFAULT_MAX_ITERATIONS` |
+| Internal constants | `_RALPH_{NAME}` | `_RALPH_SECONDS_PER_HOUR`, `_RALPH_MIN_BASH_VERSION` |
+
+#### Backwards Compatibility
+
+When renaming functions, always provide an alias for backwards compatibility:
+
+```bash
+# New prefixed function
+ut_get_feature_dir() {
+    # implementation
+}
+
+# Alias for backwards compatibility
+get_feature_dir() {
+    ut_get_feature_dir "$@"
+}
+```
+
 ### Function Documentation
 
 Document functions with a comment block:
@@ -180,6 +235,87 @@ For feature requests, please describe:
 - Check existing issues and discussions
 - Review the [SPEC.md](SPEC.md) for technical details
 - Open an issue with the `question` label
+
+## Release Process
+
+Ralph Hybrid follows [Semantic Versioning](https://semver.org/) and uses [Keep a Changelog](https://keepachangelog.com/) format for documenting changes.
+
+### Versioning Guidelines
+
+Given a version number MAJOR.MINOR.PATCH, increment the:
+
+- **MAJOR** version when you make incompatible API/CLI changes
+  - Breaking changes to CLI commands or options
+  - Breaking changes to prd.json or spec.md formats
+  - Breaking changes to configuration file format
+- **MINOR** version when you add functionality in a backward compatible manner
+  - New CLI commands or options
+  - New features or capabilities
+  - New configuration options
+- **PATCH** version when you make backward compatible bug fixes
+  - Bug fixes
+  - Documentation improvements
+  - Performance improvements
+
+### Updating the Changelog
+
+When making changes:
+
+1. **During development**, add entries to the `[Unreleased]` section of [CHANGELOG.md](CHANGELOG.md)
+
+2. **Organize entries** by type:
+   - `Added` - New features
+   - `Changed` - Changes in existing functionality
+   - `Deprecated` - Soon-to-be removed features
+   - `Removed` - Now removed features
+   - `Fixed` - Bug fixes
+   - `Security` - Vulnerability fixes
+
+3. **Write clear entries** that describe the change from a user's perspective:
+   ```markdown
+   ### Added
+   - New `--json` flag for machine-readable status output
+
+   ### Fixed
+   - Circuit breaker now properly resets after successful iteration
+   ```
+
+### Release Workflow
+
+1. **Prepare the release**
+   - Ensure all tests pass: `bats tests/unit/ && bats tests/integration/`
+   - Ensure linting passes: `shellcheck ralph lib/*.sh install.sh uninstall.sh`
+   - Review the `[Unreleased]` section in CHANGELOG.md
+
+2. **Update version numbers**
+   - Update `RALPH_VERSION` in `ralph` script
+   - Update version in SPEC.md if applicable
+
+3. **Update CHANGELOG.md**
+   - Change `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`
+   - Add a new empty `[Unreleased]` section at the top
+   - Update the comparison links at the bottom:
+     ```markdown
+     [Unreleased]: https://github.com/krazyuniks/ralph-hybrid/compare/vX.Y.Z...HEAD
+     [X.Y.Z]: https://github.com/krazyuniks/ralph-hybrid/compare/vPREVIOUS...vX.Y.Z
+     ```
+
+4. **Create the release commit**
+   ```bash
+   git add CHANGELOG.md ralph SPEC.md
+   git commit -m "chore: release vX.Y.Z"
+   ```
+
+5. **Tag the release**
+   ```bash
+   git tag -a vX.Y.Z -m "Release vX.Y.Z"
+   git push origin main --tags
+   ```
+
+6. **Create GitHub release** (optional)
+   - Go to GitHub releases page
+   - Create release from the tag
+   - Copy the changelog section for release notes
 
 ## License
 

@@ -17,7 +17,7 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 | lib/ | Complete - All library functions |
 | ralph | Complete - Main CLI script |
 | install.sh | Complete - Global installation |
-| tests/ | Complete - 430 BATS tests |
+| tests/ | Complete - 580+ BATS tests |
 
 ## CLI Commands
 
@@ -28,6 +28,7 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 | `ralph status` | Show current feature status |
 | `ralph validate` | Run preflight checks |
 | `ralph archive` | Archive completed feature |
+| `ralph import <file>` | Import PRD from Markdown or JSON file |
 
 ## Claude Commands (installed via `ralph setup`)
 
@@ -78,6 +79,11 @@ ralph run --model opus         # Or with specific model
 - prd.json with `passes: boolean` per story
 - progress.txt append-only log (agent reads for continuity)
 - Automatic archiving of completed features
+
+### Extensibility
+- **Hooks system** - pre/post hooks for run, iteration, completion, error
+- **Custom completion patterns** - Configurable via config or environment
+- **Hooks directory** - `.ralph/{feature}/hooks/` for user scripts
 
 ## Reference Documents
 

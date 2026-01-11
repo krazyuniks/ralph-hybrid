@@ -273,6 +273,113 @@ ar_list_archives() {
     return 0
 }
 
+#=============================================================================
+# Deferred Work Detection
+#=============================================================================
+
+# Keywords that indicate deferred or scoped work (case-insensitive)
+# Note: Uses constant from constants.sh if available, otherwise defines default
+#
+# Pattern: DEFERRED|SCOPE CLARIFICATION|scope change|future work|incremental|out of scope
+# Matches: Story notes containing any of these keywords (case-insensitive via grep -i)
+# Examples:
+#   "DEFERRED: Will implement in v2"
+#   "SCOPE CLARIFICATION: Limited to basic auth"
+#   "Some work deferred for future work"
+# Note: Pipe (|) is alternation operator - matches any of the terms
+#       Used with grep -iE for case-insensitive extended regex matching
+if [[ -z "${RALPH_DEFERRED_KEYWORDS:-}" ]]; then
+    RALPH_DEFERRED_KEYWORDS="DEFERRED|SCOPE CLARIFICATION|scope change|future work|incremental|out of scope"
+fi
+
+# Check if a story's notes contain deferred work keywords
+# Usage: ar_story_has_deferred_work <notes_text>
+# Returns: 0 if deferred work found, 1 if not
+ar_story_has_deferred_work() {
+    local notes="$1"
+
+    if [[ -z "$notes" ]]; then
+        return 1
+    fi
+
+    # Case-insensitive search for any of the keywords
+    if echo "$notes" | grep -iE "$RALPH_DEFERRED_KEYWORDS" &>/dev/null; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Scan prd.json for stories with deferred work in their notes
+# Usage: ar_check_deferred_work <prd_file>
+# Output: List of story IDs and titles with deferred work (one per line)
+# Returns: 0 if deferred work found, 1 if none found
+ar_check_deferred_work() {
+    local prd_file="$1"
+
+    if [[ -z "$prd_file" ]]; then
+        log_error "ar_check_deferred_work: prd_file is required"
+        return 1
+    fi
+
+    if [[ ! -f "$prd_file" ]]; then
+        log_error "ar_check_deferred_work: prd.json not found: $prd_file"
+        return 1
+    fi
+
+    local found_deferred=1  # 1 = not found (will return this if none)
+    local stories_with_deferred=""
+
+    # Extract all stories with their notes using jq
+    while IFS= read -r line; do
+        local story_id story_title notes
+        story_id=$(echo "$line" | jq -r '.id // ""')
+        story_title=$(echo "$line" | jq -r '.title // ""')
+        notes=$(echo "$line" | jq -r '.notes // ""')
+
+        if ar_story_has_deferred_work "$notes"; then
+            found_deferred=0
+            if [[ -n "$stories_with_deferred" ]]; then
+                stories_with_deferred="${stories_with_deferred}"$'\n'
+            fi
+            stories_with_deferred="${stories_with_deferred}${story_id}: ${story_title}"
+        fi
+    done < <(jq -c '.userStories[]' "$prd_file" 2>/dev/null)
+
+    if [[ $found_deferred -eq 0 ]]; then
+        echo "$stories_with_deferred"
+    fi
+
+    return $found_deferred
+}
+
+# Display warning about deferred work and prompt for confirmation
+# Usage: ar_warn_deferred_work <deferred_stories>
+# Returns: 0 if user confirms, 1 if user cancels
+ar_warn_deferred_work() {
+    local deferred_stories="$1"
+
+    log_warn "Deferred/scoped work detected in the following stories:"
+    echo ""
+    echo "$deferred_stories" | while IFS= read -r line; do
+        echo "  - $line"
+    done
+    echo ""
+    log_warn "These stories have notes indicating work was deferred or scope was clarified."
+    echo ""
+
+    # Prompt user for confirmation
+    read -r -p "Do you want to proceed with archiving? [y/N] " response
+    case "$response" in
+        [yY][eE][sS]|[yY])
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 # Get the most recent archive for a specific feature
 # Usage: ar_get_latest_archive <feature_name> <ralph_dir>
 # Output: archive name (e.g., 20260109-143022-my-feature) or empty if none

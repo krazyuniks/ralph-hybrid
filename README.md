@@ -489,6 +489,41 @@ ralph run --model opus
 ralph status
 ```
 
+### Themes
+
+Ralph Hybrid includes three built-in themes for the UI display:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  RALPH: feature-user-auth                                            │  <- Title
+│  Story 3/5: STORY-003 - Implement login validation                   │  <- Subtitle
+│  [████████░░░░░░░░░░░░] 40%  2/5 passed              Iteration 3/20  │  <- Progress
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Available Themes:**
+
+| Theme | Border | Subtitle | Description |
+|-------|--------|----------|-------------|
+| `default` | Cyan | Yellow | Current Ralph look - clean and readable |
+| `dracula` | Purple | Pink | Based on draculatheme.com |
+| `nord` | Blue | Cyan | Based on nordtheme.com - calm and focused |
+
+**Setting a Theme:**
+
+```yaml
+# In ~/.ralph/config.yaml or .ralph/config.yaml
+display:
+  theme: "dracula"
+```
+
+Or via environment variable:
+```bash
+RALPH_THEME=nord ralph run
+```
+
+---
+
 ### When Requirements Change (They Will)
 
 ```bash

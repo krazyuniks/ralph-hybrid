@@ -10,8 +10,11 @@ if [[ "${_RALPH_PLATFORM_SOURCED:-}" == "1" ]]; then
 fi
 _RALPH_PLATFORM_SOURCED=1
 
-# Ensure logging is available
+# Ensure dependencies are available
 SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+if [[ "${_RALPH_CONSTANTS_SOURCED:-}" != "1" ]]; then
+    source "${SCRIPT_DIR}/constants.sh"
+fi
 if [[ "${_RALPH_LOGGING_SOURCED:-}" != "1" ]]; then
     source "${SCRIPT_DIR}/logging.sh"
 fi
@@ -22,20 +25,30 @@ fi
 
 # Check if running on macOS
 # Returns 0 on macOS, 1 otherwise
-is_macos() {
+plat_is_macos() {
     [[ "$(uname -s)" == "Darwin" ]]
+}
+
+# Alias for backwards compatibility
+is_macos() {
+    plat_is_macos "$@"
 }
 
 # Check if running on Linux
 # Returns 0 on Linux, 1 otherwise
-is_linux() {
+plat_is_linux() {
     [[ "$(uname -s)" == "Linux" ]]
+}
+
+# Alias for backwards compatibility
+is_linux() {
+    plat_is_linux "$@"
 }
 
 # Return appropriate timeout command for platform
 # Returns 'gtimeout' on macOS (requires coreutils), 'timeout' on Linux
-get_timeout_cmd() {
-    if is_macos; then
+plat_get_timeout_cmd() {
+    if plat_is_macos; then
         # On macOS, prefer gtimeout from coreutils
         if command -v gtimeout &>/dev/null; then
             echo "gtimeout"
@@ -51,13 +64,24 @@ get_timeout_cmd() {
     fi
 }
 
-# Check that bash version is 4.0 or higher
+# Alias for backwards compatibility
+get_timeout_cmd() {
+    plat_get_timeout_cmd "$@"
+}
+
+# Check that bash version meets minimum requirement
 # Exits with error if version is too low
-check_bash_version() {
-    if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
-        log_error "Bash 4.0+ required. Current version: $BASH_VERSION"
+plat_check_bash_version() {
+    local min_version="${_RALPH_MIN_BASH_VERSION:-4}"
+    if [[ "${BASH_VERSINFO[0]}" -lt "$min_version" ]]; then
+        log_error "Bash ${min_version}.0+ required. Current version: $BASH_VERSION"
         exit 1
     fi
+}
+
+# Alias for backwards compatibility
+check_bash_version() {
+    plat_check_bash_version "$@"
 }
 
 #=============================================================================
@@ -65,8 +89,8 @@ check_bash_version() {
 #=============================================================================
 
 # Exit with error if file doesn't exist
-# Usage: require_file "path/to/file"
-require_file() {
+# Usage: plat_require_file "path/to/file"
+plat_require_file() {
     local file="$1"
     if [[ ! -f "$file" ]]; then
         log_error "Required file not found: $file"
@@ -74,9 +98,14 @@ require_file() {
     fi
 }
 
+# Alias for backwards compatibility
+require_file() {
+    plat_require_file "$@"
+}
+
 # Exit with error if command not found
-# Usage: require_command "jq"
-require_command() {
+# Usage: plat_require_command "jq"
+plat_require_command() {
     local cmd="$1"
     if ! command -v "$cmd" &>/dev/null; then
         log_error "Required command not found: $cmd"
@@ -84,12 +113,22 @@ require_command() {
     fi
 }
 
+# Alias for backwards compatibility
+require_command() {
+    plat_require_command "$@"
+}
+
 # Create directory if it doesn't exist
-# Usage: ensure_dir "path/to/dir"
-ensure_dir() {
+# Usage: plat_ensure_dir "path/to/dir"
+plat_ensure_dir() {
     local dir="$1"
     if [[ ! -d "$dir" ]]; then
         mkdir -p "$dir"
         log_debug "Created directory: $dir"
     fi
+}
+
+# Alias for backwards compatibility
+ensure_dir() {
+    plat_ensure_dir "$@"
 }

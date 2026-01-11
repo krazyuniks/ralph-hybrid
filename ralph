@@ -3,38 +3,42 @@
 # Autonomous development loop orchestrator for Claude Code
 #
 # Usage: ralph <command> [options]
-# Commands: run, status, archive, validate, help, version
+# Commands: run, status, archive, validate, import, help, version
 #
 # Note: Feature folder is automatically derived from current git branch.
 
 set -euo pipefail
 
 #=============================================================================
-# Constants
+# Script Directory
 #=============================================================================
 
-RALPH_VERSION="0.1.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 #=============================================================================
 # Source Libraries
 #=============================================================================
 
+source "${SCRIPT_DIR}/lib/constants.sh"
+source "${SCRIPT_DIR}/lib/theme.sh"
 source "${SCRIPT_DIR}/lib/utils.sh"
 source "${SCRIPT_DIR}/lib/preflight.sh"
 source "${SCRIPT_DIR}/lib/circuit_breaker.sh"
 source "${SCRIPT_DIR}/lib/rate_limiter.sh"
 source "${SCRIPT_DIR}/lib/exit_detection.sh"
 source "${SCRIPT_DIR}/lib/archive.sh"
+source "${SCRIPT_DIR}/lib/monitor.sh"
+source "${SCRIPT_DIR}/lib/hooks.sh"
+source "${SCRIPT_DIR}/lib/import.sh"
 
 #=============================================================================
 # Global Variables (set by parse_args or load_config)
 #=============================================================================
 
-# Run options
-RALPH_MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-20}"
-RALPH_TIMEOUT_MINUTES="${RALPH_TIMEOUT_MINUTES:-15}"
-RALPH_RATE_LIMIT="${RALPH_RATE_LIMIT:-100}"
+# Run options (use defaults from constants.sh)
+RALPH_MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-$RALPH_DEFAULT_MAX_ITERATIONS}"
+RALPH_TIMEOUT_MINUTES="${RALPH_TIMEOUT_MINUTES:-$RALPH_DEFAULT_TIMEOUT_MINUTES}"
+RALPH_RATE_LIMIT="${RALPH_RATE_LIMIT:-$RALPH_DEFAULT_RATE_LIMIT}"
 RALPH_PROMPT_FILE=""
 RALPH_VERBOSE=false
 RALPH_NO_ARCHIVE=false
@@ -42,13 +46,14 @@ RALPH_RESET_CIRCUIT=false
 RALPH_DRY_RUN=false
 RALPH_SKIP_PREFLIGHT=false
 RALPH_DANGEROUSLY_SKIP_PERMISSIONS="${RALPH_DANGEROUSLY_SKIP_PERMISSIONS:-false}"
+RALPH_MONITOR=false
 
 #=============================================================================
 # Help / Usage
 #=============================================================================
 
 show_help() {
-    cat << 'EOF'
+    cat << EOF
 Ralph Hybrid - Autonomous Development Loop for Claude Code
 
 Usage: ralph <command> [options]
@@ -56,9 +61,11 @@ Usage: ralph <command> [options]
 Commands:
   run [options]          Execute the development loop
   status                 Show current feature status
+  monitor                Attach to monitoring dashboard for existing run
   archive                Archive a completed feature
   validate               Run preflight checks without starting loop
   setup                  Install Claude commands (/ralph-plan, etc.) to project
+  import <file>          Import PRD from Markdown or JSON file
   help                   Show this help message
   version                Show version information
 
@@ -66,9 +73,9 @@ Note: Feature folder is automatically derived from current git branch.
       Run 'ralph setup' first, then use /ralph-plan in Claude Code.
 
 Run Options:
-  -n, --max-iterations N     Maximum iterations (default: 20)
-  -t, --timeout N            Per-iteration timeout in minutes (default: 15)
-  -r, --rate-limit N         Max API calls per hour (default: 100)
+  -n, --max-iterations N     Maximum iterations (default: ${RALPH_DEFAULT_MAX_ITERATIONS})
+  -t, --timeout N            Per-iteration timeout in minutes (default: ${RALPH_DEFAULT_TIMEOUT_MINUTES})
+  -r, --rate-limit N         Max API calls per hour (default: ${RALPH_DEFAULT_RATE_LIMIT})
   -p, --prompt FILE          Custom prompt file
   -v, --verbose              Enable verbose output
   --no-archive               Don't archive on completion
@@ -76,13 +83,23 @@ Run Options:
   --dry-run                  Show what would happen without executing
   --skip-preflight           Skip preflight validation (use with caution)
   --dangerously-skip-permissions  Pass to Claude Code
+  --monitor                  Launch with tmux monitoring dashboard
   -m, --model MODEL          Claude model (opus, sonnet, or full name)
+
+Archive Options:
+  -y, --yes                  Skip confirmation for deferred work warnings
+
+Import Options:
+  --format FORMAT          Override format detection (markdown, json)
+  --output PATH            Output path (default: .ralph/{branch}/prd.json)
 
 Examples:
   ralph run -n 30 -t 20
   ralph status
   ralph archive
   ralph validate
+  ralph import spec.md
+  ralph import requirements.json --output ./prd.json
 
 For more information, see: https://github.com/krazyuniks/ralph-hybrid
 EOF
@@ -201,11 +218,21 @@ cmd_status() {
 #=============================================================================
 
 cmd_archive() {
-    # No arguments expected - feature auto-detected from branch
-    if [[ $# -gt 0 ]]; then
-        log_error "Unknown option: $1"
-        return 1
-    fi
+    local force=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -y|--yes)
+                force=true
+                shift
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
 
     # Get feature directory from current git branch
     local feature_dir
@@ -218,6 +245,24 @@ cmd_archive() {
     local feature_name
     feature_name=$(basename "$feature_dir")
 
+    local prd_file="${feature_dir}/prd.json"
+
+    # Check for deferred work before archiving
+    local deferred_stories
+    if deferred_stories=$(ar_check_deferred_work "$prd_file"); then
+        if [[ "$force" != true ]]; then
+            if ! ar_warn_deferred_work "$deferred_stories"; then
+                log_info "Archive cancelled."
+                return 1
+            fi
+        else
+            log_warn "Deferred work detected but proceeding due to -y/--yes flag:"
+            echo "$deferred_stories" | while IFS= read -r line; do
+                echo "  - $line"
+            done
+        fi
+    fi
+
     # Use archive library
     local archive_path
     archive_path=$(ar_create_archive "$feature_name" "$ralph_dir") || return 1
@@ -227,6 +272,22 @@ cmd_archive() {
 
     log_success "Feature archived to: ${archive_path}"
     return 0
+}
+
+#=============================================================================
+# Monitor Command
+#=============================================================================
+
+cmd_monitor() {
+    # No arguments expected
+    if [[ $# -gt 0 ]]; then
+        log_error "Unknown option: $1"
+        return 1
+    fi
+
+    # Use monitor library to attach to existing session
+    mon_attach
+    return $?
 }
 
 #=============================================================================
@@ -319,6 +380,190 @@ cmd_setup() {
 }
 
 #=============================================================================
+# Import Command - Import PRD from External File
+#=============================================================================
+
+cmd_import() {
+    local input_file=""
+    local format=""
+    local output_path=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --format)
+                format="${2:-}"
+                if [[ -z "$format" ]]; then
+                    log_error "--format requires a value"
+                    return 1
+                fi
+                shift 2
+                ;;
+            --output|-o)
+                output_path="${2:-}"
+                if [[ -z "$output_path" ]]; then
+                    log_error "--output requires a path"
+                    return 1
+                fi
+                shift 2
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                return 1
+                ;;
+            *)
+                if [[ -z "$input_file" ]]; then
+                    input_file="$1"
+                else
+                    log_error "Unexpected argument: $1"
+                    return 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Validate input file
+    if [[ -z "$input_file" ]]; then
+        log_error "No input file specified"
+        log_info "Usage: ralph import <file> [--format FORMAT] [--output PATH]"
+        return 1
+    fi
+
+    if [[ ! -f "$input_file" ]]; then
+        log_error "Input file not found: $input_file"
+        return 1
+    fi
+
+    # Detect format if not specified
+    if [[ -z "$format" ]]; then
+        format=$(im_detect_format "$input_file")
+        log_info "Detected format: $format"
+    fi
+
+    # Validate format
+    if [[ "$format" == "$IM_FORMAT_UNKNOWN" ]]; then
+        log_error "Unknown file format. Use --format to specify (markdown, json)"
+        return 1
+    fi
+
+    if [[ "$format" == "$IM_FORMAT_PDF" ]]; then
+        log_error "PDF format is not yet supported"
+        log_info "Consider converting your PDF to Markdown or JSON first."
+        return 1
+    fi
+
+    # Determine output path
+    if [[ -z "$output_path" ]]; then
+        # Check git repo first
+        if ! check_git_repo; then
+            log_error "Not in a git repository. Use --output to specify output path."
+            return 1
+        fi
+
+        # Get feature directory from current git branch
+        local feature_dir
+        feature_dir=$(get_feature_dir) || return 1
+
+        # Create feature directory if it doesn't exist
+        if [[ ! -d "$feature_dir" ]]; then
+            mkdir -p "$feature_dir"
+            log_info "Created feature directory: $feature_dir"
+        fi
+
+        output_path="${feature_dir}/prd.json"
+    fi
+
+    # Convert to PRD format
+    log_info "Importing from: $input_file"
+    local prd_json
+    if ! prd_json=$(im_convert_to_prd "$input_file" "$format"); then
+        log_error "Failed to convert file to PRD format"
+        return 1
+    fi
+
+    # Validate the imported content
+    if ! im_validate_prd "$prd_json"; then
+        log_warn "Validation found issues. Attempting to fix common problems..."
+        prd_json=$(im_fix_common_issues "$prd_json")
+
+        # Re-validate
+        if ! im_validate_prd "$prd_json"; then
+            log_error "Could not fix all validation issues"
+            return 1
+        fi
+        log_success "Issues fixed successfully"
+    fi
+
+    # Ensure output directory exists
+    local output_dir
+    output_dir=$(dirname "$output_path")
+    if [[ ! -d "$output_dir" ]]; then
+        mkdir -p "$output_dir"
+    fi
+
+    # Write output file
+    echo "$prd_json" | deps_jq '.' > "$output_path"
+    log_success "Imported PRD to: $output_path"
+
+    # Show summary
+    local story_count
+    story_count=$(echo "$prd_json" | deps_jq '.userStories | length')
+    log_info "Stories imported: $story_count"
+
+    # Check if progress.txt exists, create if needed
+    local feature_dir
+    feature_dir=$(dirname "$output_path")
+    if [[ ! -f "${feature_dir}/progress.txt" ]]; then
+        # Create progress.txt
+        local feature_name
+        feature_name=$(basename "$feature_dir")
+        cat > "${feature_dir}/progress.txt" <<EOF
+# Progress Log: ${feature_name}
+# Started: $(get_timestamp)
+# Imported from: $(basename "$input_file")
+
+---
+EOF
+        log_info "Created progress.txt"
+    fi
+
+    # Create spec.md stub if it doesn't exist
+    if [[ ! -f "${feature_dir}/spec.md" ]]; then
+        local description
+        description=$(echo "$prd_json" | deps_jq -r '.description')
+        cat > "${feature_dir}/spec.md" <<EOF
+---
+created: $(get_timestamp)
+---
+
+# Imported Feature
+
+## Problem Statement
+
+$description
+
+## Success Criteria
+
+- [ ] All stories complete
+- [ ] Tests pass
+
+## User Stories
+
+$(echo "$prd_json" | deps_jq -r '.userStories[] | "### \(.id): \(.title)\n\n\(.description)\n\n**Acceptance Criteria:**\n" + ([.acceptanceCriteria[] | "- [ ] \(.)"] | join("\n")) + "\n"')
+
+## Out of Scope
+
+- TBD
+
+EOF
+        log_info "Created spec.md stub"
+    fi
+
+    return 0
+}
+
+#=============================================================================
 # Run Command - Argument Parsing
 #=============================================================================
 
@@ -366,6 +611,10 @@ parse_run_args() {
                 RALPH_DANGEROUSLY_SKIP_PERMISSIONS=true
                 shift
                 ;;
+            --monitor)
+                RALPH_MONITOR=true
+                shift
+                ;;
             -m|--model)
                 RALPH_MODEL="${2:-}"
                 shift 2
@@ -381,6 +630,34 @@ parse_run_args() {
                 ;;
         esac
     done
+
+    return 0
+}
+
+#=============================================================================
+# Run Command - Private Helper: Argument Validation
+#=============================================================================
+
+# Validate arguments and run preflight checks
+# Returns: 0 on success, 1 on failure
+_run_validate_args() {
+    # Parse arguments
+    parse_run_args "$@" || return 1
+
+    # Run preflight checks (unless skipped)
+    if [[ "$RALPH_SKIP_PREFLIGHT" == true ]]; then
+        log_warn "Skipping preflight validation (--skip-preflight). Use with caution."
+    else
+        # Check git repo first (required for preflight)
+        if ! check_git_repo; then
+            return 1
+        fi
+
+        # Run all preflight checks
+        if ! pf_run_all_checks; then
+            return 1
+        fi
+    fi
 
     return 0
 }
@@ -455,6 +732,110 @@ EOF
 }
 
 #=============================================================================
+# Run Command - Title Bar Display
+#=============================================================================
+
+# Get terminal width (with fallback)
+_get_terminal_width() {
+    local width
+    width=$(tput cols 2>/dev/null || echo 80)
+    echo "$width"
+}
+
+# Generate a progress bar
+# Args: current total width
+# Output: [████████░░░░░░░░░░░░] 40%
+_progress_bar() {
+    local current="$1"
+    local total="$2"
+    local width="${3:-20}"
+
+    if [[ "$total" -eq 0 ]]; then
+        printf '[%s] 0%%' "$(printf '░%.0s' $(seq 1 $width))"
+        return
+    fi
+
+    local percent=$((current * 100 / total))
+    local filled=$((current * width / total))
+    local empty=$((width - filled))
+
+    local bar=""
+    for ((i=0; i<filled; i++)); do bar+="█"; done
+    for ((i=0; i<empty; i++)); do bar+="░"; done
+
+    printf '[%s] %d%%' "$bar" "$percent"
+}
+
+# Display the title bar with feature and story context
+# Args: feature_name prd_file iteration max_iterations
+_display_title_bar() {
+    local feature_name="$1"
+    local prd_file="$2"
+    local iteration="$3"
+    local max_iterations="$4"
+
+    local term_width
+    term_width=$(_get_terminal_width)
+    local bar_width=$((term_width - 4))
+
+    # Get story info
+    local total_stories passed_stories current_idx current_title current_id
+    total_stories=$(get_prd_total_stories "$prd_file")
+    passed_stories=$(get_prd_passes_count "$prd_file")
+    current_idx=$(prd_get_current_story_index "$prd_file")
+    current_title=$(prd_get_current_story_title "$prd_file")
+    current_id=$(prd_get_current_story_id "$prd_file")
+
+    # Truncate title if too long
+    local max_title_len=$((term_width - 40))
+    if [[ ${#current_title} -gt $max_title_len ]]; then
+        current_title="${current_title:0:$((max_title_len - 3))}..."
+    fi
+
+    # Generate progress bar
+    local progress
+    progress=$(_progress_bar "$passed_stories" "$total_stories" 20)
+
+    # Box drawing characters
+    local h_line="" # horizontal line
+    for ((i=0; i<bar_width; i++)); do h_line+="─"; done
+
+    # Clear and draw title bar
+    echo ""
+    printf "${UI_BORDER}┌%s┐${UI_RESET}\n" "$h_line"
+
+    # Line 1: Feature name
+    local line1="  RALPH: ${feature_name}"
+    local line1_len=${#line1}
+    local padding1=$((bar_width - line1_len))
+    printf "${UI_BORDER}│${UI_RESET}${UI_TITLE}%s%*s${UI_RESET}${UI_BORDER}│${UI_RESET}\n" "$line1" "$padding1" ""
+
+    # Line 2: Current story
+    local line2
+    if [[ "$current_idx" -gt 0 ]]; then
+        line2="  Story ${current_idx}/${total_stories}: ${current_id} - ${current_title}"
+    else
+        line2="  All stories complete!"
+    fi
+    local line2_len=${#line2}
+    local padding2=$((bar_width - line2_len))
+    printf "${UI_BORDER}│${UI_RESET}${UI_SUBTITLE}%s%*s${UI_RESET}${UI_BORDER}│${UI_RESET}\n" "$line2" "$padding2" ""
+
+    # Line 3: Progress bar and iteration
+    local iter_info="Iteration ${iteration}/${max_iterations}"
+    local line3="  ${progress}  ${passed_stories}/${total_stories} passed"
+    local line3_len=${#line3}
+    local iter_len=${#iter_info}
+    local gap=$((bar_width - line3_len - iter_len - 2))
+    if [[ $gap -lt 0 ]]; then gap=2; fi
+
+    printf "${UI_BORDER}│${UI_RESET}${UI_PROGRESS}%s${UI_RESET}%*s${UI_MUTED}%s${UI_RESET}  ${UI_BORDER}│${UI_RESET}\n" "$line3" "$gap" "" "$iter_info"
+
+    printf "${UI_BORDER}└%s┘${UI_RESET}\n" "$h_line"
+    echo ""
+}
+
+#=============================================================================
 # Run Command - Validation and Setup
 #=============================================================================
 
@@ -474,6 +855,9 @@ run_validate_setup() {
 
     # Load configuration
     load_config
+
+    # Reload theme with config-specified theme
+    theme_load
 
     # Override config with CLI args (already done via parse_run_args)
     export RALPH_RATE_LIMIT
@@ -497,6 +881,20 @@ run_validate_setup() {
 
     # Set up state directory for this feature
     export RALPH_STATE_DIR="${RUN_FEATURE_DIR}"
+
+    # Set up hooks directory
+    export RALPH_HOOKS_DIR="${RUN_FEATURE_DIR}/${RALPH_HOOKS_DIR_NAME}"
+    export RALPH_FEATURE_DIR="${RUN_FEATURE_DIR}"
+    export RALPH_PRD_FILE="${RUN_PRD_FILE}"
+
+    # Load custom completion patterns from config
+    if [[ -n "${RALPH_CUSTOM_COMPLETION_PATTERNS:-}" ]]; then
+        IFS=',' read -ra patterns <<< "$RALPH_CUSTOM_COMPLETION_PATTERNS"
+        for pattern in "${patterns[@]}"; do
+            pattern=$(echo "$pattern" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            [[ -n "$pattern" ]] && hk_add_completion_pattern "$pattern"
+        done
+    fi
 
     return 0
 }
@@ -522,7 +920,7 @@ run_show_dry_run() {
     echo ""
     echo "Prompt preview:"
     echo "---"
-    build_prompt "$feature_dir" "$RALPH_PROMPT_FILE" | head -20
+    build_prompt "$feature_dir" "$RALPH_PROMPT_FILE" | head -"$_RALPH_DRY_RUN_PREVIEW_LINES"
     echo "..."
     echo "---"
 }
@@ -547,25 +945,267 @@ run_initialize_state() {
 }
 
 #=============================================================================
-# Run Command - Single Iteration
+# Run Command - Private Helper: State Setup
+#=============================================================================
+
+# Set up state directory and initialization
+# Combines validation, setup, and initialization
+# Sets: RUN_FEATURE_NAME, RUN_FEATURE_DIR, RUN_PRD_FILE
+# Returns: 0 on success, 1 on failure
+_run_setup_state() {
+    # Validate and setup (sets RUN_FEATURE_NAME, RUN_FEATURE_DIR, RUN_PRD_FILE)
+    run_validate_setup || return 1
+
+    # Initialize state (circuit breaker, rate limiter)
+    run_initialize_state "$RUN_PRD_FILE"
+
+    return 0
+}
+
+#=============================================================================
+# Run Command - Private Helper: Claude Invocation
+#=============================================================================
+
+# Invoke Claude CLI with prompt and stream output
+# Arguments: prompt_content timeout_cmd log_file iteration
+# Returns: exit_code via INVOKE_EXIT_CODE global, output via log_file
+_run_invoke_claude() {
+    local prompt_content="$1"
+    local timeout_cmd="$2"
+    local log_file="$3"
+    local iteration="$4"
+
+    # Build claude command args
+    # Note: --permission-mode bypassPermissions works with -p mode
+    # while --dangerously-skip-permissions causes hangs
+    local claude_args="--permission-mode bypassPermissions"
+
+    # Add model if specified
+    if [[ -n "${RALPH_MODEL:-}" ]]; then
+        claude_args+=" --model ${RALPH_MODEL}"
+    fi
+
+    # Run Claude with timeout and real-time output
+    # Display activity header
+    printf "${UI_MUTED}${UI_BORDER}━━━ Claude Activity ━━━${UI_RESET}\n"
+
+    # Initialize log file
+    echo "=== Iteration ${iteration} ===" > "$log_file"
+    echo "Timestamp: $(get_timestamp)" >> "$log_file"
+    echo "" >> "$log_file"
+
+    set +e
+    # Use stream-json for real-time visibility, tee to log file
+    # Parse JSON stream to show activity while also saving raw output
+    echo "$prompt_content" | $timeout_cmd "${RALPH_TIMEOUT_MINUTES}m" \
+        claude -p $claude_args --output-format stream-json --verbose 2>&1 | \
+        tee -a "$log_file" | \
+        {
+            # Scrolling window - keep last N lines visible
+            declare -a buffer=()
+            local window_size=$_RALPH_SCROLLING_WINDOW_SIZE
+            local line_count=0
+            local tool_count=0
+            local start_time=$(date +%s)
+
+            # Hide cursor during updates
+            printf '\e[?25l'
+
+            # Print empty lines to create window space
+            for ((i=0; i<window_size; i++)); do echo ""; done
+
+            while IFS= read -r line; do
+                # Parse JSON and extract display text
+                local display=""
+                local line_color=""
+                if echo "$line" | jq -e '.message.content' &>/dev/null; then
+                    display=$(echo "$line" | jq -r "
+                        .message.content[]? |
+                        if .type == \"text\" then
+                            \"${UI_TEXT}  text: \" + (.text | split(\"\n\")[0] | .[0:$_RALPH_TEXT_TRUNCATE]) + \"${UI_RESET}\"
+                        elif .type == \"tool_use\" then
+                            \"${UI_TOOL}  tool: ${UI_TOOL_NAME}\" + .name + \"${UI_RESET}${UI_MUTED}: \" + (.input | tostring | .[0:$_RALPH_TOOL_OUTPUT_TRUNCATE]) + \"${UI_RESET}\"
+                        else empty end
+                    " 2>/dev/null)
+                    if echo "$line" | jq -e '.message.content[]? | select(.type == "tool_use")' &>/dev/null; then
+                        tool_count=$((tool_count + 1))
+                    fi
+                elif echo "$line" | jq -e '.type == "result"' &>/dev/null; then
+                    display=$(echo "$line" | jq -r "\"${UI_SUCCESS}  Done: \" + (.result | .[0:70]) + \"${UI_RESET}\"" 2>/dev/null)
+                fi
+
+                # Add to buffer if we have display text
+                if [[ -n "$display" ]]; then
+                    while IFS= read -r dline; do
+                        [[ -n "$dline" ]] && buffer+=("$dline")
+                    done <<< "$display"
+
+                    # Keep only last window_size lines
+                    while [[ ${#buffer[@]} -gt $window_size ]]; do
+                        buffer=("${buffer[@]:1}")
+                    done
+
+                    # Calculate elapsed time
+                    local elapsed=$(( $(date +%s) - start_time ))
+                    local elapsed_str=$(printf "%02d:%02d" $((elapsed/60)) $((elapsed%60)))
+
+                    # Move cursor up and redraw window
+                    printf '\e[%dA' "$((window_size + 1))"  # Move up (extra line for header)
+                    printf '\e[J'                    # Clear to end of screen
+
+                    # Print status header
+                    printf "${UI_MUTED}${UI_BORDER}━━━ Claude Activity ━━━ ${UI_TEXT}Tools: %d | Time: %s${UI_RESET}\n" "$tool_count" "$elapsed_str"
+
+                    # Print buffer with padding
+                    for ((i=0; i<window_size; i++)); do
+                        if [[ $i -lt ${#buffer[@]} ]]; then
+                            printf '%b\n' "${buffer[$i]}"
+                        else
+                            echo ""
+                        fi
+                    done
+                fi
+            done
+
+            # Show cursor again
+            printf '\e[?25h'
+        }
+    INVOKE_EXIT_CODE=${PIPESTATUS[1]}
+    set -e
+
+    echo "Exit code: ${INVOKE_EXIT_CODE}" >> "$log_file"
+    log_info "Output saved to: ${log_file}"
+
+    # Record API call
+    rl_record_call
+
+    return 0
+}
+
+#=============================================================================
+# Run Command - Private Helper: Completion Handling
+#=============================================================================
+
+# Archive feature with deferred work check (non-interactive for run loop)
+# Shows warning if deferred work found but proceeds with archiving
+# Arguments: prd_file
+# Returns: 0 on success, 1 on failure
+_run_archive_with_deferred_check() {
+    local prd_file="$1"
+
+    # Check for deferred work before archiving
+    local deferred_stories
+    if deferred_stories=$(ar_check_deferred_work "$prd_file"); then
+        log_warn "Deferred/scoped work detected in the following stories:"
+        echo ""
+        echo "$deferred_stories" | while IFS= read -r line; do
+            echo "  - $line"
+        done
+        echo ""
+        log_warn "Consider creating follow-up issues for this work."
+        echo ""
+    fi
+
+    # Proceed with archive (using -y to skip interactive prompt)
+    cmd_archive -y
+}
+
+# Handle completion signals and archiving
+# Arguments: output prd_file
+# Returns: 0 to continue, 2 for user exit, 100 for completion
+_run_handle_completion() {
+    local output="$1"
+    local prd_file="$2"
+
+    # Check for completion signals (built-in)
+    local exit_signal
+    exit_signal=$(ed_check "$output" "$prd_file")
+
+    # Also check custom completion patterns from hooks system
+    if [[ "$exit_signal" == "continue" ]] && hk_check_completion_patterns "$output"; then
+        # Custom pattern matched, but verify all stories are complete
+        if all_stories_complete "$prd_file"; then
+            exit_signal="complete"
+        else
+            log_warn "Custom completion pattern detected but not all stories complete - continuing"
+        fi
+    fi
+
+    case "$exit_signal" in
+        complete)
+            log_success "All stories complete!"
+
+            # Execute on_completion hooks
+            if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+                hk_on_completion || log_warn "Some on_completion hooks failed"
+            fi
+
+            if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
+                log_info "Archiving feature..."
+                _run_archive_with_deferred_check "$prd_file"
+            fi
+            return "$RALPH_EXIT_COMPLETE"  # Special code for completion
+            ;;
+        story_complete)
+            # One story completed successfully - continue to next iteration with fresh context
+            log_success "Story completed! Starting fresh context for next story..."
+            return 0  # Continue to next iteration
+            ;;
+        api_limit)
+            log_warn "API limit detected in output."
+            if ed_prompt_api_limit; then
+                log_info "Waiting for limit reset..."
+                sleep "$_RALPH_API_LIMIT_WAIT"
+                return 0  # Continue to next iteration
+            else
+                log_info "User chose to exit."
+                return "$RALPH_EXIT_USER"
+            fi
+            ;;
+        continue)
+            # No completion signal - continue to progress check
+            return 0
+            ;;
+    esac
+
+    return 0
+}
+
+#=============================================================================
+# Run Command - Private Helper: Single Iteration
 #=============================================================================
 
 # Execute a single iteration of the development loop
-# Arguments: iteration_num feature_dir prd_file timeout_cmd
+# Arguments: iteration_num feature_dir prd_file timeout_cmd feature_name
 # Returns: 0 to continue, 1 to stop with error, 2 for user exit, 100 for completion
-run_single_iteration() {
+_run_iteration() {
     local iteration="$1"
     local feature_dir="$2"
     local prd_file="$3"
     local timeout_cmd="$4"
     local feature_name="$5"
 
-    log_info "========== Iteration ${iteration}/${RALPH_MAX_ITERATIONS} =========="
+    # Display the title bar with full context
+    _display_title_bar "$feature_name" "$prd_file" "$iteration" "$RALPH_MAX_ITERATIONS"
+
+    # Export iteration number for hooks
+    export RALPH_ITERATION="$iteration"
+
+    # Execute pre_iteration hooks
+    if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+        hk_pre_iteration || log_warn "Some pre_iteration hooks failed"
+    fi
 
     # Check circuit breaker
     if ! cb_check; then
         log_error "Circuit breaker tripped! Stopping loop."
         cb_get_status
+        # Execute on_error hooks
+        if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+            export RALPH_ERROR_TYPE="circuit_breaker"
+            hk_on_error || log_warn "Some on_error hooks failed"
+            unset RALPH_ERROR_TYPE
+        fi
         return 1
     fi
 
@@ -584,141 +1224,39 @@ run_single_iteration() {
     local prompt_content
     prompt_content=$(build_prompt "$feature_dir" "$RALPH_PROMPT_FILE")
 
-    # Build claude command args
-    # Note: --permission-mode bypassPermissions works with -p mode
-    # while --dangerously-skip-permissions causes hangs
-    local claude_args="--permission-mode bypassPermissions"
-
-    # Add model if specified
-    if [[ -n "${RALPH_MODEL:-}" ]]; then
-        claude_args+=" --model ${RALPH_MODEL}"
-    fi
-
     # Ensure logs directory exists
     mkdir -p "${feature_dir}/logs"
     local log_file="${feature_dir}/logs/iteration-${iteration}.log"
 
-    # Run Claude with timeout and real-time output
-    log_info "Running Claude Code..."
-    local exit_code=0
-
-    # Initialize log file
-    echo "=== Iteration ${iteration} ===" > "$log_file"
-    echo "Timestamp: $(get_timestamp)" >> "$log_file"
-    echo "" >> "$log_file"
-
-    set +e
-    # Use stream-json for real-time visibility, tee to log file
-    # Parse JSON stream to show activity while also saving raw output
-    echo "$prompt_content" | $timeout_cmd "${RALPH_TIMEOUT_MINUTES}m" \
-        claude -p $claude_args --output-format stream-json --verbose 2>&1 | \
-        tee -a "$log_file" | \
-        {
-            # Scrolling window - keep last 8 lines visible
-            declare -a buffer=()
-            local window_size=8
-            local line_count=0
-
-            # Hide cursor during updates
-            printf '\e[?25l'
-
-            # Print empty lines to create window space
-            for ((i=0; i<window_size; i++)); do echo ""; done
-
-            while IFS= read -r line; do
-                # Parse JSON and extract display text
-                local display=""
-                if echo "$line" | jq -e '.message.content' &>/dev/null; then
-                    display=$(echo "$line" | jq -r '
-                        .message.content[]? |
-                        if .type == "text" then
-                            "  💬 " + (.text | split("\n")[0] | .[0:90])
-                        elif .type == "tool_use" then
-                            "  🔧 " + .name + ": " + (.input | tostring | .[0:50])
-                        else empty end
-                    ' 2>/dev/null)
-                elif echo "$line" | jq -e '.type == "result"' &>/dev/null; then
-                    display=$(echo "$line" | jq -r '"  ✅ Done: " + (.result | .[0:70])' 2>/dev/null)
-                fi
-
-                # Add to buffer if we have display text
-                if [[ -n "$display" ]]; then
-                    while IFS= read -r dline; do
-                        [[ -n "$dline" ]] && buffer+=("$dline")
-                    done <<< "$display"
-
-                    # Keep only last window_size lines
-                    while [[ ${#buffer[@]} -gt $window_size ]]; do
-                        buffer=("${buffer[@]:1}")
-                    done
-
-                    # Move cursor up and redraw window
-                    printf '\e[%dA' "$window_size"  # Move up
-                    printf '\e[J'                    # Clear to end of screen
-
-                    # Print buffer with padding
-                    for ((i=0; i<window_size; i++)); do
-                        if [[ $i -lt ${#buffer[@]} ]]; then
-                            printf '%s\n' "${buffer[$i]}"
-                        else
-                            echo ""
-                        fi
-                    done
-                fi
-            done
-
-            # Show cursor again
-            printf '\e[?25h'
-        }
-    exit_code=${PIPESTATUS[1]}
-    set -e
-
-    echo "Exit code: ${exit_code}" >> "$log_file"
-    log_info "Output saved to: ${log_file}"
-
-    # Read output from log for completion detection
-    local output
-    output=$(cat "$log_file")
-
-    # Record API call
-    rl_record_call
+    # Invoke Claude CLI
+    _run_invoke_claude "$prompt_content" "$timeout_cmd" "$log_file" "$iteration"
 
     # Handle timeout
-    if [[ $exit_code -eq 124 ]]; then
+    if [[ $INVOKE_EXIT_CODE -eq $RALPH_EXIT_TIMEOUT ]]; then
         log_warn "Iteration timed out after ${RALPH_TIMEOUT_MINUTES} minutes"
+
+        # Read output from log for context
+        local timeout_output
+        timeout_output=$(cat "$log_file" 2>/dev/null || true)
+
+        # Show interrupted work context
+        ed_show_interrupted_context "$prd_file" "$timeout_output"
+
         cb_record_no_progress
         cb_save_state
         return 0  # Continue to next iteration
     fi
 
-    # Check for completion signals
-    local exit_signal
-    exit_signal=$(ed_check "$output" "$prd_file")
+    # Read output from log for completion detection
+    local output
+    output=$(cat "$log_file")
 
-    case "$exit_signal" in
-        complete)
-            log_success "Completion signal detected!"
-            if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
-                log_info "Archiving feature..."
-                cmd_archive
-            fi
-            return 100  # Special code for completion
-            ;;
-        api_limit)
-            log_warn "API limit detected in output."
-            if ed_prompt_api_limit; then
-                log_info "Waiting for limit reset..."
-                sleep 300
-                return 0  # Continue to next iteration
-            else
-                log_info "User chose to exit."
-                return 2
-            fi
-            ;;
-        continue)
-            # Continue to progress check
-            ;;
-    esac
+    # Handle completion signals
+    local completion_result=0
+    _run_handle_completion "$output" "$prd_file" || completion_result=$?
+    if [[ $completion_result -ne 0 ]]; then
+        return $completion_result
+    fi
 
     # Check for progress
     local passes_after
@@ -746,8 +1284,13 @@ run_single_iteration() {
     # Verbose output
     if [[ "$RALPH_VERBOSE" == true ]]; then
         echo "--- Claude Output ---"
-        echo "$output" | head -50
+        echo "$output" | head -"$_RALPH_VERBOSE_OUTPUT_LINES"
         echo "--- End Output ---"
+    fi
+
+    # Execute post_iteration hooks
+    if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+        hk_post_iteration || log_warn "Some post_iteration hooks failed"
     fi
 
     return 0  # Continue to next iteration
@@ -758,42 +1301,47 @@ run_single_iteration() {
 #=============================================================================
 
 cmd_run() {
-    # Parse arguments
-    parse_run_args "$@" || return 1
+    # Validate arguments and run preflight checks
+    _run_validate_args "$@" || return 1
 
-    # Run preflight checks (unless skipped)
-    if [[ "$RALPH_SKIP_PREFLIGHT" == true ]]; then
-        log_warn "Skipping preflight validation (--skip-preflight). Use with caution."
-    else
-        # Check git repo first (required for preflight)
-        if ! check_git_repo; then
-            return 1
-        fi
+    # Setup state (sets RUN_FEATURE_NAME, RUN_FEATURE_DIR, RUN_PRD_FILE)
+    _run_setup_state || return 1
 
-        # Run all preflight checks
-        if ! pf_run_all_checks; then
-            return 1
-        fi
-    fi
+    # Export feature name for monitor
+    export RALPH_FEATURE_NAME="$RUN_FEATURE_NAME"
 
-    # Validate and setup (sets RUN_FEATURE_NAME, RUN_FEATURE_DIR, RUN_PRD_FILE)
-    run_validate_setup || return 1
-
-    # Dry run mode
+    # Dry run mode - show what would happen
     if [[ "$RALPH_DRY_RUN" == true ]]; then
         run_show_dry_run "$RUN_FEATURE_NAME" "$RUN_FEATURE_DIR"
         return 0
     fi
 
-    # Initialize state (circuit breaker, rate limiter, branch)
-    run_initialize_state "$RUN_PRD_FILE"
+    # Monitor mode - launch in tmux
+    if [[ "$RALPH_MONITOR" == true ]]; then
+        # Build the ralph run command without --monitor to avoid recursion
+        local run_cmd="ralph run"
+        [[ -n "${RALPH_MAX_ITERATIONS:-}" ]] && run_cmd+=" -n $RALPH_MAX_ITERATIONS"
+        [[ -n "${RALPH_TIMEOUT_MINUTES:-}" ]] && run_cmd+=" -t $RALPH_TIMEOUT_MINUTES"
+        [[ -n "${RALPH_RATE_LIMIT:-}" ]] && run_cmd+=" -r $RALPH_RATE_LIMIT"
+        [[ -n "${RALPH_PROMPT_FILE:-}" ]] && run_cmd+=" -p $RALPH_PROMPT_FILE"
+        [[ "$RALPH_VERBOSE" == true ]] && run_cmd+=" -v"
+        [[ "$RALPH_NO_ARCHIVE" == true ]] && run_cmd+=" --no-archive"
+        [[ "$RALPH_RESET_CIRCUIT" == true ]] && run_cmd+=" --reset-circuit"
+        [[ "$RALPH_SKIP_PREFLIGHT" == true ]] && run_cmd+=" --skip-preflight"
+        [[ "$RALPH_DANGEROUSLY_SKIP_PERMISSIONS" == true ]] && run_cmd+=" --dangerously-skip-permissions"
+        [[ -n "${RALPH_MODEL:-}" ]] && run_cmd+=" -m $RALPH_MODEL"
+
+        # Start tmux with dashboard
+        mon_start_dashboard "$run_cmd"
+        return $?
+    fi
 
     # Check if already complete
     if all_stories_complete "$RUN_PRD_FILE"; then
         log_success "All stories already complete!"
         if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
             log_info "Archiving feature..."
-            cmd_archive
+            _run_archive_with_deferred_check "$RUN_PRD_FILE"
         fi
         return 0
     fi
@@ -802,40 +1350,83 @@ cmd_run() {
     local timeout_cmd
     timeout_cmd=$(get_timeout_cmd) || return 1
 
-    # Main loop
-    local iteration=0
+    # Initialize monitor status
+    mon_write_status 0 "starting" 0 0 0 0 ""
+
+    # Execute pre_run hooks
+    if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+        hk_pre_run || log_warn "Some pre_run hooks failed"
+    fi
+
+    # Run main iteration loop
     log_info "Starting Ralph loop for feature: ${RUN_FEATURE_NAME}"
     log_info "Max iterations: ${RALPH_MAX_ITERATIONS}, Timeout: ${RALPH_TIMEOUT_MINUTES}m"
 
+    local iteration=0
     while [[ $iteration -lt $RALPH_MAX_ITERATIONS ]]; do
         iteration=$((iteration + 1))
 
+        # Update monitor status at start of iteration
+        mon_iteration_start "$iteration" "$RUN_PRD_FILE" ""
+
         local iter_result=0
-        run_single_iteration "$iteration" "$RUN_FEATURE_DIR" "$RUN_PRD_FILE" "$timeout_cmd" "$RUN_FEATURE_NAME" || iter_result=$?
+        _run_iteration "$iteration" "$RUN_FEATURE_DIR" "$RUN_PRD_FILE" "$timeout_cmd" "$RUN_FEATURE_NAME" || iter_result=$?
 
         case $iter_result in
-            0)
-                # Continue to next iteration
-                sleep 2
+            "$RALPH_EXIT_SUCCESS")
+                # Update monitor status and continue
+                mon_iteration_end "$iteration" "$RUN_PRD_FILE" "running" ""
+                sleep "$_RALPH_ITERATION_SLEEP"
                 ;;
-            1)
-                # Error - stop loop
-                return 1
+            "$RALPH_EXIT_ERROR")
+                # Error - mark as error and stop loop
+                mon_mark_error "$RUN_PRD_FILE"
+                # Execute post_run hooks
+                if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+                    export RALPH_RUN_STATUS="error"
+                    hk_post_run || log_warn "Some post_run hooks failed"
+                    unset RALPH_RUN_STATUS
+                fi
+                return "$RALPH_EXIT_ERROR"
                 ;;
-            2)
+            "$RALPH_EXIT_USER")
                 # User exit
-                return 2
+                mon_iteration_end "$iteration" "$RUN_PRD_FILE" "paused" ""
+                # Execute post_run hooks
+                if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+                    export RALPH_RUN_STATUS="user_exit"
+                    hk_post_run || log_warn "Some post_run hooks failed"
+                    unset RALPH_RUN_STATUS
+                fi
+                return "$RALPH_EXIT_USER"
                 ;;
-            100)
-                # Completion
-                return 0
+            "$RALPH_EXIT_COMPLETE")
+                # Completion - mark as complete
+                mon_mark_complete "$RUN_PRD_FILE"
+                # Execute post_run hooks
+                if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+                    export RALPH_RUN_STATUS="complete"
+                    hk_post_run || log_warn "Some post_run hooks failed"
+                    unset RALPH_RUN_STATUS
+                fi
+                return "$RALPH_EXIT_SUCCESS"
                 ;;
         esac
     done
 
     # Max iterations reached
+    mon_mark_error "$RUN_PRD_FILE"
     log_error "Max iterations (${RALPH_MAX_ITERATIONS}) reached without completion."
-    return 1
+    # Execute on_error hooks for max iterations
+    if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+        export RALPH_ERROR_TYPE="max_iterations"
+        hk_on_error || log_warn "Some on_error hooks failed"
+        unset RALPH_ERROR_TYPE
+        export RALPH_RUN_STATUS="error"
+        hk_post_run || log_warn "Some post_run hooks failed"
+        unset RALPH_RUN_STATUS
+    fi
+    return "$RALPH_EXIT_ERROR"
 }
 
 #=============================================================================
@@ -867,6 +1458,9 @@ main() {
         status)
             cmd_status "$@"
             ;;
+        monitor)
+            cmd_monitor "$@"
+            ;;
         archive)
             cmd_archive "$@"
             ;;
@@ -875,6 +1469,9 @@ main() {
             ;;
         setup)
             cmd_setup "$@"
+            ;;
+        import)
+            cmd_import "$@"
             ;;
         run)
             cmd_run "$@"
@@ -898,7 +1495,7 @@ cleanup() {
     pkill -P $$ 2>/dev/null
     # Also kill any claude processes we spawned
     pkill -f "claude -p --permission-mode" 2>/dev/null
-    exit 130
+    exit "$RALPH_EXIT_INTERRUPT"
 }
 
 # Handle Ctrl+C gracefully

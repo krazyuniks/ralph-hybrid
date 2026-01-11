@@ -523,3 +523,253 @@ teardown() {
     [ -d "$first_archive" ]
     [ -d "$second_archive" ]
 }
+
+#=============================================================================
+# Deferred Work Detection Tests
+#=============================================================================
+
+@test "ar_story_has_deferred_work detects DEFERRED keyword" {
+    run ar_story_has_deferred_work "This story was DEFERRED to next sprint"
+    [ "$status" -eq 0 ]
+}
+
+@test "ar_story_has_deferred_work detects lowercase deferred" {
+    run ar_story_has_deferred_work "Some work was deferred for later"
+    [ "$status" -eq 0 ]
+}
+
+@test "ar_story_has_deferred_work detects SCOPE CLARIFICATION" {
+    run ar_story_has_deferred_work "Added SCOPE CLARIFICATION: only handles basic cases"
+    [ "$status" -eq 0 ]
+}
+
+@test "ar_story_has_deferred_work detects scope change" {
+    run ar_story_has_deferred_work "After scope change, we only implement core features"
+    [ "$status" -eq 0 ]
+}
+
+@test "ar_story_has_deferred_work detects future work" {
+    run ar_story_has_deferred_work "Some items marked as future work"
+    [ "$status" -eq 0 ]
+}
+
+@test "ar_story_has_deferred_work detects incremental" {
+    run ar_story_has_deferred_work "Taking an incremental approach"
+    [ "$status" -eq 0 ]
+}
+
+@test "ar_story_has_deferred_work detects out of scope" {
+    run ar_story_has_deferred_work "Advanced features are out of scope"
+    [ "$status" -eq 0 ]
+}
+
+@test "ar_story_has_deferred_work returns false for clean notes" {
+    run ar_story_has_deferred_work "Completed successfully. All tests passing."
+    [ "$status" -eq 1 ]
+}
+
+@test "ar_story_has_deferred_work returns false for empty notes" {
+    run ar_story_has_deferred_work ""
+    [ "$status" -eq 1 ]
+}
+
+@test "ar_check_deferred_work finds stories with deferred notes" {
+    local prd_file="$TEST_TEMP_DIR/prd-deferred.json"
+    cat > "$prd_file" << 'EOF'
+{
+  "description": "Test feature",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Complete story",
+      "notes": "All done",
+      "passes": true
+    },
+    {
+      "id": "STORY-002",
+      "title": "Deferred story",
+      "notes": "DEFERRED: edge cases not implemented",
+      "passes": true
+    }
+  ]
+}
+EOF
+
+    run ar_check_deferred_work "$prd_file"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "STORY-002" ]]
+    [[ "$output" =~ "Deferred story" ]]
+}
+
+@test "ar_check_deferred_work finds multiple deferred stories" {
+    local prd_file="$TEST_TEMP_DIR/prd-multi-deferred.json"
+    cat > "$prd_file" << 'EOF'
+{
+  "description": "Test feature",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "First deferred",
+      "notes": "DEFERRED to next phase",
+      "passes": true
+    },
+    {
+      "id": "STORY-002",
+      "title": "Complete story",
+      "notes": "All done",
+      "passes": true
+    },
+    {
+      "id": "STORY-003",
+      "title": "Scoped story",
+      "notes": "SCOPE CLARIFICATION: minimal implementation",
+      "passes": true
+    }
+  ]
+}
+EOF
+
+    run ar_check_deferred_work "$prd_file"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "STORY-001" ]]
+    [[ "$output" =~ "STORY-003" ]]
+    # Should not include STORY-002
+    [[ ! "$output" =~ "Complete story" ]]
+}
+
+@test "ar_check_deferred_work returns 1 when no deferred work" {
+    local prd_file="$TEST_TEMP_DIR/prd-clean.json"
+    cat > "$prd_file" << 'EOF'
+{
+  "description": "Test feature",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Complete story",
+      "notes": "All tests passing. Ready for production.",
+      "passes": true
+    }
+  ]
+}
+EOF
+
+    run ar_check_deferred_work "$prd_file"
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+@test "ar_check_deferred_work handles stories without notes" {
+    local prd_file="$TEST_TEMP_DIR/prd-no-notes.json"
+    cat > "$prd_file" << 'EOF'
+{
+  "description": "Test feature",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Story without notes",
+      "passes": true
+    }
+  ]
+}
+EOF
+
+    run ar_check_deferred_work "$prd_file"
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+@test "ar_check_deferred_work handles empty notes field" {
+    local prd_file="$TEST_TEMP_DIR/prd-empty-notes.json"
+    cat > "$prd_file" << 'EOF'
+{
+  "description": "Test feature",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Story with empty notes",
+      "notes": "",
+      "passes": true
+    }
+  ]
+}
+EOF
+
+    run ar_check_deferred_work "$prd_file"
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+@test "ar_check_deferred_work fails with missing prd_file" {
+    run ar_check_deferred_work ""
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "required" ]]
+}
+
+@test "ar_check_deferred_work fails with non-existent file" {
+    run ar_check_deferred_work "/nonexistent/prd.json"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not found" ]]
+}
+
+@test "ar_check_deferred_work detects case variations" {
+    local prd_file="$TEST_TEMP_DIR/prd-case.json"
+    cat > "$prd_file" << 'EOF'
+{
+  "description": "Test feature",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Mixed case deferred",
+      "notes": "This was Deferred due to time constraints",
+      "passes": true
+    }
+  ]
+}
+EOF
+
+    run ar_check_deferred_work "$prd_file"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "STORY-001" ]]
+}
+
+@test "ar_check_deferred_work detects 'out of scope' phrase" {
+    local prd_file="$TEST_TEMP_DIR/prd-oos.json"
+    cat > "$prd_file" << 'EOF'
+{
+  "description": "Test feature",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Out of scope story",
+      "notes": "Advanced features marked as out of scope for MVP",
+      "passes": true
+    }
+  ]
+}
+EOF
+
+    run ar_check_deferred_work "$prd_file"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "STORY-001" ]]
+}
+
+@test "ar_check_deferred_work detects 'future work' phrase" {
+    local prd_file="$TEST_TEMP_DIR/prd-future.json"
+    cat > "$prd_file" << 'EOF'
+{
+  "description": "Test feature",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Future work story",
+      "notes": "Optimization is future work",
+      "passes": true
+    }
+  ]
+}
+EOF
+
+    run ar_check_deferred_work "$prd_file"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "STORY-001" ]]
+}

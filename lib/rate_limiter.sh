@@ -18,14 +18,26 @@ if [[ -f "${_RL_SCRIPT_DIR}/utils.sh" ]]; then
 fi
 
 #=============================================================================
+# Source Constants
+#=============================================================================
+
+# Get the directory where this script is located
+_RL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source constants.sh for default values
+if [[ "${_RALPH_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${_RL_LIB_DIR}/constants.sh" ]]; then
+    source "${_RL_LIB_DIR}/constants.sh"
+fi
+
+#=============================================================================
 # Constants and Configuration
 #=============================================================================
 
-# Default rate limit (calls per hour)
-readonly _RL_DEFAULT_RATE_LIMIT=100
+# Default rate limit (from constants.sh)
+readonly _RL_DEFAULT_RATE_LIMIT="${RALPH_DEFAULT_RATE_LIMIT:-100}"
 
-# State file name
-readonly _RL_STATE_FILE="rate_limiter.state"
+# State file name (from constants.sh)
+readonly _RL_STATE_FILE="${RALPH_STATE_FILE_RATE_LIMITER:-rate_limiter.state}"
 
 #=============================================================================
 # Internal State Variables
@@ -53,7 +65,7 @@ _rl_get_state_file() {
 _rl_get_hour_start() {
     local now
     now=$(date +%s)
-    echo $((now - (now % 3600)))
+    echo $((now - (now % _RALPH_SECONDS_PER_HOUR)))
 }
 
 # Get the configured rate limit
@@ -103,8 +115,20 @@ rl_load_state() {
         local call_count_line hour_start_line
 
         while IFS= read -r line || [[ -n "$line" ]]; do
+            # Pattern: ^CALL_COUNT=([0-9]+)$
+            # Matches: State file line containing call count
+            # Example: "CALL_COUNT=42" -> captures "42"
+            # Breakdown:
+            #   ^           - Start of line
+            #   CALL_COUNT= - Literal key name
+            #   ([0-9]+)    - Capture group: one or more digits (the count)
+            #   $           - End of line (ensures exact match)
             if [[ "$line" =~ ^CALL_COUNT=([0-9]+)$ ]]; then
                 _rl_call_count="${BASH_REMATCH[1]}"
+            # Pattern: ^HOUR_START=([0-9]+)$
+            # Matches: State file line containing hour start timestamp
+            # Example: "HOUR_START=1704729600" -> captures Unix timestamp
+            # Note: Hour start is a Unix timestamp (seconds since epoch)
             elif [[ "$line" =~ ^HOUR_START=([0-9]+)$ ]]; then
                 _rl_hour_start="${BASH_REMATCH[1]}"
             fi
@@ -217,7 +241,7 @@ rl_get_wait_seconds() {
     local now hour_start next_hour seconds_remaining
     now=$(date +%s)
     hour_start=$(_rl_get_hour_start)
-    next_hour=$((hour_start + 3600))
+    next_hour=$((hour_start + _RALPH_SECONDS_PER_HOUR))
     seconds_remaining=$((next_hour - now))
 
     # Ensure non-negative
@@ -243,7 +267,7 @@ rl_wait_for_reset() {
     log_info "Rate limit reached. Waiting ${wait_seconds} seconds until hour resets..."
 
     local elapsed=0
-    local update_interval=60  # Update every 60 seconds
+    local update_interval=$_RALPH_RATE_LIMIT_UPDATE_INTERVAL
 
     while [[ $elapsed -lt $wait_seconds ]]; do
         local remaining=$((wait_seconds - elapsed))

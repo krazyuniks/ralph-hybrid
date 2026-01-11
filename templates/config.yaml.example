@@ -72,6 +72,13 @@ archive:
   name_format: "{date}-{feature}"
 
 #=============================================================================
+# Display Settings
+#=============================================================================
+display:
+  # Theme for UI colors: default, dracula, nord
+  theme: "default"
+
+#=============================================================================
 # Project-Specific Quality Checks (override in project config)
 #=============================================================================
 # quality_checks:

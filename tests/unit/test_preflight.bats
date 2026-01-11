@@ -531,25 +531,61 @@ EOF
     [ "$status" -eq 1 ]
 }
 
-@test "pf_run_all_checks includes sync check" {
+@test "pf_run_all_checks includes sync check (fails on missing story)" {
     pf_reset
     cd "$TEST_TEMP_DIR"
     git checkout -b feature/sync-test 2>/dev/null
 
     mkdir -p "$TEST_TEMP_DIR/.ralph/feature-sync-test"
 
-    # Create prd.json with STORY-001 and STORY-002
+    # Create prd.json with only STORY-001
     cat > "$TEST_TEMP_DIR/.ralph/feature-sync-test/prd.json" <<'EOF'
 {
   "userStories": [
-    {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
-    {"id": "STORY-002", "title": "Second", "acceptanceCriteria": ["T"], "priority": 2, "passes": false, "notes": ""}
+    {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""}
   ]
 }
 EOF
 
-    # Create spec.md with only STORY-001 (STORY-002 is orphan)
+    # Create spec.md with STORY-001 and STORY-002 (STORY-002 is MISSING in prd.json)
     cat > "$TEST_TEMP_DIR/.ralph/feature-sync-test/spec.md" <<'EOF'
+## Problem Statement
+Test
+## Success Criteria
+- [ ] Test
+## User Stories
+### STORY-001: First
+### STORY-002: Missing from prd
+## Out of Scope
+None
+EOF
+
+    touch "$TEST_TEMP_DIR/.ralph/feature-sync-test/progress.txt"
+
+    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-sync-test"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Sync check failed"* ]]
+}
+
+@test "pf_run_all_checks includes sync check (fails on completed orphan)" {
+    pf_reset
+    cd "$TEST_TEMP_DIR"
+    git checkout -b feature/orphan-test 2>/dev/null
+
+    mkdir -p "$TEST_TEMP_DIR/.ralph/feature-orphan-test"
+
+    # Create prd.json with STORY-001 and completed STORY-002 (orphan)
+    cat > "$TEST_TEMP_DIR/.ralph/feature-orphan-test/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
+    {"id": "STORY-002", "title": "Completed Orphan", "acceptanceCriteria": ["T"], "priority": 2, "passes": true, "notes": ""}
+  ]
+}
+EOF
+
+    # Create spec.md with only STORY-001
+    cat > "$TEST_TEMP_DIR/.ralph/feature-orphan-test/spec.md" <<'EOF'
 ## Problem Statement
 Test
 ## Success Criteria
@@ -560,11 +596,11 @@ Test
 None
 EOF
 
-    touch "$TEST_TEMP_DIR/.ralph/feature-sync-test/progress.txt"
+    touch "$TEST_TEMP_DIR/.ralph/feature-orphan-test/progress.txt"
 
-    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-sync-test"
+    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-orphan-test"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"Sync check failed"* ]]
+    [[ "$output" == *"Sync check failed"* ]] || [[ "$output" == *"Orphan check failed"* ]]
 }
 
 @test "pf_run_all_checks shows sync check passed when in sync" {
@@ -682,11 +718,11 @@ EOF
     ! pf_has_errors
 }
 
-@test "pf_check_sync fails when prd.json has orphan story (not in spec.md)" {
+@test "pf_check_sync warns (not errors) for incomplete orphan story" {
     pf_reset
     mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
 
-    # Create prd.json with story that doesn't exist in spec.md
+    # Create prd.json with incomplete orphan story (passes: false)
     cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
 {
   "description": "Test feature",
@@ -723,15 +759,65 @@ EOF
 **I want to** test
 EOF
 
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
-    pf_has_errors
+    # Per SPEC.md: Incomplete orphan is a WARNING, not an error
+    # Call without run so we can check internal state
+    local result=0
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || result=$?
+    [ "$result" -eq 0 ]  # Should pass (warnings only)
+    ! pf_has_errors      # No errors
+    pf_has_warnings      # Has warning about orphan
 }
 
-@test "pf_check_sync shows orphan story ID in error message" {
+@test "pf_check_sync fails when prd.json has COMPLETED orphan story" {
     pf_reset
     mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
 
-    # Create prd.json with orphan story
+    # Create prd.json with COMPLETED orphan story (passes: true)
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "description": "Test feature",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "First story",
+      "acceptanceCriteria": ["Test"],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-002",
+      "title": "Completed Orphan",
+      "acceptanceCriteria": ["Test"],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}
+EOF
+
+    # Create spec.md with only STORY-001
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+# Test Feature
+
+## User Stories
+
+### STORY-001: First story
+
+**As a** user
+**I want to** test
+EOF
+
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_has_errors  # Should have error for completed orphan
+}
+
+@test "pf_check_sync shows orphan story ID in warning message for incomplete orphan" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Create prd.json with incomplete orphan story
     cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
@@ -749,6 +835,53 @@ EOF
       "acceptanceCriteria": ["Test"],
       "priority": 2,
       "passes": false,
+      "notes": ""
+    }
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: First
+EOF
+
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Check that warning message contains the orphan story ID
+    local found_orphan=false
+    for warning in "${_PREFLIGHT_WARNINGS[@]}"; do
+        if [[ "$warning" == *"STORY-ORPHAN"* ]]; then
+            found_orphan=true
+            break
+        fi
+    done
+    [ "$found_orphan" = true ]
+}
+
+@test "pf_check_sync shows completed orphan story ID in error message" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Create prd.json with COMPLETED orphan story
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "First",
+      "acceptanceCriteria": ["Test"],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-ORPHAN",
+      "title": "Orphan",
+      "acceptanceCriteria": ["Test"],
+      "priority": 2,
+      "passes": true,
       "notes": ""
     }
   ]
@@ -851,11 +984,11 @@ EOF
     [ "$found_missing" = true ]
 }
 
-@test "pf_check_sync detects both orphans and missing stories" {
+@test "pf_check_sync detects both orphan warnings and missing story errors" {
     pf_reset
     mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
 
-    # prd.json has STORY-001 and STORY-ORPHAN
+    # prd.json has STORY-001 and STORY-ORPHAN (incomplete)
     cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
@@ -890,9 +1023,13 @@ EOF
 
     pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
 
-    # Should have errors for both orphan and missing
+    # Should have error for missing story
     local error_count=${#_PREFLIGHT_ERRORS[@]}
-    [ "$error_count" -ge 2 ]
+    [ "$error_count" -ge 1 ]
+
+    # Should have warning for incomplete orphan
+    local warning_count=${#_PREFLIGHT_WARNINGS[@]}
+    [ "$warning_count" -ge 1 ]
 }
 
 @test "pf_check_sync handles empty prd.json userStories" {
@@ -915,7 +1052,7 @@ EOF
     pf_has_errors  # Should error because spec has story that prd doesn't
 }
 
-@test "pf_check_sync handles spec.md with no stories" {
+@test "pf_check_sync warns for incomplete orphan when spec.md has no stories" {
     pf_reset
     mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
 
@@ -924,7 +1061,7 @@ EOF
   "userStories": [
     {
       "id": "STORY-001",
-      "title": "Orphan",
+      "title": "Incomplete Orphan",
       "acceptanceCriteria": ["Test"],
       "priority": 1,
       "passes": false,
@@ -942,8 +1079,43 @@ EOF
 No stories defined yet.
 EOF
 
+    # Call without run so we can check internal state
+    local result=0
+    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || result=$?
+    [ "$result" -eq 0 ]  # Should pass (incomplete orphan is just a warning)
+    ! pf_has_errors
+    pf_has_warnings      # Should have warning about orphan
+}
+
+@test "pf_check_sync errors for completed orphan when spec.md has no stories" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Completed Orphan",
+      "acceptanceCriteria": ["Test"],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+# Feature
+
+## User Stories
+
+No stories defined yet.
+EOF
+
     pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
-    pf_has_errors  # Should error because prd has story that spec doesn't
+    pf_has_errors  # Should error because completed orphan work will be lost
 }
 
 @test "pf_check_sync extracts story IDs from various spec.md formats" {
@@ -979,4 +1151,198 @@ EOF
 
     run pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature"
     [ "$status" -eq 0 ]
+}
+
+#=============================================================================
+# Orphan Detection Tests (pf_detect_orphans)
+#=============================================================================
+
+@test "pf_detect_orphans returns 0 when no orphans exist" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""}
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: First
+EOF
+
+    local result=0
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature" || result=$?
+    [ "$result" -eq 0 ]
+    ! pf_has_errors
+    ! pf_has_warnings
+}
+
+@test "pf_detect_orphans warns (not errors) for orphan with passes:false" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Orphan story with passes: false
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
+    {"id": "STORY-ORPHAN", "title": "Orphan", "acceptanceCriteria": ["T"], "priority": 2, "passes": false, "notes": ""}
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: First
+EOF
+
+    # Call without run so we can check internal state
+    local result=0
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature" || result=$?
+    [ "$result" -eq 0 ]  # Should return 0 (warnings only)
+    ! pf_has_errors      # Should NOT have errors
+    pf_has_warnings      # Should have warnings
+}
+
+@test "pf_detect_orphans errors for orphan with passes:true (completed work)" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Orphan story with passes: true (COMPLETED WORK)
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
+    {"id": "STORY-ORPHAN", "title": "Completed Orphan", "acceptanceCriteria": ["T"], "priority": 2, "passes": true, "notes": ""}
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: First
+EOF
+
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_has_errors  # Should have errors for completed orphan
+}
+
+@test "pf_detect_orphans error message includes 'COMPLETED' for passes:true orphans" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-DONE", "title": "Done Story", "acceptanceCriteria": ["T"], "priority": 1, "passes": true, "notes": ""}
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+(no stories)
+EOF
+
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature" || true
+
+    local found_completed=false
+    for error in "${_PREFLIGHT_ERRORS[@]}"; do
+        if [[ "$error" == *"COMPLETED"* ]] || [[ "$error" == *"passes: true"* ]]; then
+            found_completed=true
+            break
+        fi
+    done
+    [ "$found_completed" = true ]
+}
+
+@test "pf_detect_orphans warning message mentions removal for passes:false orphans" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-INCOMPLETE", "title": "Incomplete", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""}
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+(no stories)
+EOF
+
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    local found_removal=false
+    for warning in "${_PREFLIGHT_WARNINGS[@]}"; do
+        if [[ "$warning" == *"removed"* ]] || [[ "$warning" == *"passes: false"* ]]; then
+            found_removal=true
+            break
+        fi
+    done
+    [ "$found_removal" = true ]
+}
+
+@test "pf_detect_orphans handles mix of completed and incomplete orphans" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Mix of completed and incomplete orphans
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "In Spec", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
+    {"id": "STORY-ORPHAN-DONE", "title": "Completed Orphan", "acceptanceCriteria": ["T"], "priority": 2, "passes": true, "notes": ""},
+    {"id": "STORY-ORPHAN-WIP", "title": "WIP Orphan", "acceptanceCriteria": ["T"], "priority": 3, "passes": false, "notes": ""}
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+### STORY-001: In Spec
+EOF
+
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature" || true
+
+    # Should have error for completed orphan
+    pf_has_errors
+
+    # Should have warning for incomplete orphan
+    pf_has_warnings
+}
+
+@test "pf_detect_orphans returns 1 only when completed orphans exist" {
+    pf_reset
+    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+
+    # Only incomplete orphan
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-WIP", "title": "WIP", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""}
+  ]
+}
+EOF
+
+    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+## User Stories
+
+(empty)
+EOF
+
+    run pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature"
+    [ "$status" -eq 0 ]  # Should succeed even with incomplete orphan (just warning)
 }

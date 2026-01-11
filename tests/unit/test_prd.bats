@@ -190,3 +190,156 @@ EOF
     run get_prd_total_stories "$TEST_TEMP_DIR/prd.json"
     [ "$status" -eq 0 ]
 }
+
+#=============================================================================
+# Current Story Index Tests
+#=============================================================================
+
+@test "prd_get_current_story_index returns 1-based index of first incomplete" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": true},
+    {"id": "2", "passes": false},
+    {"id": "3", "passes": false}
+  ]
+}
+EOF
+    run prd_get_current_story_index "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "2" ]
+}
+
+@test "prd_get_current_story_index returns 1 when first story incomplete" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": false},
+    {"id": "2", "passes": false}
+  ]
+}
+EOF
+    run prd_get_current_story_index "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "1" ]
+}
+
+@test "prd_get_current_story_index returns 0 when all complete" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": true},
+    {"id": "2", "passes": true}
+  ]
+}
+EOF
+    run prd_get_current_story_index "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "0" ]
+}
+
+@test "prd_get_current_story_index returns 0 for empty array" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": []
+}
+EOF
+    run prd_get_current_story_index "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "0" ]
+}
+
+#=============================================================================
+# Current Story ID Tests
+#=============================================================================
+
+@test "prd_get_current_story_id returns id of first incomplete story" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "passes": true},
+    {"id": "STORY-002", "passes": false},
+    {"id": "STORY-003", "passes": false}
+  ]
+}
+EOF
+    run prd_get_current_story_id "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "STORY-002" ]
+}
+
+@test "prd_get_current_story_id returns empty string when all complete" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "passes": true}
+  ]
+}
+EOF
+    run prd_get_current_story_id "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
+#=============================================================================
+# Current Story Title Tests
+#=============================================================================
+
+@test "prd_get_current_story_title returns title of first incomplete story" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "title": "First Story", "passes": true},
+    {"id": "2", "title": "Second Story", "passes": false},
+    {"id": "3", "title": "Third Story", "passes": false}
+  ]
+}
+EOF
+    run prd_get_current_story_title "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "Second Story" ]
+}
+
+@test "prd_get_current_story_title returns empty string when all complete" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "title": "Done", "passes": true}
+  ]
+}
+EOF
+    run prd_get_current_story_title "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
+#=============================================================================
+# Get Current Story (JSON object) Tests
+#=============================================================================
+
+@test "get_current_story returns JSON of first incomplete story" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "First", "passes": true},
+    {"id": "STORY-002", "title": "Second", "description": "Desc", "passes": false}
+  ]
+}
+EOF
+    result=$(get_current_story "$TEST_TEMP_DIR/prd.json")
+    [ "$(echo "$result" | jq -r '.id')" = "STORY-002" ]
+    [ "$(echo "$result" | jq -r '.title')" = "Second" ]
+}
+
+@test "get_current_story returns empty when all complete" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": true}
+  ]
+}
+EOF
+    run get_current_story "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}

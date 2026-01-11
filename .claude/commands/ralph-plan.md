@@ -4,7 +4,7 @@ Plan a new feature for Ralph Hybrid development. Guide the user through requirem
 
 ## Arguments
 
-- `$ARGUMENTS` - Brief description of the feature to plan (optional, used if no GitHub issue found)
+- `$ARGUMENTS` - Brief description of the feature to plan (optional, used if no Bead or GitHub issue found). May include bead reference like `bd:123`.
 
 ## Workflow States
 
@@ -16,31 +16,87 @@ DISCOVER → SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE
 
 ## Phase 0: DISCOVER
 
-**Goal:** Extract context from GitHub issue if branch was created from one.
+**Goal:** Extract context from Beads or GitHub issue if branch was created from one.
+
+### Context Source Priority:
+1. **Beads** - Check first if `bd` CLI is available
+2. **GitHub Issues** - Fall back if no bead context found
+3. **User Input** - Use `$ARGUMENTS` if no external context
 
 ### Actions:
-1. Get current branch: `git branch --show-current`
-2. Extract issue number from branch name using patterns:
-   - `feature/42-description` → issue #42
-   - `issue-42-description` → issue #42
-   - `42-description` → issue #42
-   - `fix/42-description` → issue #42
-   - `feat/PROJ-123-description` → (Jira-style, skip GitHub lookup)
 
-3. If issue number found, fetch via GitHub CLI:
-   ```bash
-   gh issue view 42 --json number,title,body,labels,state,comments
-   ```
+#### Step 1: Get Current Branch
+```bash
+git branch --show-current
+```
 
-4. Extract useful context:
-   | Field | Use |
-   |-------|-----|
-   | `title` | Feature title for spec.md |
-   | `body` | Problem statement, may contain acceptance criteria |
-   | `labels` | Priority hints, feature type |
-   | `comments` | Additional context, decisions made |
+#### Step 2: Check for Beads Context (if `bd` CLI available)
 
-### Output (if issue found):
+Check if Beads CLI is available:
+```bash
+command -v bd
+```
+
+If available, extract bead reference from branch name or `$ARGUMENTS`:
+- `bead-123-description` → bead #123
+- `BEAD-123-description` → bead #123
+- `bd:123` in arguments → bead #123
+- `feature/bead-42-description` → bead #42
+
+If bead reference found, fetch via Beads CLI:
+```bash
+bd show 123
+```
+
+Extract useful context from bead output:
+| Field | Use |
+|-------|-----|
+| Title | Feature title for spec.md |
+| Description | Problem statement, acceptance criteria |
+| Status | Current state of the task |
+| Tags/Labels | Priority hints, feature type |
+
+#### Step 3: Check for GitHub Issue (if no bead found)
+
+Extract issue number from branch name using patterns:
+- `feature/42-description` → issue #42
+- `issue-42-description` → issue #42
+- `42-description` → issue #42
+- `fix/42-description` → issue #42
+- `feat/PROJ-123-description` → (Jira-style, skip GitHub lookup)
+
+If issue number found, fetch via GitHub CLI:
+```bash
+gh issue view 42 --json number,title,body,labels,state,comments
+```
+
+Extract useful context:
+| Field | Use |
+|-------|-----|
+| `title` | Feature title for spec.md |
+| `body` | Problem statement, may contain acceptance criteria |
+| `labels` | Priority hints, feature type |
+| `comments` | Additional context, decisions made |
+
+### Output (if bead found):
+```
+I see you're on branch 'feature/bead-42-user-auth'.
+Found Bead #42: "Add user authentication"
+
+From the bead:
+  Title: Add user authentication
+  Status: in-progress
+  Description: Users need secure login with email/password...
+
+  Details from bead:
+  - JWT tokens for session management
+  - 7-day token expiry
+  - Rate limiting on login attempts
+
+I'll use this as the starting point for the spec.
+```
+
+### Output (if GitHub issue found):
 ```
 I see you're on branch 'feature/42-user-auth'.
 Found GitHub issue #42: "Add user authentication"
@@ -58,25 +114,31 @@ From the issue:
 I'll use this as the starting point for the spec.
 ```
 
-### Output (if no issue found):
+### Output (if no external context found):
 ```
 I see you're on branch 'feature/user-auth'.
-No GitHub issue number detected in branch name.
+No Bead or GitHub issue detected in branch name.
 
 Using provided description: "$ARGUMENTS"
 ```
 
 ### Skip Conditions:
-- Branch name doesn't match issue patterns
-- `gh` CLI not available
-- Issue fetch fails (private repo, no access, etc.)
+- Branch name doesn't match bead or issue patterns
+- `bd` CLI not available (skip Beads check)
+- `gh` CLI not available (skip GitHub check)
+- Bead/Issue fetch fails (not found, no access, etc.)
 - User provides `--no-issue` flag
 
 ---
 
 ## Phase 1: SUMMARIZE
 
-**Goal:** Combine GitHub issue context (if any) with user input.
+**Goal:** Combine external context (Bead or GitHub issue) with user input.
+
+### If Bead was found (from DISCOVER):
+1. Present bead summary to user
+2. Ask: "Does this capture the feature correctly? Any additions or changes?"
+3. Note any acceptance criteria or details from the bead
 
 ### If GitHub issue was found (from DISCOVER):
 1. Present issue summary to user
@@ -94,7 +156,7 @@ Using provided description: "$ARGUMENTS"
 3. Ask what needs to change
 
 ### Output:
-> "Based on [issue #42 / your description], I understand you want to [summary]. Let me ask a few clarifying questions."
+> "Based on [bead #42 / issue #42 / your description], I understand you want to [summary]. Let me ask a few clarifying questions."
 
 ---
 
@@ -155,10 +217,14 @@ Using provided description: "$ARGUMENTS"
 ```markdown
 ---
 created: {ISO-8601 timestamp}
+bead: {number or null}
 github_issue: {number or null}
 ---
 
 # {Feature Title}
+
+<!-- If from Bead: -->
+> **Source:** Bead #{number} - {bead title}
 
 <!-- If from GitHub issue: -->
 > **Source:** GitHub issue #{number} - {issue title}
@@ -167,7 +233,7 @@ github_issue: {number or null}
 ## Problem Statement
 
 {1-2 paragraphs describing the problem this feature solves}
-{If from issue, start with the issue description}
+{If from bead or issue, start with that description}
 
 ## Success Criteria
 
@@ -319,6 +385,10 @@ Next steps:
   1. Review spec.md and prd.json
   2. Run: ralph run
 
+IMPORTANT: The command is exactly `ralph run` - do NOT substitute with
+project-specific commands like `/execute`, `npm run dev`, or any other
+command. The Ralph development loop is initiated with `ralph run` only.
+
 To modify: Edit spec.md, then run /ralph-prd to regenerate
 ```
 
@@ -401,14 +471,74 @@ Here's the draft spec. Please review:
 Note: This spec was generated from GitHub issue #42.
 ```
 
-### Example 2: Without GitHub Issue
+### Example 2: With Bead (Beads integration)
+
+```
+User: /ralph-plan
+
+Claude: I see you're on branch 'feature/bead-15-api-caching'.
+
+[DISCOVER] Checking for Beads context...
+Found `bd` CLI. Fetching bead #15...
+
+Found Bead #15: "Implement API response caching"
+  Status: in-progress
+  Created: 2026-01-05
+
+  Description from bead:
+  > API responses are slow. Need to cache frequently accessed endpoints.
+  > Consider Redis or in-memory caching.
+  > Cache invalidation on data updates.
+
+  Tags: performance, backend
+
+I'll use this as the starting point for the spec.
+Does this capture the feature correctly? Any additions or changes?
+
+User: Looks good, let's use Redis
+
+Claude: Got it - Redis for caching. A few clarifying questions:
+
+1. Which endpoints should be cached?
+   A) All GET endpoints
+   B) Only /api/users and /api/products
+   C) Configurable per-endpoint
+
+User: C
+
+Claude: 2. What's the default cache TTL?
+   A) 5 minutes
+   B) 15 minutes
+   C) 1 hour
+   D) Configurable
+
+User: D, default 15 minutes
+
+Claude: 3. How should cache invalidation work?
+   A) TTL-based only
+   B) Event-driven (invalidate on write)
+   C) Both
+
+User: C
+
+Claude: Got it. Let me draft the specification...
+
+[Creates .ralph/feature-bead-15-api-caching/spec.md]
+
+Here's the draft spec. Please review:
+[Shows spec.md content]
+
+Note: This spec was generated from Bead #15.
+```
+
+### Example 3: Without External Context
 
 ```
 User: /ralph-plan Add user authentication with JWT
 
 Claude: I see you're on branch 'feature/user-auth'.
 
-[DISCOVER] No GitHub issue number detected in branch name.
+[DISCOVER] No Bead or GitHub issue detected in branch name.
 
 I'll use your description as the starting point.
 I understand you want to add user authentication using JWT tokens.

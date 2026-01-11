@@ -167,6 +167,87 @@ pf_check_prd_schema() {
     return 0
 }
 
+# Check: Detect orphaned stories in prd.json (stories not in spec.md)
+# Args: feature_dir
+# Returns: 0 if no orphans, 1 if orphans found
+# Note: Orphans with passes:true are ERRORS, orphans with passes:false are WARNINGS
+pf_detect_orphans() {
+    local feature_dir="$1"
+    local spec_file="${feature_dir}/spec.md"
+    local prd_file="${feature_dir}/prd.json"
+
+    # Files must exist
+    if [[ ! -f "$spec_file" ]] || [[ ! -f "$prd_file" ]]; then
+        return 1
+    fi
+
+    # Extract story IDs from prd.json
+    local prd_ids
+    prd_ids=$(jq -r '.userStories[].id' "$prd_file" 2>/dev/null)
+
+    # Extract story IDs from spec.md (may be empty if no stories defined)
+    #
+    # First grep pattern: ^#{2,4}\s*STORY-[A-Za-z0-9_-]+:
+    # Matches: Markdown headers containing story IDs
+    # Example: "### STORY-001: User login" or "## STORY-AUTH-01: OAuth setup"
+    # Breakdown:
+    #   ^           - Start of line
+    #   #{2,4}      - 2 to 4 hash characters (## to ####)
+    #   \s*         - Optional whitespace after hashes
+    #   STORY-      - Literal "STORY-" prefix
+    #   [A-Za-z0-9_-]+  - One or more alphanumeric, underscore, or hyphen chars
+    #   :           - Literal colon (story ID delimiter)
+    #
+    # Second grep pattern: STORY-[A-Za-z0-9_-]+
+    # Matches: Just the story ID portion (extracts from matched lines)
+    # Example: "STORY-001", "STORY-AUTH-01"
+    # Note: -o flag outputs only the matching portion
+    local spec_ids
+    spec_ids=$(grep -E '^#{2,4}\s*STORY-[A-Za-z0-9_-]+:' "$spec_file" 2>/dev/null | \
+               grep -oE 'STORY-[A-Za-z0-9_-]+' | sort -u) || true
+
+    local has_completed_orphan=false
+
+    # Check each prd story to see if it's in spec
+    while IFS= read -r prd_id; do
+        [[ -z "$prd_id" ]] && continue
+
+        local found=false
+        # If spec_ids is empty, no stories can be found
+        if [[ -n "$spec_ids" ]]; then
+            while IFS= read -r spec_id; do
+                [[ -z "$spec_id" ]] && continue
+                if [[ "$prd_id" == "$spec_id" ]]; then
+                    found=true
+                    break
+                fi
+            done <<< "$spec_ids"
+        fi
+
+        if [[ "$found" == "false" ]]; then
+            # This is an orphan - check if it's completed
+            local passes
+            passes=$(jq -r ".userStories[] | select(.id==\"$prd_id\") | .passes" "$prd_file")
+
+            if [[ "$passes" == "true" ]]; then
+                # ERROR: Completed work will be lost
+                pf_error "Orphaned COMPLETED story: ${prd_id} (passes: true) not found in spec.md"
+                pf_error "  ^^^ COMPLETED WORK WILL BE LOST"
+                has_completed_orphan=true
+            else
+                # WARNING: Incomplete orphan, less critical
+                pf_warning "Orphaned story: ${prd_id} (passes: false, will be removed on regeneration)"
+            fi
+        fi
+    done <<< "$prd_ids"
+
+    if [[ "$has_completed_orphan" == "true" ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
 # Check: Sync between spec.md and prd.json (story IDs must match)
 # Args: feature_dir
 # Returns: 0 if in sync, 1 if mismatch
@@ -186,7 +267,21 @@ pf_check_sync() {
 
     # Extract story IDs from spec.md (look for ### STORY-XXX: or #### STORY-XXX: patterns)
     # Handles formats like: ### STORY-001: Title, #### STORY-002:No space, etc.
-    # First grep finds heading lines, second grep extracts just the story ID
+    #
+    # Pattern: ^#{2,4}\s*STORY-[A-Za-z0-9_-]+:
+    # Matches: Markdown headers (h2-h4) with story IDs
+    # Example: "### STORY-001: User login feature"
+    # Breakdown:
+    #   ^           - Start of line
+    #   #{2,4}      - 2-4 hash marks (h2, h3, or h4 headings)
+    #   \s*         - Optional whitespace
+    #   STORY-      - Literal "STORY-" prefix
+    #   [A-Za-z0-9_-]+  - Story identifier (letters, numbers, underscore, hyphen)
+    #   :           - Colon separator before title
+    #
+    # Second pattern: STORY-[A-Za-z0-9_-]+
+    # Matches: Extracts just the story ID from the full line
+    # Example: From "### STORY-001: Title" extracts "STORY-001"
     local spec_ids
     spec_ids=$(grep -E '^#{2,4}\s*STORY-[A-Za-z0-9_-]+:' "$spec_file" 2>/dev/null | \
                grep -oE 'STORY-[A-Za-z0-9_-]+' | sort -u)
@@ -203,9 +298,12 @@ pf_check_sync() {
         [[ -n "$id" ]] && spec_array+=("$id")
     done <<< "$spec_ids"
 
-    local has_mismatch=false
+    local has_error=false
 
     # Check for orphans: stories in prd.json but not in spec.md
+    # Per SPEC.md:
+    #   - Orphaned story (passes: false) = WARN (run /ralph-prd or add to spec)
+    #   - Orphaned story (passes: true) = ERROR (completed work will be lost)
     for prd_id in "${prd_array[@]}"; do
         local found=false
         for spec_id in "${spec_array[@]}"; do
@@ -215,12 +313,21 @@ pf_check_sync() {
             fi
         done
         if [[ "$found" == "false" ]]; then
-            pf_error "Orphan story in prd.json: ${prd_id} not found in spec.md"
-            has_mismatch=true
+            # Check if it's a completed story (error) or incomplete (warning)
+            local passes
+            passes=$(jq -r ".userStories[] | select(.id==\"$prd_id\") | .passes" "$prd_file")
+            if [[ "$passes" == "true" ]]; then
+                # ERROR: Completed orphan - work will be lost
+                pf_error "Orphan story in prd.json: ${prd_id} (passes: true) not found in spec.md"
+                has_error=true
+            else
+                # WARNING: Incomplete orphan - can be regenerated safely
+                pf_warning "Orphan story in prd.json: ${prd_id} (passes: false) not found in spec.md"
+            fi
         fi
     done
 
-    # Check for missing: stories in spec.md but not in prd.json
+    # Check for missing: stories in spec.md but not in prd.json (always ERROR)
     for spec_id in "${spec_array[@]}"; do
         local found=false
         for prd_id in "${prd_array[@]}"; do
@@ -231,11 +338,11 @@ pf_check_sync() {
         done
         if [[ "$found" == "false" ]]; then
             pf_error "Missing story in prd.json: ${spec_id} from spec.md not found in prd.json"
-            has_mismatch=true
+            has_error=true
         fi
     done
 
-    if [[ "$has_mismatch" == "true" ]]; then
+    if [[ "$has_error" == "true" ]]; then
         return 1
     fi
 
@@ -390,6 +497,26 @@ pf_run_all_checks() {
             for ((i=errors_before_sync; i<${#_PREFLIGHT_ERRORS[@]}; i++)); do
                 echo "    ${_PREFLIGHT_ERRORS[$i]}"
             done
+        fi
+
+        # Run orphan detection separately for clear warning/error distinction
+        local errors_before_orphan=${#_PREFLIGHT_ERRORS[@]}
+        local warnings_before_orphan=${#_PREFLIGHT_WARNINGS[@]}
+        if pf_detect_orphans "$feature_dir"; then
+            # No completed orphans - check if there were incomplete orphan warnings
+            local warnings_after_orphan=${#_PREFLIGHT_WARNINGS[@]}
+            if [[ $warnings_after_orphan -gt $warnings_before_orphan ]]; then
+                echo "⚠ Orphan check: incomplete orphans found (warnings only)"
+                for ((i=warnings_before_orphan; i<warnings_after_orphan; i++)); do
+                    echo "    ${_PREFLIGHT_WARNINGS[$i]}"
+                done
+            fi
+        else
+            echo "✗ Orphan check failed"
+            echo "    Completed story found in prd.json but not in spec.md"
+            echo "    Options:"
+            echo "      1. Add story back to spec.md (preserve completed work)"
+            echo "      2. Run '/ralph-prd' and confirm orphan removal (discard work)"
         fi
     fi
 

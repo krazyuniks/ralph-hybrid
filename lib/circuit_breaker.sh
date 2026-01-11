@@ -7,6 +7,11 @@ set -euo pipefail
 # Get the directory of this script
 CIRCUIT_BREAKER_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source constants.sh for default values
+if [[ "${_RALPH_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${CIRCUIT_BREAKER_LIB_DIR}/constants.sh" ]]; then
+    source "${CIRCUIT_BREAKER_LIB_DIR}/constants.sh"
+fi
+
 # Source utils for logging (if not already sourced)
 if ! declare -f log_debug &>/dev/null; then
     source "${CIRCUIT_BREAKER_LIB_DIR}/utils.sh"
@@ -16,13 +21,13 @@ fi
 # Configuration
 #=============================================================================
 
-# Default thresholds (can be overridden via environment)
-: "${RALPH_NO_PROGRESS_THRESHOLD:=3}"
-: "${RALPH_SAME_ERROR_THRESHOLD:=5}"
+# Default thresholds (using constants from constants.sh)
+: "${RALPH_NO_PROGRESS_THRESHOLD:=${RALPH_DEFAULT_NO_PROGRESS_THRESHOLD:-3}}"
+: "${RALPH_SAME_ERROR_THRESHOLD:=${RALPH_DEFAULT_SAME_ERROR_THRESHOLD:-5}}"
 : "${RALPH_STATE_DIR:=${PWD}/.ralph}"
 
-# State file location
-CB_STATE_FILE="${RALPH_STATE_DIR}/circuit_breaker.state"
+# State file location (using constant from constants.sh)
+CB_STATE_FILE="${RALPH_STATE_DIR}/${RALPH_STATE_FILE_CIRCUIT_BREAKER:-circuit_breaker.state}"
 
 # In-memory state variables (populated by cb_load_state)
 CB_NO_PROGRESS_COUNT=0

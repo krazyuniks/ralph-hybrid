@@ -18,6 +18,16 @@ Users need secure access to their accounts. Currently there is no authentication
 - [ ] Sessions persist across page refresh (token storage)
 - [ ] Invalid credentials show appropriate error message
 
+## Related Specs
+
+For detailed specifications, see the `specs/` directory:
+
+| Spec File | Description |
+|-----------|-------------|
+| `specs/api-design.spec.md` | API endpoint contracts, request/response schemas |
+| `specs/data-model.spec.md` | Database schema, entity relationships |
+| `specs/validation.spec.md` | Input validation rules, error messages |
+
 ## User Stories
 
 ### STORY-001: User Registration
@@ -38,6 +48,7 @@ Users need secure access to their accounts. Currently there is no authentication
 **Technical Notes:**
 - Use bcrypt for password hashing (cost factor 12)
 - Store in users table with id, email, password_hash, created_at
+- See `specs/api-design.spec.md` for request/response format
 
 ---
 
@@ -78,6 +89,8 @@ Users need secure access to their accounts. Currently there is no authentication
 **Technical Notes:**
 - Header format: `Authorization: Bearer <token>`
 - Attach decoded user to req.user or context
+
+**Spec Reference:** `specs/validation.spec.md`
 
 ---
 

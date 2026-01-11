@@ -210,6 +210,23 @@ Test suite failed"
     [ "$output" = "Error: Cannot find module 'express'" ]
 }
 
+@test "ed_extract_error ignores error in JSON tool_result content" {
+    # This simulates Claude reading a file that contains "Error:" in comments
+    local output='{"type":"tool_result","content":"# Handle Error: this is a comment\ndef handle_error():\n    pass"}'
+    run ed_extract_error "$output"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "ed_extract_error ignores error in file content with line numbers" {
+    # Simulates Read tool output with line number prefix
+    local output="   42→    // Error: this is just a comment in the code
+   43→    const errorHandler = () => {};"
+    run ed_extract_error "$output"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
 @test "ed_extract_error extracts 'error:' line (lowercase)" {
     local output="Compiling...
 error: syntax error at line 42
@@ -221,47 +238,47 @@ Build failed"
 
 @test "ed_extract_error extracts 'FAILED' line" {
     local output="test_utils.py::test_config PASSED
-test_utils.py::test_load FAILED - assertion error
+test_utils.py::test_load FAILED
 test_utils.py::test_save PASSED"
     run ed_extract_error "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "FAILED" ]]
 }
 
-@test "ed_extract_error extracts 'AssertionError' line" {
+@test "ed_extract_error extracts 'AssertionError:' line" {
     local output="Running test suite
 AssertionError: expected 5 but got 3
 Test completed with failures"
     run ed_extract_error "$output"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "AssertionError" ]]
+    [[ "$output" =~ "AssertionError:" ]]
 }
 
-@test "ed_extract_error extracts 'TypeError' line" {
+@test "ed_extract_error extracts 'TypeError:' line" {
     local output="Executing script
 TypeError: undefined is not a function
 Script aborted"
     run ed_extract_error "$output"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "TypeError" ]]
+    [[ "$output" =~ "TypeError:" ]]
 }
 
-@test "ed_extract_error extracts 'SyntaxError' line" {
+@test "ed_extract_error extracts 'SyntaxError:' line" {
     local output="Parsing file.js
 SyntaxError: Unexpected token '}' at line 15
 Parse failed"
     run ed_extract_error "$output"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "SyntaxError" ]]
+    [[ "$output" =~ "SyntaxError:" ]]
 }
 
-@test "ed_extract_error extracts 'Exception' line" {
+@test "ed_extract_error extracts 'Exception:' line" {
     local output="Processing data
 Exception: Invalid input data format
 Process terminated"
     run ed_extract_error "$output"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Exception" ]]
+    [[ "$output" =~ "Exception:" ]]
 }
 
 @test "ed_extract_error returns empty for no errors" {
@@ -538,4 +555,365 @@ The feature is ready for review."
     local output="Warning: Rate Limit will reset in 1 hour"
     run ed_check_api_limit "$output"
     [ "$status" -eq 0 ]
+}
+
+#=============================================================================
+# ed_get_current_story Tests
+#=============================================================================
+
+@test "ed_get_current_story returns first incomplete story" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "First story", "passes": true},
+    {"id": "STORY-002", "title": "Second story", "passes": false},
+    {"id": "STORY-003", "title": "Third story", "passes": false}
+  ]
+}
+EOF
+    run ed_get_current_story "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "STORY-002: Second story" ]
+}
+
+@test "ed_get_current_story returns empty when all complete" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "First story", "passes": true},
+    {"id": "STORY-002", "title": "Second story", "passes": true}
+  ]
+}
+EOF
+    run ed_get_current_story "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "ed_get_current_story returns empty for missing file" {
+    run ed_get_current_story "$TEST_TEMP_DIR/nonexistent.json"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "ed_get_current_story returns empty for empty input" {
+    run ed_get_current_story ""
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+#=============================================================================
+# ed_get_story_progress Tests
+#=============================================================================
+
+@test "ed_get_story_progress shows correct counts" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": true},
+    {"id": "2", "passes": false},
+    {"id": "3", "passes": true}
+  ]
+}
+EOF
+    run ed_get_story_progress "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "2/3 stories complete (1 remaining)" ]
+}
+
+@test "ed_get_story_progress handles all complete" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": true},
+    {"id": "2", "passes": true}
+  ]
+}
+EOF
+    run ed_get_story_progress "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "2/2 stories complete (0 remaining)" ]
+}
+
+@test "ed_get_story_progress handles no file" {
+    run ed_get_story_progress "$TEST_TEMP_DIR/nonexistent.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "No prd.json found" ]
+}
+
+#=============================================================================
+# ed_extract_last_tool Tests
+#=============================================================================
+
+@test "ed_extract_last_tool extracts tool name from stream json" {
+    local output='{"type":"tool_use","name":"Read","input":{"file_path":"/some/path"}}'
+    run ed_extract_last_tool "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Read" ]]
+}
+
+@test "ed_extract_last_tool returns last tool when multiple exist" {
+    local output='{"type":"tool_use","name":"Glob","input":{}}
+{"type":"tool_use","name":"Read","input":{}}
+{"type":"tool_use","name":"Edit","input":{}}'
+    run ed_extract_last_tool "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Edit" ]]
+}
+
+@test "ed_extract_last_tool returns empty for no tools" {
+    local output="Just some text without any tool calls"
+    run ed_extract_last_tool "$output"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "ed_extract_last_tool returns empty for empty input" {
+    run ed_extract_last_tool ""
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+#=============================================================================
+# ed_get_uncommitted_changes Tests
+#=============================================================================
+
+@test "ed_get_uncommitted_changes returns empty for clean repo" {
+    # Create a temp git repo
+    local temp_repo="$TEST_TEMP_DIR/repo"
+    mkdir -p "$temp_repo"
+    cd "$temp_repo"
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "test" > file.txt
+    git add file.txt
+    git commit -q -m "initial"
+
+    run ed_get_uncommitted_changes
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "ed_get_uncommitted_changes detects modified files" {
+    local temp_repo="$TEST_TEMP_DIR/repo"
+    mkdir -p "$temp_repo"
+    cd "$temp_repo"
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "test" > file.txt
+    git add file.txt
+    git commit -q -m "initial"
+
+    # Modify the file
+    echo "modified" >> file.txt
+
+    run ed_get_uncommitted_changes
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "modified" ]]
+}
+
+@test "ed_get_uncommitted_changes detects untracked files" {
+    local temp_repo="$TEST_TEMP_DIR/repo"
+    mkdir -p "$temp_repo"
+    cd "$temp_repo"
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "test" > file.txt
+    git add file.txt
+    git commit -q -m "initial"
+
+    # Create untracked file
+    echo "new" > newfile.txt
+
+    run ed_get_uncommitted_changes
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "untracked" ]]
+}
+
+#=============================================================================
+# ed_get_changed_files Tests
+#=============================================================================
+
+@test "ed_get_changed_files lists changed files" {
+    local temp_repo="$TEST_TEMP_DIR/repo"
+    mkdir -p "$temp_repo"
+    cd "$temp_repo"
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "test" > file.txt
+    git add file.txt
+    git commit -q -m "initial"
+
+    # Create untracked file
+    echo "new" > newfile.txt
+
+    run ed_get_changed_files
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "newfile.txt" ]]
+}
+
+@test "ed_get_changed_files respects max_files limit" {
+    local temp_repo="$TEST_TEMP_DIR/repo"
+    mkdir -p "$temp_repo"
+    cd "$temp_repo"
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "initial" > base.txt
+    git add base.txt
+    git commit -q -m "initial"
+
+    # Create multiple untracked files
+    for i in {1..10}; do
+        echo "content" > "file$i.txt"
+    done
+
+    run ed_get_changed_files 3
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "and" ]]
+    [[ "$output" =~ "more files" ]]
+}
+
+#=============================================================================
+# ed_show_interrupted_context Tests
+#=============================================================================
+
+@test "ed_show_interrupted_context displays header" {
+    run ed_show_interrupted_context "" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "INTERRUPTED WORK CONTEXT" ]]
+}
+
+@test "ed_show_interrupted_context shows story progress when prd exists" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "STORY-001", "title": "Test story", "passes": false}
+  ]
+}
+EOF
+    run ed_show_interrupted_context "$TEST_TEMP_DIR/prd.json" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Story Progress" ]]
+    [[ "$output" =~ "0/1" ]]
+    [[ "$output" =~ "STORY-001" ]]
+}
+
+@test "ed_show_interrupted_context shows resume command" {
+    run ed_show_interrupted_context "" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Resume with: ralph run" ]]
+}
+
+#=============================================================================
+# ed_check_story_complete Tests (Fresh Context per Story)
+#=============================================================================
+
+@test "ed_check_story_complete returns 0 when story complete signal is present" {
+    local output="Story STORY-001 completed successfully. <promise>STORY_COMPLETE</promise>"
+    run ed_check_story_complete "$output"
+    [ "$status" -eq 0 ]
+}
+
+@test "ed_check_story_complete returns 0 with multiline output containing signal" {
+    local output="Files changed:
+- src/auth.ts
+- tests/auth.test.ts
+
+Tests passing.
+<promise>STORY_COMPLETE</promise>
+
+Stopping for fresh context."
+    run ed_check_story_complete "$output"
+    [ "$status" -eq 0 ]
+}
+
+@test "ed_check_story_complete returns 1 when signal is missing" {
+    local output="Working on STORY-001, making progress..."
+    run ed_check_story_complete "$output"
+    [ "$status" -eq 1 ]
+}
+
+@test "ed_check_story_complete returns 1 for empty output" {
+    run ed_check_story_complete ""
+    [ "$status" -eq 1 ]
+}
+
+@test "ed_check_story_complete uses custom signal from RALPH_STORY_COMPLETE_SIGNAL" {
+    export RALPH_STORY_COMPLETE_SIGNAL="[[STORY_DONE]]"
+    local output="Story finished [[STORY_DONE]] now stopping"
+    run ed_check_story_complete "$output"
+    [ "$status" -eq 0 ]
+}
+
+@test "ed_check_story_complete returns 1 for partial signal" {
+    local output="Some text <promise>STORY_INCOMPLET</promise> more text"
+    run ed_check_story_complete "$output"
+    [ "$status" -eq 1 ]
+}
+
+@test "ed_check_story_complete distinguishes from COMPLETE signal" {
+    local output="<promise>COMPLETE</promise>"
+    run ed_check_story_complete "$output"
+    [ "$status" -eq 1 ]
+}
+
+#=============================================================================
+# ed_check Tests for story_complete Signal
+#=============================================================================
+
+@test "ed_check returns 'story_complete' when story signal detected" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": true},
+    {"id": "2", "passes": false}
+  ]
+}
+EOF
+    local output="STORY-001 done <promise>STORY_COMPLETE</promise>"
+    run ed_check "$output" "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "story_complete" ]
+}
+
+@test "ed_check prioritizes complete over story_complete when all stories done" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": true}
+  ]
+}
+EOF
+    # Both STORY_COMPLETE and all stories passing - should return 'complete'
+    local output="Done <promise>STORY_COMPLETE</promise>"
+    run ed_check "$output" "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "complete" ]
+}
+
+@test "ed_check prioritizes story_complete over api_limit" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": false}
+  ]
+}
+EOF
+    # Both story_complete signal and api_limit message - story_complete should win
+    local output="<promise>STORY_COMPLETE</promise> and also usage limit"
+    run ed_check "$output" "$TEST_TEMP_DIR/prd.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "story_complete" ]
+}
+
+@test "ed_check returns story_complete even when no prd file" {
+    local output="<promise>STORY_COMPLETE</promise>"
+    run ed_check "$output" "$TEST_TEMP_DIR/nonexistent.json"
+    [ "$status" -eq 0 ]
+    [ "$output" = "story_complete" ]
 }

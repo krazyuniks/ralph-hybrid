@@ -25,7 +25,8 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": ""
+      "notes": "",
+      "spec_ref": "specs/api-design.spec.md"
     },
     {
       "id": "STORY-003",
@@ -38,7 +39,8 @@
       ],
       "priority": 3,
       "passes": false,
-      "notes": ""
+      "notes": "",
+      "spec_ref": "specs/validation.spec.md"
     }
   ]
 }
