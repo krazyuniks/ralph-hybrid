@@ -30,6 +30,7 @@ source "${SCRIPT_DIR}/lib/archive.sh"
 source "${SCRIPT_DIR}/lib/monitor.sh"
 source "${SCRIPT_DIR}/lib/hooks.sh"
 source "${SCRIPT_DIR}/lib/import.sh"
+source "${SCRIPT_DIR}/lib/lockfile.sh"
 
 #=============================================================================
 # Global Variables (set by parse_args or load_config)
@@ -1457,12 +1458,21 @@ cmd_run() {
     # Setup state (sets RUN_FEATURE_NAME, RUN_FEATURE_DIR, RUN_PRD_FILE)
     _run_setup_state || return 1
 
+    # Acquire lock to prevent concurrent ralph runs in same/nested directories
+    local abs_feature_dir
+    abs_feature_dir="$(cd "$(dirname "$RUN_FEATURE_DIR")" && pwd)/$(basename "$RUN_FEATURE_DIR")"
+    if ! lf_acquire "$abs_feature_dir"; then
+        log_error "Cannot acquire lock. Another ralph instance may be running."
+        return 1
+    fi
+
     # Export feature name for monitor
     export RALPH_FEATURE_NAME="$RUN_FEATURE_NAME"
 
     # Dry run mode - show what would happen
     if [[ "$RALPH_DRY_RUN" == true ]]; then
         run_show_dry_run "$RUN_FEATURE_NAME" "$RUN_FEATURE_DIR"
+        lf_release
         return 0
     fi
 
@@ -1481,6 +1491,8 @@ cmd_run() {
         [[ -n "${RALPH_MODEL:-}" ]] && run_cmd+=" -m $RALPH_MODEL"
 
         # Start tmux with dashboard
+        # Release lock - the inner ralph run will acquire its own
+        lf_release
         mon_start_dashboard "$run_cmd"
         return $?
     fi
@@ -1492,12 +1504,16 @@ cmd_run() {
             log_info "Archiving feature..."
             _run_archive_with_deferred_check "$RUN_PRD_FILE"
         fi
+        lf_release
         return 0
     fi
 
     # Get timeout command
     local timeout_cmd
-    timeout_cmd=$(get_timeout_cmd) || return 1
+    if ! timeout_cmd=$(get_timeout_cmd); then
+        lf_release
+        return 1
+    fi
 
     # Initialize monitor status
     mon_write_status 0 "starting" 0 0 0 0 ""
@@ -1536,6 +1552,7 @@ cmd_run() {
                     hk_post_run || log_warn "Some post_run hooks failed"
                     unset RALPH_RUN_STATUS
                 fi
+                lf_release
                 return "$RALPH_EXIT_ERROR"
                 ;;
             "$RALPH_EXIT_USER")
@@ -1547,6 +1564,7 @@ cmd_run() {
                     hk_post_run || log_warn "Some post_run hooks failed"
                     unset RALPH_RUN_STATUS
                 fi
+                lf_release
                 return "$RALPH_EXIT_USER"
                 ;;
             "$RALPH_EXIT_COMPLETE")
@@ -1558,6 +1576,7 @@ cmd_run() {
                     hk_post_run || log_warn "Some post_run hooks failed"
                     unset RALPH_RUN_STATUS
                 fi
+                lf_release
                 return "$RALPH_EXIT_SUCCESS"
                 ;;
         esac
@@ -1575,6 +1594,7 @@ cmd_run() {
         hk_post_run || log_warn "Some post_run hooks failed"
         unset RALPH_RUN_STATUS
     fi
+    lf_release
     return "$RALPH_EXIT_ERROR"
 }
 
@@ -1647,6 +1667,8 @@ cleanup() {
     printf '\e[?25h'
     echo ""
     log_warn "Interrupted by user"
+    # Release lockfile
+    lf_release
     # Kill all child processes in our process group
     pkill -P $$ 2>/dev/null
     # Also kill any claude processes we spawned

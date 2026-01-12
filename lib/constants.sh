@@ -188,6 +188,13 @@ readonly RALPH_SPECS_DIR_NAME="specs"
 readonly RALPH_DEFAULT_PROMPT_TEMPLATE="prompt-tdd.md"
 
 #=============================================================================
+# Lockfile Settings
+#=============================================================================
+
+# Lockfile directory (centralized for easy inspection)
+readonly RALPH_DEFAULT_LOCKFILE_DIR="\$HOME/.ralph/lockfiles"
+
+#=============================================================================
 # Configuration Defaults
 #=============================================================================
 
