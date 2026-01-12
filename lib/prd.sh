@@ -142,3 +142,49 @@ prd_get_current_story_title() {
     local file="$1"
     deps_jq -r '[.userStories[] | select(.passes == false)][0].title // ""' "$file"
 }
+
+# Rollback passes state to a previous state
+# Compares current state with before state and reverts any changes
+# Usage: prd_rollback_passes "prd.json" "false,false,true"
+# Arguments:
+#   $1 - prd.json file path
+#   $2 - passes_before state (comma-separated string like "false,false,true")
+# Returns: 0 on success, 1 on error
+prd_rollback_passes() {
+    local file="$1"
+    local passes_before="$2"
+
+    if [[ ! -f "$file" ]]; then
+        return 1
+    fi
+
+    # Get current state
+    local passes_current
+    passes_current=$(prd_get_passes_state "$file")
+
+    # If states are the same, nothing to rollback
+    if [[ "$passes_before" == "$passes_current" ]]; then
+        return 0
+    fi
+
+    # Convert comma-separated strings to arrays
+    local -a before_arr current_arr
+    IFS=',' read -ra before_arr <<< "$passes_before"
+    IFS=',' read -ra current_arr <<< "$passes_current"
+
+    # Find stories that changed from false to true (these need rollback)
+    local -a rollback_indices=()
+    for i in "${!current_arr[@]}"; do
+        if [[ "${current_arr[$i]}" == "true" ]] && [[ "${before_arr[$i]:-false}" == "false" ]]; then
+            rollback_indices+=("$i")
+        fi
+    done
+
+    # Rollback each changed story
+    for idx in "${rollback_indices[@]}"; do
+        deps_jq ".userStories[$idx].passes = false" "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+        log_warn "Rolled back passes for story at index $idx (0-indexed)"
+    done
+
+    return 0
+}

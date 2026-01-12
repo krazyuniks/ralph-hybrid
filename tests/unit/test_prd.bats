@@ -343,3 +343,59 @@ EOF
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
+
+#=============================================================================
+# Rollback Passes State Tests
+#=============================================================================
+
+@test "prd_rollback_passes rolls back story that changed from false to true" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": true},
+    {"id": "2", "passes": true},
+    {"id": "3", "passes": false}
+  ]
+}
+EOF
+    # Before state: first two were complete, second was in progress
+    local passes_before="true,false,false"
+
+    run prd_rollback_passes "$TEST_TEMP_DIR/prd.json" "$passes_before"
+    [ "$status" -eq 0 ]
+
+    # Check that story 2 was rolled back to false
+    local story2_passes
+    story2_passes=$(jq -r '.userStories[1].passes' "$TEST_TEMP_DIR/prd.json")
+    [ "$story2_passes" = "false" ]
+
+    # Check that story 1 stayed true (was already true before)
+    local story1_passes
+    story1_passes=$(jq -r '.userStories[0].passes' "$TEST_TEMP_DIR/prd.json")
+    [ "$story1_passes" = "true" ]
+}
+
+@test "prd_rollback_passes does nothing when states match" {
+    cat > "$TEST_TEMP_DIR/prd.json" <<'EOF'
+{
+  "userStories": [
+    {"id": "1", "passes": true},
+    {"id": "2", "passes": false}
+  ]
+}
+EOF
+    local passes_before="true,false"
+
+    run prd_rollback_passes "$TEST_TEMP_DIR/prd.json" "$passes_before"
+    [ "$status" -eq 0 ]
+
+    # State should be unchanged
+    local current_state
+    current_state=$(get_passes_state "$TEST_TEMP_DIR/prd.json")
+    [ "$current_state" = "true,false" ]
+}
+
+@test "prd_rollback_passes handles file not found" {
+    run prd_rollback_passes "/nonexistent/prd.json" "false,false"
+    [ "$status" -eq 1 ]
+}

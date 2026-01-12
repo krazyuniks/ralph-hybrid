@@ -768,6 +768,7 @@ _progress_bar() {
 
 # Display the title bar with feature and story context
 # Args: feature_name prd_file iteration max_iterations [start_time] [timeout_minutes]
+# Sets global: _TITLE_BAR_TIMER_ROW (row where timer should be updated)
 _display_title_bar() {
     local feature_name="$1"
     local prd_file="$2"
@@ -841,7 +842,12 @@ _display_title_bar() {
     if [[ $gap2 -lt 0 ]]; then gap2=2; fi
 
     if [[ -n "$timeout_display" ]]; then
-        printf "${UI_BORDER}│${UI_RESET}${UI_SUBTITLE}%s${UI_RESET}%*s${UI_MUTED}%s${UI_RESET}  ${UI_BORDER}│${UI_RESET}\n" "$line2" "$gap2" "" "$timeout_display"
+        # Print spaces as placeholder for timer - the background timer process will fill in the actual value
+        # This avoids duplicate timers (one static from here, one updating from background)
+        local timer_placeholder
+        # Account for wide emoji: ⏱ is 2 display columns, so add 1 extra space
+        timer_placeholder=$(printf "%*s" "$((timeout_len + 1))" "")
+        printf "${UI_BORDER}│${UI_RESET}${UI_SUBTITLE}%s${UI_RESET}%*s${UI_MUTED}%s${UI_RESET}  ${UI_BORDER}│${UI_RESET}\n" "$line2" "$gap2" "" "$timer_placeholder"
     else
         local padding2=$((bar_width - line2_len))
         printf "${UI_BORDER}│${UI_RESET}${UI_SUBTITLE}%s%*s${UI_RESET}${UI_BORDER}│${UI_RESET}\n" "$line2" "$padding2" ""
@@ -914,7 +920,8 @@ _update_countdown_timer() {
     timeout_display=$(printf "⏱ %02d:%02d" "$remaining_mins" "$remaining_secs_part")
 
     # Calculate column position (timer is right-aligned with 2 char padding before border)
-    local timer_col=$((term_width - ${#timeout_display} - 2))
+    # Account for wide emoji: ⏱ displays as 2 columns but counts as 1 character, so subtract extra 1
+    local timer_col=$((term_width - ${#timeout_display} - 3))
 
     # Save cursor, move to timer position, print timer, restore cursor
     printf '\e7\e[%d;%dH%s\e8' "$timer_row" "$timer_col" "$timeout_display"
@@ -1230,15 +1237,17 @@ _run_archive_with_deferred_check() {
 }
 
 # Handle completion signals and archiving
-# Arguments: output prd_file
+# Arguments: output prd_file passes_before
 # Returns: 0 to continue, 2 for user exit, 100 for completion
 _run_handle_completion() {
     local output="$1"
     local prd_file="$2"
+    local passes_before="${3:-}"
 
     # Check for completion signals (built-in)
+    # Pass passes_before so quality check failures can rollback story completion
     local exit_signal
-    exit_signal=$(ed_check "$output" "$prd_file")
+    exit_signal=$(ed_check "$output" "$prd_file" "$passes_before")
 
     # Also check custom completion patterns from hooks system
     if [[ "$exit_signal" == "continue" ]] && hk_check_completion_patterns "$output"; then
@@ -1308,16 +1317,23 @@ _run_iteration() {
     local iteration_start_time
     iteration_start_time=$(date +%s)
 
+    # Get cursor row BEFORE drawing title bar to calculate timer position accurately
+    # Title bar structure: empty line, top border, feature name, story+timer, progress, bottom border, empty line
+    # Timer is on line 4 (0-indexed: 3) from the start
+    local term_width
+    term_width=$(_get_terminal_width)
+    local start_row
+    start_row=$(_get_cursor_row)
+    # Ensure start_row is at least 1 (minimum valid row)
+    if [[ $start_row -lt 1 ]]; then
+        start_row=1
+    fi
+    local timer_row=$((start_row + 3))
+
     # Display the title bar with full context and timeout countdown
     _display_title_bar "$feature_name" "$prd_file" "$iteration" "$RALPH_MAX_ITERATIONS" "$iteration_start_time" "$RALPH_TIMEOUT_MINUTES"
 
     # Start background countdown timer updater
-    # Timer is on line 4 from the end of the title bar (blank, border, progress, timer)
-    local term_width
-    term_width=$(_get_terminal_width)
-    local current_row
-    current_row=$(_get_cursor_row)
-    local timer_row=$((current_row - 4))
     _start_countdown_timer "$timer_row" "$iteration_start_time" "$RALPH_TIMEOUT_MINUTES" "$term_width"
 
     # Export iteration number for hooks
@@ -1391,9 +1407,9 @@ _run_iteration() {
     local output
     output=$(cat "$log_file")
 
-    # Handle completion signals
+    # Handle completion signals (pass passes_before for quality check rollback)
     local completion_result=0
-    _run_handle_completion "$output" "$prd_file" || completion_result=$?
+    _run_handle_completion "$output" "$prd_file" "$passes_before" || completion_result=$?
     if [[ $completion_result -ne 0 ]]; then
         return $completion_result
     fi

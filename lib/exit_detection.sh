@@ -591,12 +591,14 @@ ed_normalize_error() {
 # Arguments:
 #   $1 - Claude output to check
 #   $2 - Path to prd.json file
+#   $3 - (Optional) passes_before state for rollback on quality check failure
 # Returns:
 #   Prints: 'complete', 'story_complete', 'api_limit', or 'continue'
 #   Always returns 0
 ed_check() {
     local output="${1:-}"
     local prd_file="${2:-}"
+    local passes_before="${3:-}"
 
     # Priority 1: Check for completion promise in output
     # BUT only trust it if all stories are actually complete (prevents premature completion)
@@ -628,6 +630,13 @@ ed_check() {
             else
                 log_error "Story marked complete but quality checks FAILED!"
                 log_error "Claude should fix issues. Continuing iteration..."
+                # Rollback the story's passes field since quality checks failed
+                if [[ -n "$passes_before" ]] && [[ -n "$prd_file" ]]; then
+                    if declare -f prd_rollback_passes &>/dev/null; then
+                        log_error "Rolling back story completion..."
+                        prd_rollback_passes "$prd_file" "$passes_before"
+                    fi
+                fi
                 echo "continue"
                 return 0
             fi
