@@ -42,7 +42,6 @@ RALPH_RATE_LIMIT="${RALPH_RATE_LIMIT:-$RALPH_DEFAULT_RATE_LIMIT}"
 RALPH_PROMPT_FILE=""
 RALPH_VERBOSE=false
 RALPH_NO_ARCHIVE=false
-RALPH_RESET_CIRCUIT=false
 RALPH_DRY_RUN=false
 RALPH_SKIP_PREFLIGHT=false
 RALPH_DANGEROUSLY_SKIP_PERMISSIONS="${RALPH_DANGEROUSLY_SKIP_PERMISSIONS:-false}"
@@ -79,7 +78,6 @@ Run Options:
   -p, --prompt FILE          Custom prompt file
   -v, --verbose              Enable verbose output
   --no-archive               Don't archive on completion
-  --reset-circuit            Reset circuit breaker state before running
   --dry-run                  Show what would happen without executing
   --skip-preflight           Skip preflight validation (use with caution)
   --dangerously-skip-permissions  Pass to Claude Code
@@ -595,10 +593,6 @@ parse_run_args() {
                 RALPH_NO_ARCHIVE=true
                 shift
                 ;;
-            --reset-circuit)
-                RALPH_RESET_CIRCUIT=true
-                shift
-                ;;
             --dry-run)
                 RALPH_DRY_RUN=true
                 shift
@@ -1048,7 +1042,6 @@ run_show_dry_run() {
 run_initialize_state() {
     # Always reset circuit breaker at the start of a fresh run
     # A tripped circuit breaker from a previous session should not block new runs
-    # (The --reset-circuit flag is now redundant but kept for backwards compatibility)
     cb_reset
 
     # Initialize rate limiter (preserves state across runs for rate limiting)
@@ -1483,7 +1476,6 @@ cmd_run() {
         [[ -n "${RALPH_PROMPT_FILE:-}" ]] && run_cmd+=" -p $RALPH_PROMPT_FILE"
         [[ "$RALPH_VERBOSE" == true ]] && run_cmd+=" -v"
         [[ "$RALPH_NO_ARCHIVE" == true ]] && run_cmd+=" --no-archive"
-        [[ "$RALPH_RESET_CIRCUIT" == true ]] && run_cmd+=" --reset-circuit"
         [[ "$RALPH_SKIP_PREFLIGHT" == true ]] && run_cmd+=" --skip-preflight"
         [[ "$RALPH_DANGEROUSLY_SKIP_PERMISSIONS" == true ]] && run_cmd+=" --dangerously-skip-permissions"
         [[ -n "${RALPH_MODEL:-}" ]] && run_cmd+=" -m $RALPH_MODEL"

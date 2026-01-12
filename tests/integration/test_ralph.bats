@@ -476,11 +476,11 @@ EOF
     [[ "$output" =~ "Circuit" ]] || [[ "$output" =~ "progress" ]] || [[ "$output" =~ "breaker" ]]
 }
 
-@test "ralph run --reset-circuit resets circuit breaker" {
+@test "ralph run resets circuit breaker on fresh start" {
     setup_feature_branch "feature/reset-cb" "true" "true"
     create_mock_claude_complete
 
-    # Initialize with tripped state
+    # Initialize with tripped state from a previous session
     export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph/feature-reset-cb"
     mkdir -p "$RALPH_STATE_DIR"
     cat > "${RALPH_STATE_DIR}/circuit_breaker.state" << 'EOF'
@@ -490,7 +490,8 @@ LAST_ERROR_HASH=
 LAST_PASSES_STATE=
 EOF
 
-    run "$RALPH_SCRIPT" run -n 5 --reset-circuit --no-archive
+    # Fresh run should reset circuit breaker automatically
+    run "$RALPH_SCRIPT" run -n 5 --no-archive
     [ "$status" -eq 0 ]
 }
 

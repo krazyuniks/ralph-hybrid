@@ -60,7 +60,7 @@ EOF
     log_debug "Circuit breaker initialized"
 }
 
-# Reset all counters (for --reset-circuit flag)
+# Reset all counters to zero
 # Usage: cb_reset
 cb_reset() {
     cb_init

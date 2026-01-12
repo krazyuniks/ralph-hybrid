@@ -207,7 +207,6 @@ ralph help                      # Show help
 | `-m, --model` | (none) | Claude model (opus, sonnet, or full name) |
 | `-v, --verbose` | false | Detailed output |
 | `--no-archive` | false | Don't archive on completion |
-| `--reset-circuit` | false | Reset circuit breaker state |
 | `--dry-run` | false | Show what would happen |
 | `--monitor` | false | Launch with tmux monitoring dashboard |
 | `--skip-preflight` | false | Skip preflight validation (use with caution) |
