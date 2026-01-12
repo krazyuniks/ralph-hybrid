@@ -153,11 +153,36 @@ Using provided description: "$ARGUMENTS"
 **Goal:** Generate the spec.md document.
 
 ### Actions:
-1. Get current git branch: `git branch --show-current`
-2. Derive feature folder: `.ralph/{branch-name}/` (sanitize slashes to dashes)
-3. Create directory if it doesn't exist
-4. Generate `spec.md` using template (see below)
-5. Present spec to user for review
+
+#### Step 1: Derive Feature Folder (CRITICAL)
+
+**IMPORTANT:** The folder name MUST be derived exactly from the git branch name. Do NOT invent a shorter or "cleaner" name.
+
+```bash
+# Get exact branch name
+BRANCH=$(git branch --show-current)
+
+# Convert slashes to dashes - this is the ONLY transformation allowed
+FOLDER_NAME=$(echo "$BRANCH" | tr '/' '-')
+
+# Feature folder path
+FEATURE_DIR=".ralph/${FOLDER_NAME}"
+```
+
+**Examples:**
+| Branch | Folder (CORRECT) | Folder (WRONG) |
+|--------|------------------|----------------|
+| `384/job-processing-pipeline-step-3-video-com` | `.ralph/384-job-processing-pipeline-step-3-video-com/` | `.ralph/384-video-composition/` |
+| `feature/42-user-auth` | `.ralph/feature-42-user-auth/` | `.ralph/user-auth/` |
+| `fix/123-bug-fix` | `.ralph/fix-123-bug-fix/` | `.ralph/bug-fix/` |
+
+**Why this matters:** `ralph run` derives the folder from the branch name using the same logic. If you use a different name, `ralph run` won't find your files.
+
+#### Step 2: Create directory if it doesn't exist
+
+#### Step 3: Generate `spec.md` using template (see below)
+
+#### Step 4: Present spec to user for review
 
 > **Note:** The feature folder is derived from the current git branch. User should be on the correct branch before running `/ralph-plan`.
 
@@ -274,8 +299,9 @@ STORY-004: Implement user login (blocked by STORY-003)
 
 ### Actions:
 1. Read final spec.md
-2. Get feature folder from current branch (same as Phase 3)
-3. Generate `.ralph/{branch-name}/prd.json`:
+2. **Use the SAME feature folder from Phase 3** - do NOT recalculate or use a different name
+   - The folder MUST be: `.ralph/$(git branch --show-current | tr '/' '-')/`
+3. Generate `prd.json` in that folder:
 
 ```json
 {
@@ -314,14 +340,21 @@ STORY-004: Implement user login (blocked by STORY-003)
 
 4. Create `specs/` directory (for additional detailed specs if needed)
 
-5. Output summary:
+5. **Validate folder name** before outputting summary:
+   ```bash
+   # Verify the folder you created matches what ralph expects
+   EXPECTED=".ralph/$(git branch --show-current | tr '/' '-')"
+   # If your folder doesn't match $EXPECTED, you made an error - fix it!
+   ```
+
+6. Output summary:
 
 ```
-Planning complete for branch: feature/user-auth
-Feature folder: .ralph/feature-user-auth/
+Planning complete for branch: {exact branch name}
+Feature folder: .ralph/{branch-with-slashes-as-dashes}/
 
 Created files:
-  .ralph/feature-user-auth/
+  .ralph/{branch-with-slashes-as-dashes}/
   ├── spec.md          # Feature specification
   ├── prd.json         # {N} stories, all passes: false
   └── progress.txt     # Empty, ready for iterations
