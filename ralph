@@ -787,10 +787,8 @@ _display_title_bar() {
         local now elapsed remaining_secs remaining_mins remaining_secs_part
         now=$(date +%s)
         elapsed=$((now - start_time))
-        remaining_secs=$((timeout_minutes * 60 - elapsed))
-        if [[ $remaining_secs -lt 0 ]]; then
-            remaining_secs=0
-        fi
+        # Use awk for floating point support (fractional minutes like 0.083)
+        remaining_secs=$(awk -v tm="$timeout_minutes" -v el="$elapsed" 'BEGIN { r=int(tm*60-el); print (r<0)?0:r }')
         remaining_mins=$((remaining_secs / 60))
         remaining_secs_part=$((remaining_secs % 60))
         timeout_display=$(printf "⏱ %02d:%02d" "$remaining_mins" "$remaining_secs_part")
@@ -908,12 +906,8 @@ _update_countdown_timer() {
     local now elapsed remaining_secs remaining_mins remaining_secs_part
     now=$(date +%s)
     elapsed=$((now - start_time))
-    remaining_secs=$((timeout_minutes * 60 - elapsed))
-
-    if [[ $remaining_secs -lt 0 ]]; then
-        remaining_secs=0
-    fi
-
+    # Use awk for floating point support (fractional minutes like 0.083)
+    remaining_secs=$(awk -v tm="$timeout_minutes" -v el="$elapsed" 'BEGIN { r=int(tm*60-el); print (r<0)?0:r }')
     remaining_mins=$((remaining_secs / 60))
     remaining_secs_part=$((remaining_secs % 60))
     local timeout_display
@@ -1169,7 +1163,8 @@ _run_invoke_claude() {
                     local now_secs=$(date +%s)
                     local elapsed=$(( now_secs - start_time ))
                     local elapsed_str=$(printf "%02d:%02d" $((elapsed/60)) $((elapsed%60)))
-                    local timeout_secs=$((${RALPH_TIMEOUT_MINUTES:-15} * 60))
+                    # Use awk for floating point support (fractional minutes like 0.083)
+                    local timeout_secs=$(awk -v tm="${RALPH_TIMEOUT_MINUTES:-15}" 'BEGIN { print int(tm*60) }')
                     local remaining=$((timeout_secs - elapsed))
                     [[ $remaining -lt 0 ]] && remaining=0
                     local remaining_str=$(printf "%02d:%02d" $((remaining/60)) $((remaining%60)))
@@ -1277,6 +1272,13 @@ _run_handle_completion() {
         story_complete)
             # One story completed successfully - continue to next iteration with fresh context
             log_success "Story completed! Starting fresh context for next story..."
+            return 0  # Continue to next iteration
+            ;;
+        quality_check_failed)
+            # Story was completed but quality checks failed - rolled back
+            # This counts as progress attempt, don't penalize with circuit breaker
+            log_warn "Quality checks failed - Claude will retry in same iteration"
+            cb_record_progress  # Reset no-progress counter since work was done
             return 0  # Continue to next iteration
             ;;
         api_limit)

@@ -18,6 +18,32 @@ Users need secure access to their accounts. Currently there is no authentication
 - [ ] Sessions persist across page refresh (token storage)
 - [ ] Invalid credentials show appropriate error message
 
+## Execution Guidelines
+
+**Use background agents for parallel sub-tasks.** When implementing stories, use the Task tool with `run_in_background: true` to maximize throughput without cluttering the output stream:
+
+1. **Background agents for independent work:**
+   - `Explore` agent - Codebase research, finding related files/patterns
+   - `Bash` agent - Running tests, builds, type checks in background
+   - `general-purpose` agent - Complex multi-step research tasks
+
+2. **When to use background agents:**
+   - Long-running tests while you continue implementing
+   - Searching large codebases for patterns
+   - Build/typecheck validation while moving to next file
+   - Exploring multiple subsystems in parallel
+
+3. **Example workflow:**
+   ```
+   Before implementing a story:
+   1. Spawn background Explore agent: "Find all files related to X"
+   2. Spawn background Bash agent: "Run existing tests for module Y"
+   3. While agents run, read and edit the main files
+   4. Check agent results, incorporate findings
+   ```
+
+4. **Note:** Background agents write to output files (not the main stream), so they won't clutter the iteration log. Check results with `Read` tool when needed.
+
 ## Related Specs
 
 For detailed specifications, see the `specs/` directory:

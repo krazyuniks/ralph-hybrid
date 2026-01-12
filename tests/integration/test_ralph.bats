@@ -413,6 +413,53 @@ setup_feature_branch() {
     [ "$status" -eq 1 ]
 }
 
+@test "ralph run handles timeout and shows interrupted context" {
+    setup_feature_branch "feature/timeout-int"
+
+    # Create mock claude that sleeps longer than timeout
+    cat > "${TEST_TEMP_DIR}/bin/claude" << 'EOF'
+#!/bin/bash
+# Simulate work with some output then hang
+echo '{"type":"assistant","message":"Starting work..."}'
+sleep 30
+echo "Done!"
+EOF
+    chmod +x "${TEST_TEMP_DIR}/bin/claude"
+
+    # Create uncommitted changes to test WIP detection
+    echo "wip change" >> "${TEST_TEMP_DIR}/project/file.txt"
+
+    # Run with 5-second timeout (0.083 minutes)
+    # Note: timeout command accepts fractional minutes
+    run timeout 15 "$RALPH_SCRIPT" run -t 0.083 -n 1 --skip-preflight
+
+    # Should exit with timeout exit code (124 from timeout command or 1 from ralph)
+    # The key is it should show interrupted context
+    [[ "$output" =~ "timed out" ]] || [[ "$output" =~ "Iteration timed out" ]] || [[ "$output" =~ "INTERRUPTED" ]]
+}
+
+@test "ralph run timeout preserves uncommitted changes display" {
+    setup_feature_branch "feature/timeout-wip"
+
+    # Create mock claude that sleeps longer than timeout
+    cat > "${TEST_TEMP_DIR}/bin/claude" << 'EOF'
+#!/bin/bash
+echo '{"type":"assistant","message":"Working..."}'
+sleep 30
+EOF
+    chmod +x "${TEST_TEMP_DIR}/bin/claude"
+
+    # Create uncommitted file to verify WIP detection works with fix
+    echo "uncommitted content" > "${TEST_TEMP_DIR}/project/newfile.txt"
+
+    # Run with very short timeout
+    run timeout 15 "$RALPH_SCRIPT" run -t 0.083 -n 1 --skip-preflight
+
+    # Should show uncommitted changes without arithmetic errors
+    # This tests the grep -c fix - should NOT see "arithmetic syntax error"
+    [[ ! "$output" =~ "arithmetic syntax error" ]]
+}
+
 #=============================================================================
 # Run Command - Circuit Breaker Tests
 #=============================================================================

@@ -637,7 +637,9 @@ ed_check() {
                         prd_rollback_passes "$prd_file" "$passes_before"
                     fi
                 fi
-                echo "continue"
+                # Return special signal so circuit breaker doesn't count this as "no progress"
+                # Claude DID complete work, it just failed quality validation
+                echo "quality_check_failed"
                 return 0
             fi
         else
@@ -820,6 +822,62 @@ ed_extract_last_tool() {
     return 0
 }
 
+# Extract context usage information from Claude JSON stream output
+# Arguments:
+#   $1 - Claude output (JSON stream)
+# Returns:
+#   Prints formatted context usage summary with percentage (e.g., "68% (135k/200k)")
+#   Returns empty if no usage data found
+#   Always returns 0
+ed_get_context_usage() {
+    local output="${1:-}"
+    # Claude's context window size (200k tokens)
+    local context_limit="${RALPH_CONTEXT_LIMIT:-200000}"
+
+    if [[ -z "$output" ]]; then
+        return 0
+    fi
+
+    # Find the last usage block in the output
+    # Format: "usage":{"input_tokens":N,"cache_read_input_tokens":N,...,"output_tokens":N}
+    local usage_line
+    usage_line=$(echo "$output" | grep '"usage"' 2>/dev/null | tail -1 || true)
+
+    if [[ -z "$usage_line" ]]; then
+        return 0
+    fi
+
+    # Extract token counts using grep and sed
+    local input_tokens cache_read_tokens output_tokens
+    input_tokens=$(echo "$usage_line" | grep -o '"input_tokens":[0-9]*' | tail -1 | sed 's/"input_tokens"://' || echo "0")
+    cache_read_tokens=$(echo "$usage_line" | grep -o '"cache_read_input_tokens":[0-9]*' | tail -1 | sed 's/"cache_read_input_tokens"://' || echo "0")
+    output_tokens=$(echo "$usage_line" | grep -o '"output_tokens":[0-9]*' | tail -1 | sed 's/"output_tokens"://' || echo "0")
+
+    # Total input context = input_tokens + cache_read_tokens
+    local total_input=0
+    [[ -n "$input_tokens" ]] && total_input=$((total_input + input_tokens))
+    [[ -n "$cache_read_tokens" ]] && total_input=$((total_input + cache_read_tokens))
+
+    if [[ "$total_input" -eq 0 ]] && [[ "${output_tokens:-0}" -eq 0 ]]; then
+        return 0
+    fi
+
+    # Calculate percentage of context used
+    local percent=$((total_input * 100 / context_limit))
+
+    # Format as human-readable (k for thousands)
+    local input_display limit_display
+    if [[ "$total_input" -ge 1000 ]]; then
+        input_display="$((total_input / 1000))k"
+    else
+        input_display="$total_input"
+    fi
+    limit_display="$((context_limit / 1000))k"
+
+    echo "${percent}% (${input_display}/${limit_display})"
+    return 0
+}
+
 # Get uncommitted changes summary from git
 # Arguments: none
 # Returns:
@@ -849,27 +907,29 @@ ed_get_uncommitted_changes() {
     #   "MM file.txt"  - Modified, staged, then modified again
     # Note: \| is alternation in basic regex (grep without -E)
     local modified added deleted untracked
-    modified=$(echo "$status_output" | grep -c '^ M\|^M \|^MM' 2>/dev/null || echo "0")
+    # Note: grep -c returns exit code 1 when no matches, but still outputs "0"
+    # We use "|| true" to ignore exit code WITHOUT adding extra output
+    modified=$(echo "$status_output" | grep -c '^ M\|^M \|^MM' 2>/dev/null) || true
 
     # Pattern: ^A \|^AM
     # Matches: Newly added/staged files
     # Examples:
     #   "A  file.txt"  - New file staged for commit
     #   "AM file.txt"  - New file staged, then modified
-    added=$(echo "$status_output" | grep -c '^A \|^AM' 2>/dev/null || echo "0")
+    added=$(echo "$status_output" | grep -c '^A \|^AM' 2>/dev/null) || true
 
     # Pattern: ^ D\|^D
     # Matches: Deleted files
     # Examples:
     #   " D file.txt"  - Deleted from working tree (not staged)
     #   "D  file.txt"  - Deletion staged for commit
-    deleted=$(echo "$status_output" | grep -c '^ D\|^D ' 2>/dev/null || echo "0")
+    deleted=$(echo "$status_output" | grep -c '^ D\|^D ' 2>/dev/null) || true
 
     # Pattern: ^??
     # Matches: Untracked files
     # Example: "?? newfile.txt" - File not tracked by git
     # Note: Double question mark is git's indicator for untracked
-    untracked=$(echo "$status_output" | grep -c '^??' 2>/dev/null || echo "0")
+    untracked=$(echo "$status_output" | grep -c '^??' 2>/dev/null) || true
 
     local parts=()
     [[ "$modified" -gt 0 ]] && parts+=("${modified} modified")
@@ -957,13 +1017,20 @@ ed_show_interrupted_context() {
         fi
     fi
 
-    # Last tool action
+    # Last tool action and context usage
     if [[ -n "$claude_output" ]]; then
         local last_tool
         last_tool=$(ed_extract_last_tool "$claude_output")
         if [[ -n "$last_tool" ]]; then
             echo "" >&2
             echo "Last Action:    ${last_tool}" >&2
+        fi
+
+        # Context usage (helps decide whether to extend timeout)
+        local context_usage
+        context_usage=$(ed_get_context_usage "$claude_output")
+        if [[ -n "$context_usage" ]]; then
+            echo "Context Usage:  ${context_usage}" >&2
         fi
     fi
 

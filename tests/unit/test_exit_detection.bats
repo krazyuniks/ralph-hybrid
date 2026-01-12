@@ -675,6 +675,51 @@ EOF
 }
 
 #=============================================================================
+# ed_get_context_usage Tests
+#=============================================================================
+
+@test "ed_get_context_usage shows percentage and token counts" {
+    local output='{"type":"assistant","usage":{"input_tokens":100,"cache_read_input_tokens":50000,"output_tokens":2000}}'
+    run ed_get_context_usage "$output"
+    [ "$status" -eq 0 ]
+    # 50100 / 200000 = 25%
+    [[ "$output" =~ "25%" ]]
+    [[ "$output" =~ "50k/200k" ]]
+}
+
+@test "ed_get_context_usage handles large token counts" {
+    local output='{"type":"assistant","usage":{"input_tokens":1,"cache_read_input_tokens":135922,"output_tokens":3}}'
+    run ed_get_context_usage "$output"
+    [ "$status" -eq 0 ]
+    # 135923 / 200000 = 67%
+    [[ "$output" =~ "67%" ]]
+    [[ "$output" =~ "135k/200k" ]]
+}
+
+@test "ed_get_context_usage returns empty for no usage data" {
+    local output='{"type":"assistant","message":"Hello"}'
+    run ed_get_context_usage "$output"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "ed_get_context_usage returns empty for empty input" {
+    run ed_get_context_usage ""
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "ed_get_context_usage uses last usage block from multiple lines" {
+    local output='{"usage":{"input_tokens":1,"cache_read_input_tokens":10000,"output_tokens":100}}
+{"usage":{"input_tokens":1,"cache_read_input_tokens":50000,"output_tokens":500}}'
+    run ed_get_context_usage "$output"
+    [ "$status" -eq 0 ]
+    # Should use last line (50k, not 10k) = 25%
+    [[ "$output" =~ "25%" ]]
+    [[ "$output" =~ "50k/200k" ]]
+}
+
+#=============================================================================
 # ed_get_uncommitted_changes Tests
 #=============================================================================
 
@@ -731,6 +776,35 @@ EOF
     run ed_get_uncommitted_changes
     [ "$status" -eq 0 ]
     [[ "$output" =~ "untracked" ]]
+}
+
+@test "ed_get_uncommitted_changes handles only-untracked without arithmetic error" {
+    # Regression test: grep -c returns exit code 1 when no matches, but outputs "0"
+    # Old code: `grep -c ... || echo "0"` produced "0\n0" causing arithmetic error
+    # Fixed code: `grep -c ... ) || true` ignores exit code without extra output
+    local temp_repo="$TEST_TEMP_DIR/repo"
+    mkdir -p "$temp_repo"
+    cd "$temp_repo"
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "Test"
+    echo "test" > file.txt
+    git add file.txt
+    git commit -q -m "initial"
+
+    # Create ONLY untracked files (no modified, no added, no deleted)
+    # This triggers the regression where modified=0, added=0, deleted=0
+    # but each grep -c returned exit code 1
+    echo "new1" > untracked1.txt
+    echo "new2" > untracked2.txt
+
+    run ed_get_uncommitted_changes
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2 untracked" ]]
+    # Should NOT contain "modified" or "added" or "deleted"
+    [[ ! "$output" =~ "modified" ]]
+    [[ ! "$output" =~ "added" ]]
+    [[ ! "$output" =~ "deleted" ]]
 }
 
 #=============================================================================
