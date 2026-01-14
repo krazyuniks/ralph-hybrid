@@ -60,23 +60,6 @@ qc_get_command() {
     return 0
 }
 
-# Get the autofix command from config
-# Arguments: none
-# Returns: The autofix command, empty if not configured
-qc_get_autofix_command() {
-    local autofix_cmd
-
-    # Try to get quality_checks.autofix from config
-    autofix_cmd=$(cfg_get_value "quality_checks.autofix" 2>/dev/null || true)
-    if [[ -n "$autofix_cmd" ]]; then
-        echo "$autofix_cmd"
-        return 0
-    fi
-
-    # No autofix configured
-    return 0
-}
-
 # Check if quality checks are configured
 # Arguments: none
 # Returns: 0 if configured, 1 if not
@@ -86,59 +69,12 @@ qc_is_configured() {
     [[ -n "$cmd" ]]
 }
 
-# Check if autofix is configured
-# Arguments: none
-# Returns: 0 if configured, 1 if not
-qc_is_autofix_configured() {
-    local cmd
-    cmd=$(qc_get_autofix_command)
-    [[ -n "$cmd" ]]
-}
-
 #=============================================================================
 # Quality Check Execution
 #=============================================================================
 
-# Run autofix command to automatically fix lint/format errors
-# Arguments:
-#   $1 - Optional: Autofix command (defaults to configured command)
-# Returns:
-#   0 if autofix succeeds or is not configured
-#   1 if autofix fails
-qc_autofix() {
-    local autofix_command="${1:-}"
-
-    # Get command from config if not provided
-    if [[ -z "$autofix_command" ]]; then
-        autofix_command=$(qc_get_autofix_command)
-    fi
-
-    # If no autofix configured, skip silently
-    if [[ -z "$autofix_command" ]]; then
-        return 0
-    fi
-
-    log_info "Running autofix: $autofix_command"
-
-    # Run the autofix command
-    local autofix_output autofix_exit_code
-    autofix_output=$(eval "$autofix_command" 2>&1) || autofix_exit_code=$?
-    autofix_exit_code=${autofix_exit_code:-0}
-
-    if [[ $autofix_exit_code -eq 0 ]]; then
-        log_success "Autofix completed successfully"
-        return 0
-    else
-        log_warn "Autofix encountered issues (exit code: $autofix_exit_code)"
-        log_debug "Autofix output:"
-        echo "$autofix_output" | tail -20 >&2
-        # Don't fail - let quality checks determine if issues remain
-        return 0
-    fi
-}
-
 # Run quality checks and verify they pass
-# Automatically runs autofix first if configured
+# READ-ONLY - Ralph never modifies source code, only Claude does
 # Arguments:
 #   $1 - Optional: Quality check command (defaults to configured command)
 # Returns:
@@ -162,12 +98,9 @@ qc_run() {
         return 0
     fi
 
-    # Run autofix first (if configured) to automatically fix lint/format errors
-    qc_autofix
-
     log_info "Running quality checks: $qc_command"
 
-    # Run the quality check command
+    # Run the quality check command (READ-ONLY verification)
     local qc_output qc_exit_code
     qc_output=$(eval "$qc_command" 2>&1) || qc_exit_code=$?
     qc_exit_code=${qc_exit_code:-0}
@@ -180,7 +113,7 @@ qc_run() {
         log_error "Output:"
         echo "$qc_output" | tail -50 >&2
         log_error ""
-        log_error "Story cannot be marked as complete until quality checks pass."
+        log_error "Claude will see these errors and fix them in the next iteration."
         return 1
     fi
 }

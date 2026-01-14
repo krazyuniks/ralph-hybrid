@@ -603,18 +603,54 @@ ed_check() {
     # Priority 1: Check for completion promise in output
     # BUT only trust it if all stories are actually complete (prevents premature completion)
     if ed_check_promise "$output"; then
-        if [[ -n "$prd_file" ]] && ed_check_all_complete "$prd_file"; then
-            echo "complete"
-            return 0
-        else
-            log_warn "Completion promise detected but not all stories are complete - continuing"
+        if [[ -n "$prd_file" ]]; then
+            # Try to verify all complete (includes quality check)
+            local complete_check_output complete_check_exit
+            complete_check_output=$(ed_check_all_complete "$prd_file" 2>&1) || complete_check_exit=$?
+            complete_check_exit=${complete_check_exit:-0}
+
+            if [[ $complete_check_exit -eq 0 ]]; then
+                # Clear error file on success
+                local feature_dir
+                feature_dir=$(dirname "$prd_file")
+                rm -f "${feature_dir}/last_error.txt" 2>/dev/null || true
+                echo "complete"
+                return 0
+            else
+                log_warn "Completion promise detected but final quality checks failed"
+                # Save error for next iteration
+                local feature_dir
+                feature_dir=$(dirname "$prd_file")
+                cat > "${feature_dir}/last_error.txt" << EOF
+Final Quality Checks Failed
+===========================
+
+All stories are marked complete, but quality checks are failing.
+You claimed completion but the codebase does not pass quality checks.
+
+$complete_check_output
+
+You MUST fix these errors before the feature can be marked as truly complete.
+EOF
+                log_warn "Error feedback saved for next iteration"
+            fi
         fi
     fi
 
     # Priority 2: Check if all stories are complete (even without promise)
-    if [[ -n "$prd_file" ]] && ed_check_all_complete "$prd_file"; then
-        echo "complete"
-        return 0
+    if [[ -n "$prd_file" ]]; then
+        local complete_check_output complete_check_exit
+        complete_check_output=$(ed_check_all_complete "$prd_file" 2>&1) || complete_check_exit=$?
+        complete_check_exit=${complete_check_exit:-0}
+
+        if [[ $complete_check_exit -eq 0 ]]; then
+            # Clear error file on success
+            local feature_dir
+            feature_dir=$(dirname "$prd_file")
+            rm -f "${feature_dir}/last_error.txt" 2>/dev/null || true
+            echo "complete"
+            return 0
+        fi
     fi
 
     # Priority 3: Check for story completion signal (one story done)
@@ -650,13 +686,54 @@ ed_check() {
 
         # Verify quality checks before accepting story completion
         if declare -f qc_run &>/dev/null && qc_is_configured; then
-            if qc_run; then
+            # Capture quality check output
+            local qc_output qc_exit_code
+            qc_output=$(qc_run 2>&1) || qc_exit_code=$?
+            qc_exit_code=${qc_exit_code:-0}
+
+            if [[ $qc_exit_code -eq 0 ]]; then
                 log_info "Story completion verified - quality checks passed"
+                # Clear any previous error file since checks passed
+                local feature_dir
+                feature_dir=$(dirname "$prd_file")
+                rm -f "${feature_dir}/last_error.txt" 2>/dev/null || true
                 echo "story_complete"
                 return 0
             else
                 log_error "Story marked complete but quality checks FAILED!"
                 log_error "Claude should fix issues. Continuing iteration..."
+
+                # Save error output to last_error.txt for next iteration's prompt
+                local feature_dir
+                feature_dir=$(dirname "$prd_file")
+                cat > "${feature_dir}/last_error.txt" << EOF
+Quality Checks Failed
+=====================
+
+Exit Code: $qc_exit_code
+
+Error Output:
+-------------
+$qc_output
+
+What This Means:
+----------------
+Your implementation does not pass the project's quality checks. You MUST fix
+all errors listed above before the story can be marked as complete.
+
+Common fixes:
+- Run autofix tools if available (ruff check --fix, eslint --fix, etc.)
+- Fix lint errors manually
+- Fix type errors
+- Ensure tests pass
+- Fix compilation errors
+
+Review the error messages carefully and adjust your code accordingly.
+EOF
+
+                log_warn "Error feedback saved to ${feature_dir}/last_error.txt"
+                log_warn "Next iteration will include error details in prompt"
+
                 # Rollback the story's passes field since quality checks failed
                 if [[ -n "$passes_before" ]] && [[ -n "$prd_file" ]]; then
                     if declare -f prd_rollback_passes &>/dev/null; then

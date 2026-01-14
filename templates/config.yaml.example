@@ -81,15 +81,20 @@ display:
 #=============================================================================
 # Project-Specific Quality Checks (override in project config)
 #=============================================================================
-# quality_checks:
-#   # Autofix command runs BEFORE quality checks to fix lint/format errors
-#   # Examples:
-#   #   Python: "ruff check --fix && ruff format"
-#   #   TypeScript: "npm run lint:fix && npm run format"
-#   #   Rust: "cargo fmt && cargo clippy --fix --allow-dirty"
-#   autofix: "ruff check --fix && ruff format"
+# IMPORTANT: Quality checks should be READ-ONLY verification commands.
+# Ralph never modifies source code - only Claude does.
+# If checks fail, Ralph shows Claude the errors and Claude fixes them.
 #
-#   # Quality check commands run AFTER autofix to verify everything passes
-#   backend: "docker compose exec backend pytest tests/ && just check-backend"
-#   frontend: "docker compose exec frontend pnpm check && just check-frontend"
+# quality_checks:
+#   # Single command that verifies everything (recommended)
 #   all: "just check"
+#
+#   # Or separate commands for different parts
+#   backend: "docker compose exec backend pytest tests/ && ruff check ."
+#   frontend: "docker compose exec frontend pnpm check"
+#
+#   # Examples by language/framework:
+#   # Python: "ruff check . && mypy ."
+#   # TypeScript: "npm run lint && npm run typecheck"
+#   # Rust: "cargo check && cargo clippy && cargo fmt --check"
+#   # Go: "go test ./... && golangci-lint run"

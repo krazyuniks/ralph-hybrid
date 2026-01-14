@@ -15,15 +15,14 @@ You have been given:
 
 ## Your Workflow
 
-### 1. Assess Current State
-- Read prd.json to find user stories where `passes: false`
-- Read progress.txt to understand what's been attempted
-- **Check specs/ directory for detailed requirements** (see "Using Spec Files" below)
+### 1. Find Next Story (QUICK - 1 tool call)
+- prd.json is provided above - read it to find first story where `passes: false`
+- That's your story - no need to explore or discover anything else
 
-### 2. Select Next Story
-- Choose the highest priority story (lowest `priority` number) where `passes: false`
-- If priority is equal, choose based on dependencies
-- Work on ONE story only
+### 2. Implement (FOCUS HERE - most of your work)
+- Directories already exist (scripts/, tests/, src/)
+- All configuration is already done
+- Just write the code for the story
 
 ### 3. Implement Using TDD
 
@@ -34,92 +33,49 @@ You have been given:
 4. Run tests to confirm they pass
 5. Refactor if needed (tests must stay green)
 
-### 4. Run Quality Checks (Required Before Commit)
+### 3. Quality Checks (YOU handle this - Ralph only verifies)
 
-Before committing, you MUST run all available quality checks:
+**IMPORTANT:** You are responsible for ensuring code quality.
 
-**Discover available commands:**
-- Check `package.json` scripts for: `lint`, `typecheck`, `type-check`, `check`, `format:check`
-- Check `Cargo.toml` for Rust projects (use `cargo check`, `cargo clippy`, `cargo fmt --check`)
-- Check `pyproject.toml` or `setup.py` for Python (use `ruff check`, `mypy`, `black --check`)
-- Check `Makefile` for common targets like `lint`, `check`, `fmt`
-- Check existing CI workflows in `.github/workflows/` to see what commands CI runs
+**Before committing:**
+1. Run any linters/formatters the project uses (check pyproject.toml, package.json, etc.)
+2. Fix any issues they report
+3. Commit your code
 
-**Run the quality checks:**
-```bash
-# Examples by ecosystem (run what's available in the project):
-npm run lint           # JavaScript/TypeScript linting
-npm run typecheck      # TypeScript type checking
-npm run format:check   # Formatting verification
-cargo check            # Rust compilation check
-cargo clippy           # Rust linting
-cargo fmt --check      # Rust formatting
-ruff check .           # Python linting
-mypy .                 # Python type checking
-make lint              # Makefile targets
-```
+**After you commit:**
+- Ralph runs read-only quality checks to verify
+- If checks fail, you'll see "⚠️ PREVIOUS ATTEMPT FAILED" with exact errors
+- Fix the issues and commit again
 
-**If quality checks fail:**
-1. Fix the issues reported by the linter/type checker
-2. Re-run the quality checks until they pass
-3. Only proceed to commit once ALL checks pass
+**Ralph never modifies your code** - you have full control.
 
-**Do NOT skip this step.** Quality checks catch issues that would fail CI.
+### 4. Commit & Update (STREAMLINED - 3 commands)
 
-### 5. Commit & Update
-
-If all checks pass:
-
-1. **Commit your changes:**
+1. **Commit your code:**
    ```bash
    git add -A
    git commit -m "feat: [STORY-ID] - [Story Title]"
    ```
 
-2. **Verify clean working tree:**
-   ```bash
-   git status --porcelain
-   ```
-   - If output is empty, proceed to next step
-   - If files remain, run `git add -A && git commit --amend --no-edit` to include them
-
-3. **Update prd.json:**
+2. **Update prd.json:**
    - Set `passes: true` for the completed story
-   - Add any notes to the `notes` field
+   - Add brief notes if relevant
 
-4. **Append to progress.txt:**
+3. **Update progress.txt:**
    ```
    ---
    Iteration: [N]
-   Date: [ISO timestamp]
    Story: [ID] - [Title]
    Status: complete
-   Files Changed:
-     - path/to/file1.py
-     - path/to/file2.py
-   Tests Added:
-     - test_function_name
-   Learnings:
-     - [What you discovered]
-     - [Patterns found]
-     - [Gotchas encountered]
    ```
 
-5. **Commit tracking files:**
+4. **Commit tracking:**
    ```bash
    git add .ralph/
    git commit -m "chore: Update progress for [STORY-ID]"
    ```
 
-6. **Rebase on main:**
-   ```bash
-   git fetch origin main
-   git rebase origin/main
-   ```
-   - If conflicts occur, resolve them and `git rebase --continue`
-   - If rebase fails and cannot be resolved, run `git rebase --abort`, document the issue in progress.txt, and continue to signal completion
-
-### 6. Signal Completion and STOP
+### 5. Signal Completion and STOP
 
 **After completing the story, you MUST signal and stop immediately:**
 

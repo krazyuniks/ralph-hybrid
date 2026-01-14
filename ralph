@@ -62,7 +62,9 @@ Commands:
   run [options]          Execute the development loop
   status                 Show current feature status
   monitor                Attach to monitoring dashboard for existing run
+  kill                   Kill the Ralph process running in this project
   archive                Archive a completed feature
+  restore                Restore a feature from archive
   validate               Run preflight checks without starting loop
   setup                  Install Claude commands (/ralph-plan, etc.) to project
   import <file>          Import PRD from Markdown or JSON file
@@ -290,6 +292,102 @@ cmd_monitor() {
 }
 
 #=============================================================================
+# Kill Command
+#=============================================================================
+
+cmd_kill() {
+    # No arguments expected
+    if [[ $# -gt 0 ]]; then
+        log_error "Unknown option: $1"
+        return 1
+    fi
+
+    # Check git repo first
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Get feature directory from current git branch
+    local feature_dir
+    feature_dir=$(get_feature_dir) || return 1
+
+    # Get absolute path
+    local abs_feature_dir
+    abs_feature_dir="$(cd "$(dirname "$feature_dir")" && pwd)/$(basename "$feature_dir")"
+
+    # Generate lockfile name
+    local filename
+    filename="${abs_feature_dir//\//__}"
+    filename="${filename#__}.lock"
+    local lockfile="${HOME}/.ralph/lockfiles/${filename}"
+
+    # Check if lockfile exists
+    if [[ ! -f "$lockfile" ]]; then
+        log_error "No Ralph process found for this project"
+        log_info "Feature: $abs_feature_dir"
+        log_info "Expected lockfile: $lockfile"
+        return 1
+    fi
+
+    # Read PID from lockfile
+    local pid
+    pid=$(head -1 "$lockfile" 2>/dev/null)
+
+    if [[ -z "$pid" ]]; then
+        log_error "Could not read PID from lockfile"
+        rm -f "$lockfile"
+        return 1
+    fi
+
+    # Check if process is running
+    if ! kill -0 "$pid" 2>/dev/null; then
+        log_warn "Process $pid is not running (stale lock)"
+        rm -f "$lockfile"
+        log_info "Cleaned up stale lockfile"
+        return 0
+    fi
+
+    # Kill the process and its children
+    log_info "Killing Ralph process $pid and its children..."
+
+    # Get all child PIDs
+    local children
+    children=$(pgrep -P "$pid" 2>/dev/null || true)
+
+    # Kill main process
+    kill -TERM "$pid" 2>/dev/null || true
+    sleep 0.5
+
+    # Kill children if still running
+    if [[ -n "$children" ]]; then
+        echo "$children" | xargs kill -TERM 2>/dev/null || true
+        sleep 0.5
+        echo "$children" | xargs kill -KILL 2>/dev/null || true
+    fi
+
+    # Force kill main process if still alive
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -KILL "$pid" 2>/dev/null || true
+    fi
+
+    # Also kill any remaining claude processes
+    pkill -f "claude -p --permission-mode" 2>/dev/null || true
+
+    # Remove lockfile
+    rm -f "$lockfile"
+
+    # Verify it's dead
+    sleep 0.3
+    if kill -0 "$pid" 2>/dev/null; then
+        log_error "Failed to kill process $pid"
+        return 1
+    else
+        log_success "Successfully killed Ralph process $pid"
+        return 0
+    fi
+}
+
+#=============================================================================
 # Validate Command
 #=============================================================================
 
@@ -308,6 +406,98 @@ cmd_validate() {
     # Run all preflight checks (feature_dir auto-detected from branch)
     pf_run_all_checks
     return $?
+}
+
+#=============================================================================
+# Restore Command
+#=============================================================================
+
+cmd_restore() {
+    # Optional: archive name or timestamp
+    local archive_name="${1:-}"
+
+    # Check git repo first
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Get feature directory from current git branch
+    local feature_dir
+    feature_dir=$(get_feature_dir) || return 1
+
+    local ralph_dir
+    ralph_dir=$(get_ralph_dir)
+
+    local feature_name
+    feature_name=$(basename "$feature_dir")
+
+    local archive_dir="${ralph_dir}/archive"
+
+    # Check if archive directory exists
+    if [[ ! -d "$archive_dir" ]]; then
+        log_error "No archive directory found at: $archive_dir"
+        return 1
+    fi
+
+    # Find matching archives
+    local matching_archives=()
+    if [[ -n "$archive_name" ]]; then
+        # User specified an archive
+        if [[ -d "${archive_dir}/${archive_name}" ]]; then
+            matching_archives=("${archive_dir}/${archive_name}")
+        fi
+    else
+        # Find all archives for this feature (sorted by date, newest first)
+        while IFS= read -r archive; do
+            matching_archives+=("$archive")
+        done < <(find "$archive_dir" -maxdepth 1 -type d -name "*-${feature_name}" | sort -r)
+    fi
+
+    # Check if we found any archives
+    if [[ ${#matching_archives[@]} -eq 0 ]]; then
+        log_error "No archives found for feature: $feature_name"
+        log_info "Archive directory: $archive_dir"
+        return 1
+    fi
+
+    # Use the most recent archive
+    local source_archive="${matching_archives[0]}"
+    local archive_basename
+    archive_basename=$(basename "$source_archive")
+
+    log_info "Restoring from archive: $archive_basename"
+
+    # Check if feature directory already exists
+    if [[ -d "$feature_dir" ]]; then
+        log_warn "Feature directory already exists: $feature_dir"
+        echo -n "Overwrite? [y/N]: "
+        read -r response
+        response=$(echo "$response" | tr '[:upper:]' '[:lower:]')
+        if [[ "$response" != "y" ]] && [[ "$response" != "yes" ]]; then
+            log_info "Restore cancelled"
+            return 1
+        fi
+        rm -rf "$feature_dir"
+    fi
+
+    # Create feature directory
+    mkdir -p "$feature_dir"
+
+    # Copy files from archive
+    cp -r "$source_archive"/* "$feature_dir/" 2>/dev/null || true
+
+    # Restore spec.md and config from git if available
+    git checkout HEAD -- "${feature_dir}/spec.md" "${feature_dir}/config.yaml" 2>/dev/null || true
+    git checkout HEAD -- ".ralph/config.yaml" 2>/dev/null || true
+
+    log_success "Restored feature from archive"
+    log_info "Feature folder: $feature_dir"
+
+    # Show status
+    echo ""
+    cmd_status
+
+    return 0
 }
 
 #=============================================================================
@@ -669,6 +859,7 @@ build_prompt() {
     local progress_file="${feature_dir}/progress.txt"
     local specs_dir="${feature_dir}/specs"
     local default_prompt="${feature_dir}/prompt.md"
+    local last_error_file="${feature_dir}/last_error.txt"
 
     # Determine which prompt to use
     local prompt_path
@@ -683,6 +874,25 @@ build_prompt() {
     # Build the combined prompt with inline file contents
     # Note: @ file references don't work with claude -p mode, so we inline everything
     cat << EOF
+# CONTEXT - READ THIS FIRST
+
+**Working Directory:** \`$(pwd)\`
+
+**What's Already Done:**
+- Project structure exists (check with \`ls\` if needed, but only once)
+- Configuration files in place
+- \`.ralph/\` contains Ralph state files (DO NOT MODIFY)
+
+**Your Job:** Implement the next incomplete story from prd.json below.
+
+**Be Efficient:**
+- Don't explore unnecessarily
+- Don't read files that aren't relevant to the story
+- Focus on: read story → implement → commit → done
+- Ralph handles quality checks automatically
+
+---
+
 $(cat "$prompt_path")
 
 ---
@@ -721,6 +931,25 @@ $(
         done
     else
         echo "(no specs directory)"
+    fi
+)
+
+---
+
+$(
+    # Include last error feedback if it exists
+    if [[ -f "$last_error_file" ]]; then
+        echo "## ⚠️ PREVIOUS ATTEMPT FAILED - YOU MUST FIX THESE ERRORS"
+        echo ""
+        echo "The previous iteration failed with the following errors:"
+        echo ""
+        echo '```'
+        cat "$last_error_file"
+        echo '```'
+        echo ""
+        echo "**CRITICAL**: You MUST fix all these errors before marking the story complete."
+        echo "Review the error output carefully and adjust your implementation."
+        echo ""
     fi
 )
 EOF
@@ -862,6 +1091,9 @@ _display_title_bar() {
 
 # Global to track the countdown timer background process
 _COUNTDOWN_TIMER_PID=""
+
+# Global to track the claude process PID
+_CLAUDE_PROCESS_PID=""
 
 # Get current cursor row position
 # Output: row number (1-based)
@@ -1105,9 +1337,12 @@ _run_invoke_claude() {
     set +e
     # Use stream-json for real-time visibility, tee to log file
     # Parse JSON stream to show activity while also saving raw output
-    echo "$prompt_content" | $timeout_cmd "${RALPH_TIMEOUT_MINUTES}m" \
-        claude -p $claude_args --output-format stream-json --verbose 2>&1 | \
-        tee -a "$log_file" | \
+    # Run in background to allow proper signal handling
+    (
+        echo "$prompt_content" | $timeout_cmd "${RALPH_TIMEOUT_MINUTES}m" \
+            claude -p $claude_args --output-format stream-json --verbose 2>&1 | \
+            tee -a "$log_file"
+    ) | \
         {
             # Scrolling window - keep last N lines visible
             declare -a buffer=()
@@ -1258,8 +1493,18 @@ _run_handle_completion() {
             fi
 
             if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
-                log_info "Archiving feature..."
-                _run_archive_with_deferred_check "$prd_file"
+                # Prompt user to archive
+                echo ""
+                read -r -p "Archive now? [y/N] " response
+                case "$response" in
+                    [yY][eE][sS]|[yY])
+                        log_info "Archiving feature..."
+                        _run_archive_with_deferred_check "$prd_file"
+                        ;;
+                    *)
+                        log_info "Skipping archive. You can run 'ralph archive' later."
+                        ;;
+                esac
             fi
             return "$RALPH_EXIT_COMPLETE"  # Special code for completion
             ;;
@@ -1502,8 +1747,18 @@ cmd_run() {
     if all_stories_complete "$RUN_PRD_FILE"; then
         log_success "All stories already complete!"
         if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
-            log_info "Archiving feature..."
-            _run_archive_with_deferred_check "$RUN_PRD_FILE"
+            # Prompt user to archive
+            echo ""
+            read -r -p "Archive now? [y/N] " response
+            case "$response" in
+                [yY][eE][sS]|[yY])
+                    log_info "Archiving feature..."
+                    _run_archive_with_deferred_check "$RUN_PRD_FILE"
+                    ;;
+                *)
+                    log_info "Skipping archive. You can run 'ralph archive' later."
+                    ;;
+            esac
         fi
         lf_release
         return 0
@@ -1633,8 +1888,16 @@ main() {
             cmd_monitor "$@"
             return $?
             ;;
+        kill)
+            cmd_kill "$@"
+            return $?
+            ;;
         archive)
             cmd_archive "$@"
+            return $?
+            ;;
+        restore)
+            cmd_restore "$@"
             return $?
             ;;
         validate)
@@ -1664,31 +1927,47 @@ main() {
 
 # Cleanup function to kill child processes
 cleanup() {
+    # Disable the trap immediately to prevent recursive calls
+    trap - INT TERM
+
     # Show cursor again (in case we were in scrolling window)
     printf '\e[?25h' 2>/dev/null || true
     echo "" 2>/dev/null || true
-    log_warn "Interrupted by user"
+
+    # Use logging if available, otherwise just echo
+    if declare -f log_warn &>/dev/null; then
+        log_warn "Interrupted by user - cleaning up..."
+    else
+        echo "Interrupted by user - cleaning up..." >&2
+    fi
 
     # Stop countdown timer if running
     _stop_countdown_timer 2>/dev/null || true
 
-    # Release lockfile
-    lf_release 2>/dev/null || true
-
-    # Get our process group ID
-    local pgid
-    pgid=$(ps -o pgid= -p $$ | tr -d ' ')
-
-    # Kill entire process group (includes all subshells)
-    if [[ -n "$pgid" ]]; then
-        kill -TERM -"$pgid" 2>/dev/null || true
-        sleep 0.5
-        kill -KILL -"$pgid" 2>/dev/null || true
+    # Release lockfile FIRST (most important)
+    if declare -f lf_release &>/dev/null; then
+        lf_release 2>/dev/null || true
     fi
 
-    # Also kill any claude processes we spawned (backup)
+    # Kill all child processes (works on both Linux and macOS)
+    # pkill -P $$ kills all children of our PID
+    pkill -TERM -P $$ 2>/dev/null || true
+    sleep 0.2
+    pkill -KILL -P $$ 2>/dev/null || true
+
+    # Also kill any claude/timeout processes we spawned (backup method)
     pkill -f "claude -p --permission-mode" 2>/dev/null || true
     pkill -f "timeout.*claude" 2>/dev/null || true
+    pkill -f "gtimeout.*claude" 2>/dev/null || true
+
+    # macOS-specific: Use pgrep to find all descendants and kill them
+    local descendants
+    descendants=$(pgrep -P $$ 2>/dev/null || true)
+    if [[ -n "$descendants" ]]; then
+        kill -TERM $descendants 2>/dev/null || true
+        sleep 0.2
+        kill -KILL $descendants 2>/dev/null || true
+    fi
 
     exit "$RALPH_EXIT_INTERRUPT"
 }
