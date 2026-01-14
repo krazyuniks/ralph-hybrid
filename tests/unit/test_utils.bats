@@ -25,7 +25,7 @@ setup() {
     TEST_TEMP_DIR="$(mktemp -d)"
 
     # Create test config files
-    mkdir -p "$TEST_TEMP_DIR/.ralph"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid"
     mkdir -p "$TEST_TEMP_DIR/global"
 }
 
@@ -151,7 +151,7 @@ EOF
 
 @test "get_config_value reads from project config first" {
     # Create project config
-    cat > "$TEST_TEMP_DIR/.ralph/config.yaml" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/config.yaml" <<'EOF'
 defaults:
   max_iterations: 30
 EOF
@@ -160,7 +160,7 @@ EOF
 defaults:
   max_iterations: 20
 EOF
-    export RALPH_PROJECT_CONFIG="$TEST_TEMP_DIR/.ralph/config.yaml"
+    export RALPH_PROJECT_CONFIG="$TEST_TEMP_DIR/.ralph-hybrid/config.yaml"
     export RALPH_GLOBAL_CONFIG="$TEST_TEMP_DIR/global/config.yaml"
 
     run get_config_value "defaults.max_iterations"
@@ -174,7 +174,7 @@ EOF
 defaults:
   max_iterations: 20
 EOF
-    export RALPH_PROJECT_CONFIG="$TEST_TEMP_DIR/.ralph/config.yaml"  # doesn't exist
+    export RALPH_PROJECT_CONFIG="$TEST_TEMP_DIR/.ralph-hybrid/config.yaml"  # doesn't exist
     export RALPH_GLOBAL_CONFIG="$TEST_TEMP_DIR/global/config.yaml"
 
     run get_config_value "defaults.max_iterations"
@@ -183,14 +183,14 @@ EOF
 }
 
 @test "load_config sets RALPH_* environment variables" {
-    cat > "$TEST_TEMP_DIR/.ralph/config.yaml" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/config.yaml" <<'EOF'
 defaults:
   max_iterations: 25
   timeout_minutes: 10
 circuit_breaker:
   no_progress_threshold: 5
 EOF
-    export RALPH_PROJECT_CONFIG="$TEST_TEMP_DIR/.ralph/config.yaml"
+    export RALPH_PROJECT_CONFIG="$TEST_TEMP_DIR/.ralph-hybrid/config.yaml"
     export RALPH_GLOBAL_CONFIG="$TEST_TEMP_DIR/nonexistent/config.yaml"
 
     # Unset existing values to ensure clean test

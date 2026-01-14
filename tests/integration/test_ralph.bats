@@ -33,8 +33,8 @@ setup() {
 
     # Export test environment
     export PATH="${TEST_TEMP_DIR}/bin:$PATH"
-    export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph"
-    export RALPH_PROJECT_CONFIG="${TEST_TEMP_DIR}/project/.ralph/config.yaml"
+    export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph-hybrid"
+    export RALPH_PROJECT_CONFIG="${TEST_TEMP_DIR}/project/.ralph-hybrid/config.yaml"
     export RALPH_GLOBAL_CONFIG="${TEST_TEMP_DIR}/global/config.yaml"
 
     # Disable debug output in tests unless explicitly enabled
@@ -106,9 +106,9 @@ create_test_feature_folder() {
     # Convert branch name to folder name (slashes to dashes)
     local folder_name="${branch_name//\//-}"
 
-    mkdir -p "${TEST_TEMP_DIR}/project/.ralph/${folder_name}"
+    mkdir -p "${TEST_TEMP_DIR}/project/.ralph-hybrid/${folder_name}"
 
-    cat > "${TEST_TEMP_DIR}/project/.ralph/${folder_name}/prd.json" << EOF
+    cat > "${TEST_TEMP_DIR}/project/.ralph-hybrid/${folder_name}/prd.json" << EOF
 {
   "description": "Test feature for integration tests",
   "createdAt": "2026-01-09T12:00:00Z",
@@ -135,7 +135,7 @@ create_test_feature_folder() {
 }
 EOF
 
-    cat > "${TEST_TEMP_DIR}/project/.ralph/${folder_name}/spec.md" << 'EOF'
+    cat > "${TEST_TEMP_DIR}/project/.ralph-hybrid/${folder_name}/spec.md" << 'EOF'
 # Test Feature Spec
 
 ## Problem Statement
@@ -156,12 +156,12 @@ Test story 2
 Nothing
 EOF
 
-    cat > "${TEST_TEMP_DIR}/project/.ralph/${folder_name}/progress.txt" << EOF
+    cat > "${TEST_TEMP_DIR}/project/.ralph-hybrid/${folder_name}/progress.txt" << EOF
 # Progress Log: ${branch_name}
 # Started: 2026-01-09T12:00:00Z
 EOF
 
-    cat > "${TEST_TEMP_DIR}/project/.ralph/${folder_name}/prompt.md" << 'EOF'
+    cat > "${TEST_TEMP_DIR}/project/.ralph-hybrid/${folder_name}/prompt.md" << 'EOF'
 # Test Prompt
 You are a test agent.
 EOF
@@ -241,7 +241,7 @@ setup_feature_branch() {
 
     # Initialize circuit breaker state
     source "$PROJECT_ROOT/lib/circuit_breaker.sh"
-    export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph/feature-cb-status"
+    export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-cb-status"
     cb_init
 
     run "$RALPH_SCRIPT" status
@@ -280,11 +280,11 @@ setup_feature_branch() {
     [ "$status" -eq 0 ]
 
     # Check archive was created
-    [ -d ".ralph/archive" ]
+    [ -d ".ralph-hybrid/archive" ]
 
     # Check there's an archive with the feature name
     local archive_count
-    archive_count=$(ls -1 ".ralph/archive" 2>/dev/null | grep -c "archive-test" || echo "0")
+    archive_count=$(ls -1 ".ralph-hybrid/archive" 2>/dev/null | grep -c "archive-test" || echo "0")
     [ "$archive_count" -ge 1 ]
 }
 
@@ -295,7 +295,7 @@ setup_feature_branch() {
     [ "$status" -eq 0 ]
 
     # Original should be gone
-    [ ! -d ".ralph/feature-to-archive" ]
+    [ ! -d ".ralph-hybrid/feature-to-archive" ]
 }
 
 @test "ralph archive preserves prd.json and progress.txt" {
@@ -306,7 +306,7 @@ setup_feature_branch() {
 
     # Find the archive
     local archive_dir
-    archive_dir=$(ls -1d .ralph/archive/*-preserve-test 2>/dev/null | head -1)
+    archive_dir=$(ls -1d .ralph-hybrid/archive/*-preserve-test 2>/dev/null | head -1)
     [ -n "$archive_dir" ]
 
     # Check files exist
@@ -382,11 +382,11 @@ setup_feature_branch() {
     [ "$status" -eq 0 ]
 
     # Feature should be archived
-    [ ! -d ".ralph/feature-auto-archive" ]
+    [ ! -d ".ralph-hybrid/feature-auto-archive" ]
 
     # Archive should exist
     local archive_count
-    archive_count=$(ls -1 ".ralph/archive" 2>/dev/null | grep -c "auto-archive" || echo "0")
+    archive_count=$(ls -1 ".ralph-hybrid/archive" 2>/dev/null | grep -c "auto-archive" || echo "0")
     [ "$archive_count" -ge 1 ]
 }
 
@@ -398,7 +398,7 @@ setup_feature_branch() {
     [ "$status" -eq 0 ]
 
     # Feature should still exist
-    [ -d ".ralph/feature-no-archive" ]
+    [ -d ".ralph-hybrid/feature-no-archive" ]
 }
 
 #=============================================================================
@@ -481,7 +481,7 @@ EOF
     create_mock_claude_complete
 
     # Initialize with tripped state from a previous session
-    export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph/feature-reset-cb"
+    export RALPH_STATE_DIR="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-reset-cb"
     mkdir -p "$RALPH_STATE_DIR"
     cat > "${RALPH_STATE_DIR}/circuit_breaker.state" << 'EOF'
 NO_PROGRESS_COUNT=5
@@ -576,8 +576,8 @@ EOF
     git checkout -b "feature/nested/path/test" --quiet
 
     # Create folder with converted name
-    mkdir -p ".ralph/feature-nested-path-test"
-    cat > ".ralph/feature-nested-path-test/prd.json" << 'EOF'
+    mkdir -p ".ralph-hybrid/feature-nested-path-test"
+    cat > ".ralph-hybrid/feature-nested-path-test/prd.json" << 'EOF'
 {
   "description": "Test",
   "createdAt": "2026-01-09T12:00:00Z",
@@ -592,7 +592,7 @@ EOF
   ]
 }
 EOF
-    cat > ".ralph/feature-nested-path-test/spec.md" << 'EOF'
+    cat > ".ralph-hybrid/feature-nested-path-test/spec.md" << 'EOF'
 # Spec
 ## Problem Statement
 Test
@@ -604,7 +604,7 @@ Test
 ## Out of Scope
 None
 EOF
-    cat > ".ralph/feature-nested-path-test/progress.txt" << 'EOF'
+    cat > ".ralph-hybrid/feature-nested-path-test/progress.txt" << 'EOF'
 # Progress
 EOF
     create_mock_claude_complete
@@ -723,7 +723,7 @@ OUTER
     create_mock_claude "Done!"
 
     # Remove spec.md to break sync check
-    rm -f ".ralph/feature-skip-preflight/spec.md"
+    rm -f ".ralph-hybrid/feature-skip-preflight/spec.md"
 
     run "$RALPH_SCRIPT" run -n 1 --skip-preflight
     # Should run (even though preflight would fail) because we skipped it
@@ -743,7 +743,7 @@ OUTER
     setup_feature_branch "feature/validate-sync-fail"
 
     # Add a story to prd.json that's not in spec.md
-    cat > ".ralph/feature-validate-sync-fail/prd.json" << 'EOF'
+    cat > ".ralph-hybrid/feature-validate-sync-fail/prd.json" << 'EOF'
 {
   "description": "Test",
   "createdAt": "2026-01-09T12:00:00Z",

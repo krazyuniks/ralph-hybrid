@@ -12,7 +12,7 @@ setup() {
     export TEST_TEMP_DIR
 
     # Set up RALPH_STATE_DIR for state file isolation
-    RALPH_STATE_DIR="${TEST_TEMP_DIR}/.ralph"
+    RALPH_STATE_DIR="${TEST_TEMP_DIR}/.ralph-hybrid"
     export RALPH_STATE_DIR
     mkdir -p "$RALPH_STATE_DIR"
 

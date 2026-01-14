@@ -138,16 +138,16 @@ teardown() {
 
 @test "pf_check_feature_folder succeeds when folder exists" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
-    run pf_check_feature_folder "$TEST_TEMP_DIR/.ralph/test-feature"
+    run pf_check_feature_folder "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     [ "$status" -eq 0 ]
 }
 
 @test "pf_check_feature_folder fails when folder does not exist" {
     pf_reset
 
-    pf_check_feature_folder "$TEST_TEMP_DIR/.ralph/nonexistent" || true
+    pf_check_feature_folder "$TEST_TEMP_DIR/.ralph-hybrid/nonexistent" || true
     pf_has_errors
 }
 
@@ -157,51 +157,51 @@ teardown() {
 
 @test "pf_check_required_files succeeds when all files present" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    touch "$TEST_TEMP_DIR/.ralph/test-feature/spec.md"
-    touch "$TEST_TEMP_DIR/.ralph/test-feature/prd.json"
-    touch "$TEST_TEMP_DIR/.ralph/test-feature/progress.txt"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/progress.txt"
 
-    run pf_check_required_files "$TEST_TEMP_DIR/.ralph/test-feature"
+    run pf_check_required_files "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     [ "$status" -eq 0 ]
 }
 
 @test "pf_check_required_files fails when spec.md missing" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    touch "$TEST_TEMP_DIR/.ralph/test-feature/prd.json"
-    touch "$TEST_TEMP_DIR/.ralph/test-feature/progress.txt"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/progress.txt"
 
-    pf_check_required_files "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_required_files "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors
 }
 
 @test "pf_check_required_files fails when prd.json missing" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    touch "$TEST_TEMP_DIR/.ralph/test-feature/spec.md"
-    touch "$TEST_TEMP_DIR/.ralph/test-feature/progress.txt"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/progress.txt"
 
-    pf_check_required_files "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_required_files "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors
 }
 
 @test "pf_check_required_files fails when progress.txt missing" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    touch "$TEST_TEMP_DIR/.ralph/test-feature/spec.md"
-    touch "$TEST_TEMP_DIR/.ralph/test-feature/prd.json"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json"
 
-    pf_check_required_files "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_required_files "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors
 }
 
 @test "pf_check_required_files lists all missing files" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     # All files missing
 
-    pf_check_required_files "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_required_files "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors
 }
 
@@ -211,8 +211,8 @@ teardown() {
 
 @test "pf_check_prd_schema succeeds with valid prd.json" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "description": "Test feature",
   "createdAt": "2026-01-09T00:00:00Z",
@@ -230,37 +230,37 @@ teardown() {
 }
 EOF
 
-    run pf_check_prd_schema "$TEST_TEMP_DIR/.ralph/test-feature"
+    run pf_check_prd_schema "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     [ "$status" -eq 0 ]
 }
 
 @test "pf_check_prd_schema fails with invalid JSON" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    echo "not valid json" > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    echo "not valid json" > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json"
 
-    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors
 }
 
 @test "pf_check_prd_schema fails when userStories missing" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "description": "Test feature",
   "createdAt": "2026-01-09T00:00:00Z"
 }
 EOF
 
-    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors
 }
 
 @test "pf_check_prd_schema fails when userStories is not an array" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "description": "Test feature",
   "createdAt": "2026-01-09T00:00:00Z",
@@ -268,14 +268,14 @@ EOF
 }
 EOF
 
-    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors
 }
 
 @test "pf_check_prd_schema warns with empty userStories" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "description": "Test feature",
   "createdAt": "2026-01-09T00:00:00Z",
@@ -283,14 +283,14 @@ EOF
 }
 EOF
 
-    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph/test-feature"
+    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     pf_has_warnings
 }
 
 @test "pf_check_prd_schema fails when story missing id" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {
@@ -303,14 +303,14 @@ EOF
 }
 EOF
 
-    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors
 }
 
 @test "pf_check_prd_schema fails when story missing passes field" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {
@@ -323,7 +323,7 @@ EOF
 }
 EOF
 
-    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_prd_schema "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors
 }
 
@@ -333,8 +333,8 @@ EOF
 
 @test "pf_check_spec_structure succeeds with valid spec.md" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 # Test Feature
 
 ## Problem Statement
@@ -358,15 +358,15 @@ This is a test problem.
 - Nothing
 EOF
 
-    run pf_check_spec_structure "$TEST_TEMP_DIR/.ralph/test-feature"
+    run pf_check_spec_structure "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     [ "$status" -eq 0 ]
     ! pf_has_warnings
 }
 
 @test "pf_check_spec_structure warns when Problem Statement missing" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 # Test Feature
 
 ## Success Criteria
@@ -382,14 +382,14 @@ EOF
 - Nothing
 EOF
 
-    pf_check_spec_structure "$TEST_TEMP_DIR/.ralph/test-feature"
+    pf_check_spec_structure "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     pf_has_warnings
 }
 
 @test "pf_check_spec_structure warns when Success Criteria missing" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 # Test Feature
 
 ## Problem Statement
@@ -405,14 +405,14 @@ This is a test problem.
 - Nothing
 EOF
 
-    pf_check_spec_structure "$TEST_TEMP_DIR/.ralph/test-feature"
+    pf_check_spec_structure "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     pf_has_warnings
 }
 
 @test "pf_check_spec_structure warns when User Stories missing" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 # Test Feature
 
 ## Problem Statement
@@ -428,14 +428,14 @@ This is a test problem.
 - Nothing
 EOF
 
-    pf_check_spec_structure "$TEST_TEMP_DIR/.ralph/test-feature"
+    pf_check_spec_structure "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     pf_has_warnings
 }
 
 @test "pf_check_spec_structure warns when Out of Scope missing" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 # Test Feature
 
 ## Problem Statement
@@ -451,7 +451,7 @@ This is a test problem.
 ### STORY-001: Test Story
 EOF
 
-    pf_check_spec_structure "$TEST_TEMP_DIR/.ralph/test-feature"
+    pf_check_spec_structure "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     pf_has_warnings
 }
 
@@ -465,8 +465,8 @@ EOF
     git checkout -b feature/test-feature 2>/dev/null
 
     # Create feature folder and files
-    mkdir -p "$TEST_TEMP_DIR/.ralph/feature-test-feature"
-    cat > "$TEST_TEMP_DIR/.ralph/feature-test-feature/prd.json" <<'EOF'
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature"
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature/prd.json" <<'EOF'
 {
   "description": "Test feature",
   "createdAt": "2026-01-09T00:00:00Z",
@@ -482,7 +482,7 @@ EOF
   ]
 }
 EOF
-    cat > "$TEST_TEMP_DIR/.ralph/feature-test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature/spec.md" <<'EOF'
 # Test Feature
 
 ## Problem Statement
@@ -501,9 +501,9 @@ This is a test problem.
 
 - Nothing
 EOF
-    touch "$TEST_TEMP_DIR/.ralph/feature-test-feature/progress.txt"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature/progress.txt"
 
-    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-test-feature"
+    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature"
     [ "$status" -eq 0 ]
 }
 
@@ -512,7 +512,7 @@ EOF
     cd "$TEST_TEMP_DIR"
     git checkout -b feature/test-feature 2>/dev/null
 
-    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-test-feature"
+    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature"
     [ "$status" -eq 1 ]
 }
 
@@ -522,12 +522,12 @@ EOF
     git checkout -b feature/test-feature 2>/dev/null
 
     # Create feature folder with invalid prd.json
-    mkdir -p "$TEST_TEMP_DIR/.ralph/feature-test-feature"
-    echo "not valid json" > "$TEST_TEMP_DIR/.ralph/feature-test-feature/prd.json"
-    touch "$TEST_TEMP_DIR/.ralph/feature-test-feature/spec.md"
-    touch "$TEST_TEMP_DIR/.ralph/feature-test-feature/progress.txt"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature"
+    echo "not valid json" > "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature/prd.json"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature/spec.md"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature/progress.txt"
 
-    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-test-feature"
+    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph-hybrid/feature-test-feature"
     [ "$status" -eq 1 ]
 }
 
@@ -536,10 +536,10 @@ EOF
     cd "$TEST_TEMP_DIR"
     git checkout -b feature/sync-test 2>/dev/null
 
-    mkdir -p "$TEST_TEMP_DIR/.ralph/feature-sync-test"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/feature-sync-test"
 
     # Create prd.json with only STORY-001
-    cat > "$TEST_TEMP_DIR/.ralph/feature-sync-test/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/feature-sync-test/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""}
@@ -548,7 +548,7 @@ EOF
 EOF
 
     # Create spec.md with STORY-001 and STORY-002 (STORY-002 is MISSING in prd.json)
-    cat > "$TEST_TEMP_DIR/.ralph/feature-sync-test/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/feature-sync-test/spec.md" <<'EOF'
 ## Problem Statement
 Test
 ## Success Criteria
@@ -560,9 +560,9 @@ Test
 None
 EOF
 
-    touch "$TEST_TEMP_DIR/.ralph/feature-sync-test/progress.txt"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/feature-sync-test/progress.txt"
 
-    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-sync-test"
+    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph-hybrid/feature-sync-test"
     [ "$status" -eq 1 ]
     [[ "$output" == *"Sync check failed"* ]]
 }
@@ -572,10 +572,10 @@ EOF
     cd "$TEST_TEMP_DIR"
     git checkout -b feature/orphan-test 2>/dev/null
 
-    mkdir -p "$TEST_TEMP_DIR/.ralph/feature-orphan-test"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/feature-orphan-test"
 
     # Create prd.json with STORY-001 and completed STORY-002 (orphan)
-    cat > "$TEST_TEMP_DIR/.ralph/feature-orphan-test/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/feature-orphan-test/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
@@ -585,7 +585,7 @@ EOF
 EOF
 
     # Create spec.md with only STORY-001
-    cat > "$TEST_TEMP_DIR/.ralph/feature-orphan-test/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/feature-orphan-test/spec.md" <<'EOF'
 ## Problem Statement
 Test
 ## Success Criteria
@@ -596,9 +596,9 @@ Test
 None
 EOF
 
-    touch "$TEST_TEMP_DIR/.ralph/feature-orphan-test/progress.txt"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/feature-orphan-test/progress.txt"
 
-    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-orphan-test"
+    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph-hybrid/feature-orphan-test"
     [ "$status" -eq 1 ]
     [[ "$output" == *"Sync check failed"* ]] || [[ "$output" == *"Orphan check failed"* ]]
 }
@@ -608,9 +608,9 @@ EOF
     cd "$TEST_TEMP_DIR"
     git checkout -b feature/sync-ok 2>/dev/null
 
-    mkdir -p "$TEST_TEMP_DIR/.ralph/feature-sync-ok"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/feature-sync-ok"
 
-    cat > "$TEST_TEMP_DIR/.ralph/feature-sync-ok/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/feature-sync-ok/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""}
@@ -618,7 +618,7 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/feature-sync-ok/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/feature-sync-ok/spec.md" <<'EOF'
 ## Problem Statement
 Test
 ## Success Criteria
@@ -629,9 +629,9 @@ Test
 None
 EOF
 
-    touch "$TEST_TEMP_DIR/.ralph/feature-sync-ok/progress.txt"
+    touch "$TEST_TEMP_DIR/.ralph-hybrid/feature-sync-ok/progress.txt"
 
-    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph/feature-sync-ok"
+    run pf_run_all_checks "$TEST_TEMP_DIR/.ralph-hybrid/feature-sync-ok"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Sync check passed"* ]]
 }
@@ -654,10 +654,10 @@ EOF
 
 @test "pf_check_sync succeeds when spec.md and prd.json are in sync" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Create prd.json with two stories
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "description": "Test feature",
   "createdAt": "2026-01-09T00:00:00Z",
@@ -683,7 +683,7 @@ EOF
 EOF
 
     # Create matching spec.md with same stories
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 # Test Feature
 
 ## Problem Statement
@@ -713,17 +713,17 @@ This is a test problem.
 - Nothing
 EOF
 
-    run pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature"
+    run pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     [ "$status" -eq 0 ]
     ! pf_has_errors
 }
 
 @test "pf_check_sync warns (not errors) for incomplete orphan story" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Create prd.json with incomplete orphan story (passes: false)
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "description": "Test feature",
   "userStories": [
@@ -748,7 +748,7 @@ EOF
 EOF
 
     # Create spec.md with only STORY-001
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 # Test Feature
 
 ## User Stories
@@ -762,7 +762,7 @@ EOF
     # Per SPEC.md: Incomplete orphan is a WARNING, not an error
     # Call without run so we can check internal state
     local result=0
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || result=$?
+    pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || result=$?
     [ "$result" -eq 0 ]  # Should pass (warnings only)
     ! pf_has_errors      # No errors
     pf_has_warnings      # Has warning about orphan
@@ -770,10 +770,10 @@ EOF
 
 @test "pf_check_sync fails when prd.json has COMPLETED orphan story" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Create prd.json with COMPLETED orphan story (passes: true)
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "description": "Test feature",
   "userStories": [
@@ -798,7 +798,7 @@ EOF
 EOF
 
     # Create spec.md with only STORY-001
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 # Test Feature
 
 ## User Stories
@@ -809,16 +809,16 @@ EOF
 **I want to** test
 EOF
 
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors  # Should have error for completed orphan
 }
 
 @test "pf_check_sync shows orphan story ID in warning message for incomplete orphan" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Create prd.json with incomplete orphan story
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {
@@ -841,13 +841,13 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: First
 EOF
 
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature"
+    pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Check that warning message contains the orphan story ID
     local found_orphan=false
@@ -862,10 +862,10 @@ EOF
 
 @test "pf_check_sync shows completed orphan story ID in error message" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Create prd.json with COMPLETED orphan story
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {
@@ -888,13 +888,13 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: First
 EOF
 
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
 
     # Check that error message contains the orphan story ID
     local found_orphan=false
@@ -909,10 +909,10 @@ EOF
 
 @test "pf_check_sync fails when spec.md has story not in prd.json (missing)" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Create prd.json with only one story
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {
@@ -928,7 +928,7 @@ EOF
 EOF
 
     # Create spec.md with two stories (STORY-002 is missing from prd.json)
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: First story
@@ -940,15 +940,15 @@ EOF
 **As a** user
 EOF
 
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors
 }
 
 @test "pf_check_sync shows missing story ID in error message" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {
@@ -963,7 +963,7 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: First
@@ -971,7 +971,7 @@ EOF
 ### STORY-MISSING: Not in prd
 EOF
 
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
 
     # Check that error message contains the missing story ID
     local found_missing=false
@@ -986,10 +986,10 @@ EOF
 
 @test "pf_check_sync detects both orphan warnings and missing story errors" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # prd.json has STORY-001 and STORY-ORPHAN (incomplete)
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {
@@ -1013,7 +1013,7 @@ EOF
 EOF
 
     # spec.md has STORY-001 and STORY-MISSING
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: Common
@@ -1021,7 +1021,7 @@ EOF
 ### STORY-MISSING: Only in spec
 EOF
 
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
 
     # Should have error for missing story
     local error_count=${#_PREFLIGHT_ERRORS[@]}
@@ -1034,29 +1034,29 @@ EOF
 
 @test "pf_check_sync handles empty prd.json userStories" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": []
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: A story
 EOF
 
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors  # Should error because spec has story that prd doesn't
 }
 
 @test "pf_check_sync warns for incomplete orphan when spec.md has no stories" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {
@@ -1071,7 +1071,7 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 # Feature
 
 ## User Stories
@@ -1081,7 +1081,7 @@ EOF
 
     # Call without run so we can check internal state
     local result=0
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || result=$?
+    pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || result=$?
     [ "$result" -eq 0 ]  # Should pass (incomplete orphan is just a warning)
     ! pf_has_errors
     pf_has_warnings      # Should have warning about orphan
@@ -1089,9 +1089,9 @@ EOF
 
 @test "pf_check_sync errors for completed orphan when spec.md has no stories" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {
@@ -1106,7 +1106,7 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 # Feature
 
 ## User Stories
@@ -1114,16 +1114,16 @@ EOF
 No stories defined yet.
 EOF
 
-    pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors  # Should error because completed orphan work will be lost
 }
 
 @test "pf_check_sync extracts story IDs from various spec.md formats" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Test different heading formats
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: Standard format
@@ -1137,7 +1137,7 @@ EOF
 ### STORY-005:No space after colon
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-001", "title": "1", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
@@ -1149,7 +1149,7 @@ EOF
 }
 EOF
 
-    run pf_check_sync "$TEST_TEMP_DIR/.ralph/test-feature"
+    run pf_check_sync "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     [ "$status" -eq 0 ]
 }
 
@@ -1159,9 +1159,9 @@ EOF
 
 @test "pf_detect_orphans returns 0 when no orphans exist" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""}
@@ -1169,14 +1169,14 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: First
 EOF
 
     local result=0
-    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature" || result=$?
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || result=$?
     [ "$result" -eq 0 ]
     ! pf_has_errors
     ! pf_has_warnings
@@ -1184,10 +1184,10 @@ EOF
 
 @test "pf_detect_orphans warns (not errors) for orphan with passes:false" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Orphan story with passes: false
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
@@ -1196,7 +1196,7 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: First
@@ -1204,7 +1204,7 @@ EOF
 
     # Call without run so we can check internal state
     local result=0
-    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature" || result=$?
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || result=$?
     [ "$result" -eq 0 ]  # Should return 0 (warnings only)
     ! pf_has_errors      # Should NOT have errors
     pf_has_warnings      # Should have warnings
@@ -1212,10 +1212,10 @@ EOF
 
 @test "pf_detect_orphans errors for orphan with passes:true (completed work)" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Orphan story with passes: true (COMPLETED WORK)
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-001", "title": "First", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
@@ -1224,21 +1224,21 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: First
 EOF
 
-    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
     pf_has_errors  # Should have errors for completed orphan
 }
 
 @test "pf_detect_orphans error message includes 'COMPLETED' for passes:true orphans" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-DONE", "title": "Done Story", "acceptanceCriteria": ["T"], "priority": 1, "passes": true, "notes": ""}
@@ -1246,13 +1246,13 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 (no stories)
 EOF
 
-    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
 
     local found_completed=false
     for error in "${_PREFLIGHT_ERRORS[@]}"; do
@@ -1266,9 +1266,9 @@ EOF
 
 @test "pf_detect_orphans warning message mentions removal for passes:false orphans" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-INCOMPLETE", "title": "Incomplete", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""}
@@ -1276,13 +1276,13 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 (no stories)
 EOF
 
-    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature"
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     local found_removal=false
     for warning in "${_PREFLIGHT_WARNINGS[@]}"; do
@@ -1296,10 +1296,10 @@ EOF
 
 @test "pf_detect_orphans handles mix of completed and incomplete orphans" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Mix of completed and incomplete orphans
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-001", "title": "In Spec", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""},
@@ -1309,13 +1309,13 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 ### STORY-001: In Spec
 EOF
 
-    pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature" || true
+    pf_detect_orphans "$TEST_TEMP_DIR/.ralph-hybrid/test-feature" || true
 
     # Should have error for completed orphan
     pf_has_errors
@@ -1326,10 +1326,10 @@ EOF
 
 @test "pf_detect_orphans returns 1 only when completed orphans exist" {
     pf_reset
-    mkdir -p "$TEST_TEMP_DIR/.ralph/test-feature"
+    mkdir -p "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
 
     # Only incomplete orphan
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/prd.json" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/prd.json" <<'EOF'
 {
   "userStories": [
     {"id": "STORY-WIP", "title": "WIP", "acceptanceCriteria": ["T"], "priority": 1, "passes": false, "notes": ""}
@@ -1337,12 +1337,12 @@ EOF
 }
 EOF
 
-    cat > "$TEST_TEMP_DIR/.ralph/test-feature/spec.md" <<'EOF'
+    cat > "$TEST_TEMP_DIR/.ralph-hybrid/test-feature/spec.md" <<'EOF'
 ## User Stories
 
 (empty)
 EOF
 
-    run pf_detect_orphans "$TEST_TEMP_DIR/.ralph/test-feature"
+    run pf_detect_orphans "$TEST_TEMP_DIR/.ralph-hybrid/test-feature"
     [ "$status" -eq 0 ]  # Should succeed even with incomplete orphan (just warning)
 }

@@ -13,9 +13,9 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 | README.md | Complete - Philosophy, rationale, source material |
 | SPEC.md | Complete - Technical specification |
 | templates/ | Complete - Prompt templates, examples |
-| .claude/commands/ | Complete - `/ralph-plan`, `/ralph-prd`, `/ralph-amend` commands |
+| .claude/commands/ | Complete - `/ralph-hybrid-plan`, `/ralph-hybrid-prd`, `/ralph-hybrid-amend` commands |
 | lib/ | Complete - All library functions |
-| ralph | Complete - Main CLI script |
+| ralph-hybrid | Complete - Main CLI script |
 | install.sh | Complete - Global installation |
 | tests/ | Complete - 580+ BATS tests |
 
@@ -23,20 +23,20 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 
 | Command | Purpose |
 |---------|---------|
-| `ralph setup` | Install Claude commands to project's `.claude/commands/` |
-| `ralph run [options]` | Execute the development loop |
-| `ralph status` | Show current feature status |
-| `ralph validate` | Run preflight checks |
-| `ralph archive` | Archive completed feature |
-| `ralph import <file>` | Import PRD from Markdown or JSON file |
+| `ralph-hybrid setup` | Install Claude commands to project's `.claude/commands/` |
+| `ralph-hybrid run [options]` | Execute the development loop |
+| `ralph-hybrid status` | Show current feature status |
+| `ralph-hybrid validate` | Run preflight checks |
+| `ralph-hybrid archive` | Archive completed feature |
+| `ralph-hybrid import <file>` | Import PRD from Markdown or JSON file |
 
-## Claude Commands (installed via `ralph setup`)
+## Claude Commands (installed via `ralph-hybrid setup`)
 
 | Command | Purpose |
 |---------|---------|
-| `/ralph-plan <description>` | Interactive planning workflow: SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE |
-| `/ralph-prd` | Generate/regenerate prd.json from existing spec.md |
-| `/ralph-amend` | Safely modify requirements during implementation |
+| `/ralph-hybrid-plan <description>` | Interactive planning workflow: SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE |
+| `/ralph-hybrid-prd` | Generate/regenerate prd.json from existing spec.md |
+| `/ralph-hybrid-amend` | Safely modify requirements during implementation |
 
 ## Quick Start
 
@@ -45,11 +45,11 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 ./install.sh
 
 # In each project
-ralph setup                    # Install Claude commands
-git checkout -b feature/xyz    # Create feature branch
-/ralph-plan "description"      # Plan the feature (in Claude Code)
-ralph run                      # Run implementation loop
-ralph run --model opus         # Or with specific model
+ralph-hybrid setup                    # Install Claude commands
+git checkout -b feature/xyz           # Create feature branch
+/ralph-hybrid-plan "description"      # Plan the feature (in Claude Code)
+ralph-hybrid run                      # Run implementation loop
+ralph-hybrid run --model opus         # Or with specific model
 ```
 
 ## Key Decisions Made
@@ -62,12 +62,12 @@ ralph run --model opus         # Or with specific model
 
 ### Implementation Choices
 - **Bash 4.0+** - Simple, minimal dependencies
-- **No extension on main script** - `ralph` not `ralph.sh` for cleaner CLI
-- **Branch-based feature folders** - `.ralph/{branch-name}/` derived from git branch (no manual init)
-- **spec.md as source of truth** - prd.json is derived via `/ralph-prd`
+- **No extension on main script** - `ralph-hybrid` not `ralph-hybrid.sh` for cleaner CLI
+- **Branch-based feature folders** - `.ralph-hybrid/{branch-name}/` derived from git branch (no manual init)
+- **spec.md as source of truth** - prd.json is derived via `/ralph-hybrid-prd`
 - **Preflight validation** - Sync check ensures spec.md and prd.json match before running
 - **TDD-first workflow** - Default prompt template emphasizes tests first
-- **YAML config** - Global (~/.ralph/config.yaml) and project-level (.ralph/config.yaml)
+- **YAML config** - Global (~/.ralph-hybrid/config.yaml) and project-level (.ralph-hybrid/config.yaml)
 
 ### Safety Features (from frankbria/ralph-claude-code)
 - Circuit breaker (no progress / repeated errors)
@@ -83,7 +83,7 @@ ralph run --model opus         # Or with specific model
 ### Extensibility
 - **Hooks system** - pre/post hooks for run, iteration, completion, error
 - **Custom completion patterns** - Configurable via config or environment
-- **Hooks directory** - `.ralph/{feature}/hooks/` for user scripts
+- **Hooks directory** - `.ralph-hybrid/{feature}/hooks/` for user scripts
 
 ## Reference Documents
 

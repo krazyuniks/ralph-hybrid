@@ -11,7 +11,7 @@ setup() {
     export TEST_TEMP_DIR
 
     # Create RALPH_STATE_DIR inside temp for state isolation
-    RALPH_STATE_DIR="${TEST_TEMP_DIR}/.ralph"
+    RALPH_STATE_DIR="${TEST_TEMP_DIR}/.ralph-hybrid"
     export RALPH_STATE_DIR
     mkdir -p "$RALPH_STATE_DIR"
 
@@ -135,7 +135,7 @@ EOF
 # Create a complete mock feature structure
 # Usage: create_mock_feature <feature_name> <ralph_dir>
 #   feature_name: name of the feature
-#   ralph_dir: path to .ralph directory
+#   ralph_dir: path to .ralph-hybrid directory
 create_mock_feature() {
     local feature_name="$1"
     local ralph_dir="$2"

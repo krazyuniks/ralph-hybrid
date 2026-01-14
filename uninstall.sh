@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # uninstall.sh - Ralph Hybrid uninstaller
 #
-# Removes Ralph Hybrid installation and cleans up shell configuration.
+# Removes Ralph Hybrid installation.
 #
 # Usage: ./uninstall.sh
 #
 # What it does:
 #   1. Removes ~/.ralph-hybrid directory
-#   2. Removes PATH entries from .bashrc and .zshrc
 
 set -euo pipefail
 
@@ -71,73 +70,15 @@ remove_install_dir() {
 }
 
 # -----------------------------------------------------------------------------
-# Shell Configuration Cleanup
-# -----------------------------------------------------------------------------
-
-# Remove Ralph Hybrid PATH entries from a shell rc file
-# Uses platform-appropriate sed syntax
-remove_from_rc_file() {
-    local rc_file="$1"
-
-    if [[ ! -f "$rc_file" ]]; then
-        return 0  # File doesn't exist, nothing to clean
-    fi
-
-    # Check if our entries exist
-    if ! grep -q "# Ralph Hybrid PATH\|\.ralph-hybrid" "$rc_file" 2>/dev/null; then
-        print_info "No entries in $(basename "$rc_file")"
-        return 0
-    fi
-
-    # Create backup
-    cp "$rc_file" "${rc_file}.ralph-hybrid-backup"
-
-    # Platform-specific sed -i syntax
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS requires '' after -i
-        sed -i '' '/# Ralph Hybrid PATH/d' "$rc_file"
-        sed -i '' '/\.ralph-hybrid/d' "$rc_file"
-    else
-        # Linux/GNU sed
-        sed -i '/# Ralph Hybrid PATH/d' "$rc_file"
-        sed -i '/\.ralph-hybrid/d' "$rc_file"
-    fi
-
-    # Remove empty lines at end of file (cleanup)
-    # This is optional but keeps the file tidy
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # Remove trailing blank lines on macOS
-        sed -i '' -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$rc_file" 2>/dev/null || true
-    else
-        # Remove trailing blank lines on Linux
-        sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$rc_file" 2>/dev/null || true
-    fi
-
-    # Remove backup if successful
-    rm -f "${rc_file}.ralph-hybrid-backup"
-
-    print_info "Cleaned $(basename "$rc_file")"
-}
-
-clean_shell_config() {
-    print_section "Cleaning shell configuration..."
-
-    if [[ -f "${HOME}/.zshrc" ]]; then
-        remove_from_rc_file "${HOME}/.zshrc"
-    fi
-
-    if [[ -f "${HOME}/.bashrc" ]]; then
-        remove_from_rc_file "${HOME}/.bashrc"
-    fi
-}
-
-# -----------------------------------------------------------------------------
 # Success Message
 # -----------------------------------------------------------------------------
 
 print_success() {
     echo ""
     echo -e "${GREEN}Ralph Hybrid has been uninstalled.${NC}"
+    echo ""
+    echo -e "${YELLOW}Remember to remove the PATH entry from your shell config:${NC}"
+    echo '  export PATH="$HOME/.ralph-hybrid:$PATH"'
     echo ""
 }
 
@@ -148,7 +89,6 @@ print_success() {
 main() {
     print_header
     remove_install_dir
-    clean_shell_config
     print_success
 }
 

@@ -14,8 +14,8 @@ setup() {
     # Source the library (which sources utils.sh)
     source "$PROJECT_ROOT/lib/archive.sh"
 
-    # Create mock .ralph directory structure
-    RALPH_DIR="$TEST_TEMP_DIR/.ralph"
+    # Create mock .ralph-hybrid directory structure
+    RALPH_DIR="$TEST_TEMP_DIR/.ralph-hybrid"
     mkdir -p "$RALPH_DIR"
 }
 

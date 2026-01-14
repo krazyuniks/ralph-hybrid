@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install.sh - Ralph Hybrid installer
 #
-# Installs Ralph Hybrid to ~/.ralph-hybrid and updates shell configuration.
+# Installs Ralph Hybrid to ~/.ralph-hybrid.
 #
 # Usage: ./install.sh
 #
@@ -10,7 +10,6 @@
 #   2. Creates ~/.ralph-hybrid directory
 #   3. Copies ralph-hybrid, lib/, templates/
 #   4. Creates default config.yaml (if not exists)
-#   5. Adds ~/.ralph-hybrid to PATH in shell rc files
 
 set -euo pipefail
 
@@ -257,58 +256,6 @@ install_files() {
 }
 
 # -----------------------------------------------------------------------------
-# Shell Configuration
-# -----------------------------------------------------------------------------
-
-# Marker comment for identifying our PATH entries
-PATH_MARKER="# Ralph Hybrid PATH"
-
-add_to_path_in_file() {
-    local rc_file="$1"
-
-    if [[ ! -f "$rc_file" ]]; then
-        return 0  # File doesn't exist, skip
-    fi
-
-    # Check if already added (idempotent)
-    if grep -q "$PATH_MARKER" "$rc_file" 2>/dev/null; then
-        print_info "Already in $(basename "$rc_file")"
-        return 0
-    fi
-
-    # Add PATH entry with marker
-    {
-        echo ""
-        echo "$PATH_MARKER"
-        echo 'export PATH="$HOME/.ralph-hybrid:$PATH"'
-    } >> "$rc_file"
-
-    print_info "Updated $(basename "$rc_file")"
-}
-
-update_shell_config() {
-    print_section "Updating shell configuration..."
-
-    local updated=0
-
-    if [[ -f "${HOME}/.zshrc" ]]; then
-        add_to_path_in_file "${HOME}/.zshrc"
-        updated=1
-    fi
-
-    if [[ -f "${HOME}/.bashrc" ]]; then
-        add_to_path_in_file "${HOME}/.bashrc"
-        updated=1
-    fi
-
-    if [[ "$updated" -eq 0 ]]; then
-        print_warn "No shell rc files found (.bashrc or .zshrc)"
-        echo "       Add this to your shell config manually:"
-        echo '       export PATH="$HOME/.ralph-hybrid:$PATH"'
-    fi
-}
-
-# -----------------------------------------------------------------------------
 # Success Message
 # -----------------------------------------------------------------------------
 
@@ -321,12 +268,29 @@ print_success() {
     else
         echo -e "${GREEN}Installation complete!${NC}"
         echo ""
-        echo "To use ralph-hybrid in a project:"
-        echo "  1. Restart your shell or run: source ~/.zshrc"
-        echo "  2. Navigate to your project"
-        echo "  3. Run: ralph-hybrid setup  (installs /ralph-hybrid-plan, /ralph-hybrid-prd, etc.)"
-        echo "  4. In Claude Code, run: /ralph-hybrid-plan <description>"
-        echo "  5. Run: ralph-hybrid run"
+        echo -e "${YELLOW}Add ~/.ralph-hybrid to your PATH:${NC}"
+        echo ""
+        # Detect current shell and show appropriate example
+        local current_shell
+        current_shell=$(basename "${SHELL:-/bin/bash}")
+        if [[ "$current_shell" == "zsh" ]]; then
+            echo "  # Add to your ~/.zshrc (or wherever you manage PATH):"
+            echo '  export PATH="$HOME/.ralph-hybrid:$PATH"'
+        elif [[ "$current_shell" == "bash" ]]; then
+            echo "  # Add to your ~/.bashrc (or wherever you manage PATH):"
+            echo '  export PATH="$HOME/.ralph-hybrid:$PATH"'
+        else
+            echo "  # Add to your shell config:"
+            echo '  export PATH="$HOME/.ralph-hybrid:$PATH"'
+        fi
+        echo ""
+        echo "Then restart your shell or source your config file."
+        echo ""
+        echo -e "${BLUE}To use ralph-hybrid in a project:${NC}"
+        echo "  1. Navigate to your project"
+        echo "  2. Run: ralph-hybrid setup  (installs /ralph-hybrid-plan, /ralph-hybrid-prd, etc.)"
+        echo "  3. In Claude Code, run: /ralph-hybrid-plan <description>"
+        echo "  4. Run: ralph-hybrid run"
     fi
     echo ""
 }
@@ -339,7 +303,6 @@ main() {
     print_header
     check_prerequisites
     install_files
-    update_shell_config
     print_success
 }
 

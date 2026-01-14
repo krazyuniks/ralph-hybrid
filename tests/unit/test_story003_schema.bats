@@ -117,8 +117,8 @@ EOF
     git checkout -b feature/test-feature --quiet
 
     # Create feature folder with prd.json
-    mkdir -p .ralph/feature-test-feature
-    cat > .ralph/feature-test-feature/prd.json <<'EOF'
+    mkdir -p .ralph-hybrid/feature-test-feature
+    cat > .ralph-hybrid/feature-test-feature/prd.json <<'EOF'
 {
   "description": "Test feature",
   "createdAt": "2026-01-09T12:00:00Z",

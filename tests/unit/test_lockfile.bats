@@ -59,9 +59,9 @@ teardown() {
 #=============================================================================
 
 @test "_lf_path_to_filename converts path to safe filename" {
-    run _lf_path_to_filename "/home/user/project/.ralph/feature-test"
+    run _lf_path_to_filename "/home/user/project/.ralph-hybrid/feature-test"
     [ "$status" -eq 0 ]
-    [ "$output" = "home__user__project__.ralph__feature-test.lock" ]
+    [ "$output" = "home__user__project__.ralph-hybrid__feature-test.lock" ]
 }
 
 @test "_lf_path_to_filename handles root path" {
@@ -81,7 +81,7 @@ teardown() {
 #=============================================================================
 
 @test "lf_acquire creates lockfile with correct content" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     mkdir -p "$test_path"
 
     run lf_acquire "$test_path"
@@ -102,7 +102,7 @@ teardown() {
 }
 
 @test "lf_acquire fails for same path" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     mkdir -p "$test_path"
 
     # First acquisition should succeed
@@ -127,7 +127,7 @@ teardown() {
 }
 
 @test "lf_acquire sets _RALPH_CURRENT_LOCKFILE" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     mkdir -p "$test_path"
 
     _RALPH_CURRENT_LOCKFILE=""
@@ -142,7 +142,7 @@ teardown() {
 #=============================================================================
 
 @test "lf_release removes lockfile" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     mkdir -p "$test_path"
 
     lf_acquire "$test_path"
@@ -154,7 +154,7 @@ teardown() {
 }
 
 @test "lf_release clears _RALPH_CURRENT_LOCKFILE" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     mkdir -p "$test_path"
 
     lf_acquire "$test_path"
@@ -171,7 +171,7 @@ teardown() {
 }
 
 @test "lf_release only removes own lockfile" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     mkdir -p "$test_path"
 
     lf_acquire "$test_path"
@@ -191,14 +191,14 @@ teardown() {
 #=============================================================================
 
 @test "lf_check_conflicts returns 0 when no locks exist" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
 
     run lf_check_conflicts "$test_path"
     [ "$status" -eq 0 ]
 }
 
 @test "lf_check_conflicts detects exact path conflict" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     lf_init
 
     # Create a lockfile for the same path
@@ -213,8 +213,8 @@ teardown() {
 }
 
 @test "lf_check_conflicts detects ancestor path conflict" {
-    local parent_path="${TEST_TEMP_DIR}/project/.ralph"
-    local child_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local parent_path="${TEST_TEMP_DIR}/project/.ralph-hybrid"
+    local child_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     lf_init
 
     # Create a lockfile for the parent path
@@ -229,8 +229,8 @@ teardown() {
 }
 
 @test "lf_check_conflicts detects descendant path conflict" {
-    local parent_path="${TEST_TEMP_DIR}/project/.ralph"
-    local child_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local parent_path="${TEST_TEMP_DIR}/project/.ralph-hybrid"
+    local child_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     lf_init
 
     # Create a lockfile for the child path
@@ -245,8 +245,8 @@ teardown() {
 }
 
 @test "lf_check_conflicts allows unrelated paths" {
-    local path1="${TEST_TEMP_DIR}/project1/.ralph/feature"
-    local path2="${TEST_TEMP_DIR}/project2/.ralph/feature"
+    local path1="${TEST_TEMP_DIR}/project1/.ralph-hybrid/feature"
+    local path2="${TEST_TEMP_DIR}/project2/.ralph-hybrid/feature"
     lf_init
 
     # Create a lockfile for path1
@@ -265,7 +265,7 @@ teardown() {
 #=============================================================================
 
 @test "lf_cleanup_stale removes lockfiles with dead PIDs" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     lf_init
 
     # Create a lockfile with a definitely dead PID
@@ -282,7 +282,7 @@ teardown() {
 }
 
 @test "lf_cleanup_stale preserves lockfiles with live PIDs" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     lf_init
 
     # Create a lockfile with our own PID (definitely alive)
@@ -343,7 +343,7 @@ teardown() {
 }
 
 @test "lf_list shows active locks" {
-    local test_path="${TEST_TEMP_DIR}/project/.ralph/feature-test"
+    local test_path="${TEST_TEMP_DIR}/project/.ralph-hybrid/feature-test"
     lf_init
 
     # Create a lockfile with our own PID
@@ -364,7 +364,7 @@ teardown() {
 #=============================================================================
 
 @test "lockfile handles paths with spaces" {
-    local test_path="${TEST_TEMP_DIR}/my project/.ralph/feature test"
+    local test_path="${TEST_TEMP_DIR}/my project/.ralph-hybrid/feature test"
     mkdir -p "$test_path"
 
     # Don't use 'run' here - we need _RALPH_CURRENT_LOCKFILE to persist
@@ -379,7 +379,7 @@ teardown() {
 }
 
 @test "lockfile handles paths with special characters" {
-    local test_path="${TEST_TEMP_DIR}/project-name_v2/.ralph/feature-test_1"
+    local test_path="${TEST_TEMP_DIR}/project-name_v2/.ralph-hybrid/feature-test_1"
     mkdir -p "$test_path"
 
     run lf_acquire "$test_path"

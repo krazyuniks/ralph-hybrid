@@ -24,10 +24,10 @@ setup() {
     git config user.name "Test User"
 
     # Create ralph directory structure
-    mkdir -p .ralph/feature-test-feature
+    mkdir -p .ralph-hybrid/feature-test-feature
 
     # Create valid spec.md
-    cat > .ralph/feature-test-feature/spec.md << 'EOF'
+    cat > .ralph-hybrid/feature-test-feature/spec.md << 'EOF'
 # Test Feature Spec
 
 ## Problem Statement
@@ -46,7 +46,7 @@ This is a test problem.
 EOF
 
     # Create valid prd.json
-    cat > .ralph/feature-test-feature/prd.json << 'EOF'
+    cat > .ralph-hybrid/feature-test-feature/prd.json << 'EOF'
 {
     "description": "Test feature",
     "createdAt": "2026-01-09T00:00:00Z",
@@ -65,7 +65,7 @@ EOF
 EOF
 
     # Create progress.txt
-    echo "# Progress Log" > .ralph/feature-test-feature/progress.txt
+    echo "# Progress Log" > .ralph-hybrid/feature-test-feature/progress.txt
 }
 
 teardown() {
@@ -108,7 +108,7 @@ teardown() {
 @test "ralph validate runs folder existence check" {
     run "$PROJECT_ROOT/ralph" validate
     # Should show folder exists message
-    [[ "$output" == *"Folder exists"* ]] || [[ "$output" == *".ralph/feature-test-feature"* ]]
+    [[ "$output" == *"Folder exists"* ]] || [[ "$output" == *".ralph-hybrid/feature-test-feature"* ]]
 }
 
 @test "ralph validate runs required files check" {
@@ -140,26 +140,26 @@ teardown() {
 #-----------------------------------------------------------------------------
 
 @test "ralph validate returns non-zero when feature folder missing" {
-    rm -rf .ralph/feature-test-feature
+    rm -rf .ralph-hybrid/feature-test-feature
     run "$PROJECT_ROOT/ralph" validate
     [[ $status -ne 0 ]]
 }
 
 @test "ralph validate returns non-zero when prd.json missing" {
-    rm .ralph/feature-test-feature/prd.json
+    rm .ralph-hybrid/feature-test-feature/prd.json
     run "$PROJECT_ROOT/ralph" validate
     [[ $status -ne 0 ]]
 }
 
 @test "ralph validate returns non-zero when prd.json invalid" {
-    echo "not valid json" > .ralph/feature-test-feature/prd.json
+    echo "not valid json" > .ralph-hybrid/feature-test-feature/prd.json
     run "$PROJECT_ROOT/ralph" validate
     [[ $status -ne 0 ]]
 }
 
 @test "ralph validate returns non-zero when stories out of sync" {
     # Add a story to prd.json that's not in spec.md
-    cat > .ralph/feature-test-feature/prd.json << 'EOF'
+    cat > .ralph-hybrid/feature-test-feature/prd.json << 'EOF'
 {
     "description": "Test feature",
     "createdAt": "2026-01-09T00:00:00Z",
@@ -195,14 +195,14 @@ EOF
 #-----------------------------------------------------------------------------
 
 @test "ralph validate shows clear failure message on error" {
-    rm .ralph/feature-test-feature/prd.json
+    rm .ralph-hybrid/feature-test-feature/prd.json
     run "$PROJECT_ROOT/ralph" validate
     [[ "$output" == *"FAILED"* ]] || [[ "$output" == *"missing"* ]] || [[ "$output" == *"not found"* ]]
 }
 
 @test "ralph validate shows which files are missing" {
-    rm .ralph/feature-test-feature/spec.md
-    rm .ralph/feature-test-feature/prd.json
+    rm .ralph-hybrid/feature-test-feature/spec.md
+    rm .ralph-hybrid/feature-test-feature/prd.json
     run "$PROJECT_ROOT/ralph" validate
     [[ "$output" == *"spec.md"* ]] || [[ "$output" == *"prd.json"* ]]
 }
@@ -228,8 +228,8 @@ EOF
 @test "ralph validate shows warning on main branch" {
     git checkout -b main 2>/dev/null || git checkout main 2>/dev/null || skip "Cannot checkout main"
     # Create ralph folder for main branch
-    mkdir -p .ralph/main
-    cp -r .ralph/feature-test-feature/* .ralph/main/
+    mkdir -p .ralph-hybrid/main
+    cp -r .ralph-hybrid/feature-test-feature/* .ralph-hybrid/main/
 
     run "$PROJECT_ROOT/ralph" validate
     # Should warn but still succeed (warnings don't cause failure)

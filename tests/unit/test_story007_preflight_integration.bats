@@ -29,7 +29,7 @@ setup() {
     git checkout -b feature/test-feature --quiet
 
     # Create feature folder structure
-    export FEATURE_DIR="$TEST_REPO/.ralph/feature-test-feature"
+    export FEATURE_DIR="$TEST_REPO/.ralph-hybrid/feature-test-feature"
     mkdir -p "$FEATURE_DIR/logs"
 
     # Source the libraries for helper functions

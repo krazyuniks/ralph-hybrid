@@ -1,4 +1,4 @@
-# /ralph-amend - Mid-Implementation Scope Changes
+# /ralph-hybrid-amend - Mid-Implementation Scope Changes
 
 Safely modify requirements during active Ralph development. Plans evolve. Requirements get clarified. This command handles scope changes without losing progress.
 
@@ -6,7 +6,7 @@ Safely modify requirements during active Ralph development. Plans evolve. Requir
 
 > **"No plan survives first contact with implementation."**
 
-First drafts are incomplete. Edge cases emerge. Stakeholders clarify requirements. This is normal. Ralph Hybrid embraces iterative refinement through `/ralph-amend`:
+First drafts are incomplete. Edge cases emerge. Stakeholders clarify requirements. This is normal. Ralph Hybrid embraces iterative refinement through `/ralph-hybrid-amend`:
 
 - **ADD** new requirements discovered during implementation
 - **CORRECT** existing stories when requirements are clarified
@@ -19,7 +19,7 @@ All changes are tracked, auditable, and preserve completed work.
 ## Arguments
 
 ```
-/ralph-amend <mode> [target] [description]
+/ralph-hybrid-amend <mode> [target] [description]
 ```
 
 | Argument | Required | Description |
@@ -31,10 +31,10 @@ All changes are tracked, auditable, and preserve completed work.
 ### Examples
 
 ```bash
-/ralph-amend add "Users need CSV export for reporting"
-/ralph-amend correct STORY-003 "Email validation should use RFC 5322"
-/ralph-amend remove STORY-005 "Moved to separate issue #47"
-/ralph-amend status
+/ralph-hybrid-amend add "Users need CSV export for reporting"
+/ralph-hybrid-amend correct STORY-003 "Email validation should use RFC 5322"
+/ralph-hybrid-amend remove STORY-005 "Moved to separate issue #47"
+/ralph-hybrid-amend status
 ```
 
 ---
@@ -61,7 +61,7 @@ Add new requirements discovered during implementation.
 # Check we're in a valid state
 feature_dir=$(detect_feature_dir)
 if [ ! -f "$feature_dir/prd.json" ]; then
-    error "No active feature. Run /ralph-plan first."
+    error "No active feature. Run /ralph-hybrid-plan first."
 fi
 
 # Check Ralph isn't mid-iteration (optional - can interrupt)
@@ -160,7 +160,7 @@ Update all relevant files:
 
 **Type:** ADD
 **Reason:** User needs data export for external reporting
-**Added by:** /ralph-amend
+**Added by:** /ralph-hybrid-amend
 
 #### STORY-004: Export data as CSV
 
@@ -226,7 +226,7 @@ Append to progress.txt:
 ## Amendment AMD-001: 2026-01-09T14:32:00Z
 
 Type: ADD
-Command: /ralph-amend add "Users need CSV export for reporting"
+Command: /ralph-hybrid-amend add "Users need CSV export for reporting"
 
 Added Stories:
   - STORY-004: Export data as CSV (priority: 2)
@@ -264,7 +264,7 @@ Current progress:
   → STORY-003 (passes: false) - in progress
   + STORY-004 (passes: false) - NEW
 
-Ready to continue: ralph run
+Ready to continue: ralph-hybrid run
 ```
 
 ---
@@ -288,7 +288,7 @@ Fix or clarify existing story requirements.
 ### Phase 1-2: VALIDATE & SHOW
 
 ```
-/ralph-amend correct STORY-003 "Email validation needs RFC 5322"
+/ralph-hybrid-amend correct STORY-003 "Email validation needs RFC 5322"
 
 Found STORY-003: Validate user registration input
 
@@ -409,7 +409,7 @@ Updated files:
 
 Next Ralph run will re-verify STORY-003.
 
-Ready to continue: ralph run
+Ready to continue: ralph-hybrid run
 ```
 
 ---
@@ -450,7 +450,7 @@ Descope a story (move elsewhere, no longer needed, etc.).
 ### Example Flow
 
 ```
-/ralph-amend remove STORY-005 "Moved to separate issue #47"
+/ralph-hybrid-amend remove STORY-005 "Moved to separate issue #47"
 
 Found STORY-005: Advanced filtering options
 
@@ -481,7 +481,7 @@ Current progress:
   + STORY-004 (passes: false)
   ✗ STORY-005 (descoped)
 
-Ready to continue: ralph run
+Ready to continue: ralph-hybrid run
 ```
 
 ---
@@ -491,7 +491,7 @@ Ready to continue: ralph run
 Show current amendment history and feature state.
 
 ```
-/ralph-amend status
+/ralph-hybrid-amend status
 
 Feature: feature-21-sync-implementation
 Branch: feature/21-sync-implementation
@@ -539,7 +539,7 @@ IDs are:
 ### Adding to completed feature
 
 ```
-/ralph-amend add "One more thing..."
+/ralph-hybrid-amend add "One more thing..."
 
 ⚠️  All stories currently pass. Adding new story will:
   - Mark feature incomplete
@@ -551,7 +551,7 @@ Proceed? (y/N)
 ### Correcting a story that blocks others
 
 ```
-/ralph-amend correct STORY-001 "Change API contract"
+/ralph-hybrid-amend correct STORY-001 "Change API contract"
 
 ⚠️  STORY-001 is a dependency for:
   - STORY-002 (passes: true)
@@ -564,7 +564,7 @@ Reset all dependent stories? (y/N/select)
 ### Removing a blocking story
 
 ```
-/ralph-amend remove STORY-002 "Not needed"
+/ralph-hybrid-amend remove STORY-002 "Not needed"
 
 ⚠️  STORY-002 blocks:
   - STORY-003 (passes: false)
@@ -581,7 +581,7 @@ Choice:
 ### Conflicting amendments
 
 ```
-/ralph-amend correct STORY-003 "New requirement"
+/ralph-hybrid-amend correct STORY-003 "New requirement"
 
 ⚠️  STORY-003 was already amended:
   - AMD-001 (2026-01-09T14:00:00Z): Added acceptance criterion
@@ -620,7 +620,7 @@ Amendments are normal. Plans evolve. Implement them like any other story.
 ```
 # No feature active
 Error: No active feature found.
-Run /ralph-plan to create a feature first.
+Run /ralph-hybrid-plan to create a feature first.
 
 # Story not found
 Error: STORY-099 not found in prd.json.
@@ -632,11 +632,11 @@ Valid modes: add, correct, remove, status
 
 # Missing description
 Error: ADD mode requires a description.
-Usage: /ralph-amend add "description of new requirement"
+Usage: /ralph-hybrid-amend add "description of new requirement"
 
 # Missing target
 Error: CORRECT mode requires a story ID.
-Usage: /ralph-amend correct STORY-003 "what to change"
+Usage: /ralph-hybrid-amend correct STORY-003 "what to change"
 ```
 
 ---
@@ -647,7 +647,7 @@ Usage: /ralph-amend correct STORY-003 "what to change"
 
 ```
 # Implementing STORY-002, realize we need error handling
-/ralph-amend add "Need retry logic for failed sync operations"
+/ralph-hybrid-amend add "Need retry logic for failed sync operations"
 
 > Clarifying: What triggers a retry?
 A) Automatic on any failure
@@ -671,7 +671,7 @@ Added STORY-004: Implement retry logic for sync failures
 
 ```
 # Product clarifies a requirement mid-sprint
-/ralph-amend correct STORY-003 "Sync should be bidirectional, not just pull"
+/ralph-hybrid-amend correct STORY-003 "Sync should be bidirectional, not just pull"
 
 > Found STORY-003: Implement sync pull operation
 >
@@ -691,7 +691,7 @@ Amendment AMD-002 complete.
 
 ```
 # Realize offline mode is too complex for v1
-/ralph-amend remove STORY-005 "Defer offline mode to v2, tracked in issue #89"
+/ralph-hybrid-amend remove STORY-005 "Defer offline mode to v2, tracked in issue #89"
 
 > Removing STORY-005: Offline mode support
 > Reason: Defer offline mode to v2, tracked in issue #89
@@ -714,4 +714,4 @@ Feature now has 4 active stories (was 5).
 | `remove` | Descope story | Yes | Archived in spec.md |
 | `status` | View amendments | N/A | N/A |
 
-**Key principle:** Plans are living documents. `/ralph-amend` makes scope changes safe, tracked, and reversible.
+**Key principle:** Plans are living documents. `/ralph-hybrid-amend` makes scope changes safe, tracked, and reversible.

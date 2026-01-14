@@ -11,7 +11,7 @@ setup() {
     export TEST_TEMP_DIR
 
     # Set up RALPH_STATE_DIR for state isolation
-    RALPH_STATE_DIR="${TEST_TEMP_DIR}/.ralph"
+    RALPH_STATE_DIR="${TEST_TEMP_DIR}/.ralph-hybrid"
     export RALPH_STATE_DIR
     mkdir -p "$RALPH_STATE_DIR"
 
@@ -479,7 +479,7 @@ EOF
 #=============================================================================
 
 @test "hk_init_hooks_dir creates hooks directory" {
-    local test_base="${TEST_TEMP_DIR}/new-project/.ralph"
+    local test_base="${TEST_TEMP_DIR}/new-project/.ralph-hybrid"
     rm -rf "$test_base"
 
     run hk_init_hooks_dir "$test_base"
@@ -488,7 +488,7 @@ EOF
 }
 
 @test "hk_init_hooks_dir creates README.md" {
-    local test_base="${TEST_TEMP_DIR}/new-project/.ralph"
+    local test_base="${TEST_TEMP_DIR}/new-project/.ralph-hybrid"
     rm -rf "$test_base"
 
     hk_init_hooks_dir "$test_base"
@@ -497,7 +497,7 @@ EOF
 }
 
 @test "hk_init_hooks_dir is idempotent" {
-    local test_base="${TEST_TEMP_DIR}/new-project/.ralph"
+    local test_base="${TEST_TEMP_DIR}/new-project/.ralph-hybrid"
 
     hk_init_hooks_dir "$test_base"
     run hk_init_hooks_dir "$test_base"

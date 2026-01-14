@@ -1,6 +1,6 @@
 # Ralph Hybrid Configuration
-# Copy to ~/.ralph/config.yaml for global settings
-# Copy to .ralph/config.yaml for project-specific overrides
+# Copy to ~/.ralph-hybrid/config.yaml for global settings
+# Copy to .ralph-hybrid/config.yaml for project-specific overrides
 
 #=============================================================================
 # Default Settings
@@ -15,7 +15,7 @@ defaults:
   # API calls per hour limit
   rate_limit_per_hour: 100
 
-  # Default prompt template (from ~/.ralph/templates/)
+  # Default prompt template (from ~/.ralph-hybrid/templates/)
   prompt_template: "prompt-tdd.md"
 
 #=============================================================================
@@ -65,7 +65,7 @@ archive:
   # Automatically archive completed features
   auto_archive: true
 
-  # Archive directory (relative to .ralph/)
+  # Archive directory (relative to .ralph-hybrid/)
   directory: "archive"
 
   # Archive format: {date}-{feature}

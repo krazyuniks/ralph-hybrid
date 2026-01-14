@@ -219,22 +219,22 @@ Most tools force you to either:
 - Start over with a new plan (loses progress)
 - Just tell the AI and hope it remembers (it won't)
 
-### The Solution: `/ralph-amend`
+### The Solution: `/ralph-hybrid-amend`
 
 Ralph Hybrid treats scope changes as **expected, not exceptional**:
 
 ```bash
 # Discover new requirement mid-implementation
-/ralph-amend add "Users need CSV export for reporting"
+/ralph-hybrid-amend add "Users need CSV export for reporting"
 
 # Stakeholder clarifies a requirement
-/ralph-amend correct STORY-003 "Email validation should use RFC 5322"
+/ralph-hybrid-amend correct STORY-003 "Email validation should use RFC 5322"
 
 # Descope for MVP
-/ralph-amend remove STORY-005 "Defer to v2, tracked in issue #89"
+/ralph-hybrid-amend remove STORY-005 "Defer to v2, tracked in issue #89"
 
 # See all changes
-/ralph-amend status
+/ralph-hybrid-amend status
 ```
 
 ### How It Works
@@ -244,7 +244,7 @@ Ralph Hybrid treats scope changes as **expected, not exceptional**:
 │                    ITERATIVE PLANNING                           │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  /ralph-plan          Initial planning session                  │
+│  /ralph-hybrid-plan          Initial planning session                  │
 │       │               Creates spec.md + prd.json                │
 │       ▼                                                         │
 │  ┌─────────┐                                                    │
@@ -259,7 +259,7 @@ Ralph Hybrid treats scope changes as **expected, not exceptional**:
 │  └────────────────┬────────────────────┘         │              │
 │                   │                              │              │
 │                   ▼                              │              │
-│  /ralph-amend     Safely modify requirements    │              │
+│  /ralph-hybrid-amend     Safely modify requirements    │              │
 │       │           Preserves completed work       │              │
 │       │           Full audit trail               │              │
 │       │                                          │              │
@@ -270,7 +270,7 @@ Ralph Hybrid treats scope changes as **expected, not exceptional**:
 
 ### What Gets Preserved
 
-| Scenario | Without /ralph-amend | With /ralph-amend |
+| Scenario | Without /ralph-hybrid-amend | With /ralph-hybrid-amend |
 |----------|---------------------|-------------------|
 | Add new requirement | Manual prd.json edit, no acceptance criteria | Mini-planning session, proper AC, audit trail |
 | Fix existing story | Edit and hope, may break things | Warns if resetting completed work, logs change |
@@ -475,17 +475,17 @@ Each **ralph-hybrid work** iteration runs two phases:
 
 > **"No plan survives first contact with implementation."**
 
-Ralph Hybrid treats scope changes as **expected, not exceptional** with the `/ralph-amend` system:
+Ralph Hybrid treats scope changes as **expected, not exceptional** with the `/ralph-hybrid-amend` system:
 
 ```bash
 # Discover new requirement mid-implementation
-/ralph-amend add "Users need CSV export for reporting"
+/ralph-hybrid-amend add "Users need CSV export for reporting"
 
 # Stakeholder clarifies a requirement
-/ralph-amend correct STORY-003 "Email validation should use RFC 5322"
+/ralph-hybrid-amend correct STORY-003 "Email validation should use RFC 5322"
 
 # Descope for MVP
-/ralph-amend remove STORY-005 "Defer to v2, tracked in issue #89"
+/ralph-hybrid-amend remove STORY-005 "Defer to v2, tracked in issue #89"
 ```
 
 **What gets preserved:**

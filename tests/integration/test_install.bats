@@ -119,79 +119,55 @@ run_uninstall() {
 # install.sh Tests
 # -----------------------------------------------------------------------------
 
-@test "install.sh: creates ~/.ralph directory" {
+@test "install.sh: creates ~/.ralph-hybrid directory" {
     run run_install
 
-    assert_dir_exists "${HOME}/.ralph"
+    assert_dir_exists "${HOME}/.ralph-hybrid"
 }
 
 @test "install.sh: copies ralph executable" {
     create_mock_ralph
     run run_install
 
-    assert_file_exists "${HOME}/.ralph/ralph"
-    [[ -x "${HOME}/.ralph/ralph" ]]
+    assert_file_exists "${HOME}/.ralph-hybrid/ralph"
+    [[ -x "${HOME}/.ralph-hybrid/ralph" ]]
 }
 
 @test "install.sh: copies lib/ directory" {
     run run_install
 
-    assert_dir_exists "${HOME}/.ralph/lib"
+    assert_dir_exists "${HOME}/.ralph-hybrid/lib"
     # Check that at least one lib file was copied
-    [[ -n "$(ls -A "${HOME}/.ralph/lib/" 2>/dev/null)" ]] || \
-        [[ -f "${HOME}/.ralph/lib/.gitkeep" ]]
+    [[ -n "$(ls -A "${HOME}/.ralph-hybrid/lib/" 2>/dev/null)" ]] || \
+        [[ -f "${HOME}/.ralph-hybrid/lib/.gitkeep" ]]
 }
 
 @test "install.sh: copies templates/ directory" {
     run run_install
 
-    assert_dir_exists "${HOME}/.ralph/templates"
-    assert_file_exists "${HOME}/.ralph/templates/prompt-tdd.md"
-    assert_file_exists "${HOME}/.ralph/templates/prompt.md"
-    assert_file_exists "${HOME}/.ralph/templates/prd.json.example"
+    assert_dir_exists "${HOME}/.ralph-hybrid/templates"
+    assert_file_exists "${HOME}/.ralph-hybrid/templates/prompt-tdd.md"
+    assert_file_exists "${HOME}/.ralph-hybrid/templates/prompt.md"
+    assert_file_exists "${HOME}/.ralph-hybrid/templates/prd.json.example"
 }
 
 @test "install.sh: creates default config.yaml from template" {
     run run_install
 
-    assert_file_exists "${HOME}/.ralph/config.yaml"
-    assert_file_contains "${HOME}/.ralph/config.yaml" "max_iterations"
+    assert_file_exists "${HOME}/.ralph-hybrid/config.yaml"
+    assert_file_contains "${HOME}/.ralph-hybrid/config.yaml" "max_iterations"
 }
 
 @test "install.sh: preserves existing config.yaml" {
     # Create existing config
-    mkdir -p "${HOME}/.ralph"
-    echo "# My custom config" > "${HOME}/.ralph/config.yaml"
-    echo "custom_setting: true" >> "${HOME}/.ralph/config.yaml"
+    mkdir -p "${HOME}/.ralph-hybrid"
+    echo "# My custom config" > "${HOME}/.ralph-hybrid/config.yaml"
+    echo "custom_setting: true" >> "${HOME}/.ralph-hybrid/config.yaml"
 
     run run_install
 
     # Should not overwrite
-    assert_file_contains "${HOME}/.ralph/config.yaml" "custom_setting: true"
-}
-
-@test "install.sh: adds PATH to .bashrc" {
-    run run_install
-
-    assert_file_contains "${HOME}/.bashrc" 'export PATH="$HOME/.ralph:$PATH"'
-    assert_file_contains "${HOME}/.bashrc" "# Ralph Hybrid PATH"
-}
-
-@test "install.sh: adds PATH to .zshrc" {
-    run run_install
-
-    assert_file_contains "${HOME}/.zshrc" 'export PATH="$HOME/.ralph:$PATH"'
-    assert_file_contains "${HOME}/.zshrc" "# Ralph Hybrid PATH"
-}
-
-@test "install.sh: is idempotent - running twice doesn't duplicate PATH" {
-    run run_install
-    run run_install
-
-    # Count occurrences of PATH entry
-    local count
-    count=$(grep -c '# Ralph Hybrid PATH' "${HOME}/.bashrc" || echo "0")
-    [[ "$count" -eq 1 ]]
+    assert_file_contains "${HOME}/.ralph-hybrid/config.yaml" "custom_setting: true"
 }
 
 @test "install.sh: handles missing .bashrc gracefully" {
@@ -201,7 +177,7 @@ run_uninstall() {
 
     # Should succeed without .bashrc
     [[ "$status" -eq 0 ]]
-    assert_dir_exists "${HOME}/.ralph"
+    assert_dir_exists "${HOME}/.ralph-hybrid"
 }
 
 @test "install.sh: handles missing .zshrc gracefully" {
@@ -211,7 +187,7 @@ run_uninstall() {
 
     # Should succeed without .zshrc
     [[ "$status" -eq 0 ]]
-    assert_dir_exists "${HOME}/.ralph"
+    assert_dir_exists "${HOME}/.ralph-hybrid"
 }
 
 @test "install.sh: handles both rc files missing" {
@@ -222,7 +198,7 @@ run_uninstall() {
 
     # Should succeed
     [[ "$status" -eq 0 ]]
-    assert_dir_exists "${HOME}/.ralph"
+    assert_dir_exists "${HOME}/.ralph-hybrid"
 }
 
 @test "install.sh: fails gracefully when jq is missing" {
@@ -265,14 +241,14 @@ EOF
     create_mock_ralph
     run run_install
 
-    [[ -x "${HOME}/.ralph/ralph" ]]
+    [[ -x "${HOME}/.ralph-hybrid/ralph" ]]
 }
 
 @test "install.sh: lib scripts maintain permissions" {
     run run_install
 
     # Check if any .sh files in lib are executable (if they exist and are not .gitkeep)
-    local lib_dir="${HOME}/.ralph/lib"
+    local lib_dir="${HOME}/.ralph-hybrid/lib"
     if [[ -d "$lib_dir" ]]; then
         for f in "$lib_dir"/*.sh; do
             if [[ -f "$f" ]]; then
@@ -286,57 +262,24 @@ EOF
 # uninstall.sh Tests
 # -----------------------------------------------------------------------------
 
-@test "uninstall.sh: removes ~/.ralph directory" {
+@test "uninstall.sh: removes ~/.ralph-hybrid directory" {
     # First install
     run run_install
-    assert_dir_exists "${HOME}/.ralph"
+    assert_dir_exists "${HOME}/.ralph-hybrid"
 
     # Then uninstall
     run run_uninstall
 
-    assert_dir_not_exists "${HOME}/.ralph"
+    assert_dir_not_exists "${HOME}/.ralph-hybrid"
 }
 
-@test "uninstall.sh: removes PATH entry from .bashrc" {
-    # First install
-    run run_install
-    assert_file_contains "${HOME}/.bashrc" "# Ralph Hybrid PATH"
-
-    # Then uninstall
-    run run_uninstall
-
-    assert_file_not_contains "${HOME}/.bashrc" "# Ralph Hybrid PATH"
-    assert_file_not_contains "${HOME}/.bashrc" ".ralph"
-}
-
-@test "uninstall.sh: removes PATH entry from .zshrc" {
-    # First install
-    run run_install
-    assert_file_contains "${HOME}/.zshrc" "# Ralph Hybrid PATH"
-
-    # Then uninstall
-    run run_uninstall
-
-    assert_file_not_contains "${HOME}/.zshrc" "# Ralph Hybrid PATH"
-    assert_file_not_contains "${HOME}/.zshrc" ".ralph"
-}
-
-@test "uninstall.sh: handles missing ~/.ralph gracefully" {
+@test "uninstall.sh: handles missing ~/.ralph-hybrid gracefully" {
     # Don't install first
-    assert_dir_not_exists "${HOME}/.ralph"
+    assert_dir_not_exists "${HOME}/.ralph-hybrid"
 
     run run_uninstall
 
     # Should succeed even if nothing to uninstall
-    [[ "$status" -eq 0 ]]
-}
-
-@test "uninstall.sh: handles missing .bashrc gracefully" {
-    run run_install
-    rm -f "${HOME}/.bashrc"
-
-    run run_uninstall
-
     [[ "$status" -eq 0 ]]
 }
 
@@ -349,32 +292,14 @@ EOF
     [[ "$status" -eq 0 ]]
 }
 
-@test "uninstall.sh: preserves other content in rc files" {
-    # Add some content before install
-    echo "# My custom bash config" > "${HOME}/.bashrc"
-    echo "export MY_VAR=123" >> "${HOME}/.bashrc"
-
-    run run_install
-    run run_uninstall
-
-    # Custom content should remain
-    assert_file_contains "${HOME}/.bashrc" "# My custom bash config"
-    assert_file_contains "${HOME}/.bashrc" "export MY_VAR=123"
-}
-
 @test "uninstall.sh: is safe on clean system" {
     # Fresh home directory, no installation
-    rm -rf "${HOME}/.ralph"
-    echo "# Clean bashrc" > "${HOME}/.bashrc"
-    echo "# Clean zshrc" > "${HOME}/.zshrc"
+    rm -rf "${HOME}/.ralph-hybrid"
 
     run run_uninstall
 
     # Should succeed
     [[ "$status" -eq 0 ]]
-    # RC files should be intact
-    assert_file_contains "${HOME}/.bashrc" "# Clean bashrc"
-    assert_file_contains "${HOME}/.zshrc" "# Clean zshrc"
 }
 
 # -----------------------------------------------------------------------------
@@ -382,10 +307,6 @@ EOF
 # -----------------------------------------------------------------------------
 
 @test "install then uninstall leaves system clean" {
-    # Record initial state
-    echo "# Initial bashrc" > "${HOME}/.bashrc"
-    echo "# Initial zshrc" > "${HOME}/.zshrc"
-
     # Install
     run run_install
     [[ "$status" -eq 0 ]]
@@ -395,28 +316,23 @@ EOF
     [[ "$status" -eq 0 ]]
 
     # Check clean state
-    assert_dir_not_exists "${HOME}/.ralph"
-    assert_file_not_contains "${HOME}/.bashrc" ".ralph"
-    assert_file_not_contains "${HOME}/.zshrc" ".ralph"
-    assert_file_contains "${HOME}/.bashrc" "# Initial bashrc"
-    assert_file_contains "${HOME}/.zshrc" "# Initial zshrc"
+    assert_dir_not_exists "${HOME}/.ralph-hybrid"
 }
 
 @test "reinstall after uninstall works correctly" {
     # Install
     run run_install
     [[ "$status" -eq 0 ]]
-    assert_dir_exists "${HOME}/.ralph"
+    assert_dir_exists "${HOME}/.ralph-hybrid"
 
     # Uninstall
     run run_uninstall
     [[ "$status" -eq 0 ]]
-    assert_dir_not_exists "${HOME}/.ralph"
+    assert_dir_not_exists "${HOME}/.ralph-hybrid"
 
     # Reinstall
     run run_install
     [[ "$status" -eq 0 ]]
-    assert_dir_exists "${HOME}/.ralph"
-    assert_file_exists "${HOME}/.ralph/ralph"
-    assert_file_contains "${HOME}/.bashrc" "# Ralph Hybrid PATH"
+    assert_dir_exists "${HOME}/.ralph-hybrid"
+    assert_file_exists "${HOME}/.ralph-hybrid/ralph"
 }

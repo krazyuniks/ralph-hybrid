@@ -152,7 +152,7 @@ ralph-hybrid/
 
 ```
 <project>/
-└── .ralph/
+└── .ralph-hybrid/
     ├── config.yaml                         # Project settings (optional)
     ├── <feature-name>/                     # Active feature folder
     │   ├── prd.json                        # User stories with passes field
@@ -184,17 +184,17 @@ ralph-hybrid/
 ### Commands
 
 ```bash
-ralph setup                     # Install Claude commands to project (.claude/commands/)
-ralph run [options]             # Execute the loop (includes preflight validation)
-ralph status                    # Show current state
-ralph monitor                   # Launch tmux monitoring dashboard
-ralph archive                   # Archive current feature
-ralph validate                  # Run preflight checks without starting loop
-ralph import <file> [options]   # Import PRD from Markdown or JSON file
-ralph help                      # Show help
+ralph-hybrid setup                     # Install Claude commands to project (.claude/commands/)
+ralph-hybrid run [options]             # Execute the loop (includes preflight validation)
+ralph-hybrid status                    # Show current state
+ralph-hybrid monitor                   # Launch tmux monitoring dashboard
+ralph-hybrid archive                   # Archive current feature
+ralph-hybrid validate                  # Run preflight checks without starting loop
+ralph-hybrid import <file> [options]   # Import PRD from Markdown or JSON file
+ralph-hybrid help                      # Show help
 ```
 
-> **Note:** Run `ralph setup` first in each project to install the `/ralph-plan`, `/ralph-prd`, and `/ralph-amend` commands. The feature folder is derived from the current git branch name.
+> **Note:** Run `ralph-hybrid setup` first in each project to install the `/ralph-hybrid-plan`, `/ralph-hybrid-prd`, and `/ralph-hybrid-amend` commands. The feature folder is derived from the current git branch name.
 
 ### Run Options
 
@@ -219,7 +219,7 @@ ralph help                      # Show help
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--format` | auto-detect | Override format detection (markdown, json) |
-| `--output, -o` | .ralph/{branch}/prd.json | Output path for the generated prd.json |
+| `--output, -o` | .ralph-hybrid/{branch}/prd.json | Output path for the generated prd.json |
 
 #### Supported Import Formats
 
@@ -233,20 +233,20 @@ ralph help                      # Show help
 
 ```bash
 # Import from Markdown spec file
-ralph import spec.md
+ralph-hybrid import spec.md
 
 # Import from JSON with explicit output path
-ralph import requirements.json --output ./custom-prd.json
+ralph-hybrid import requirements.json --output ./custom-prd.json
 
 # Override format detection
-ralph import my-spec.txt --format markdown
+ralph-hybrid import my-spec.txt --format markdown
 ```
 
 ---
 
 ## Configuration
 
-### Global Config (~/.ralph/config.yaml)
+### Global Config (~/.ralph-hybrid/config.yaml)
 
 ```yaml
 defaults:
@@ -266,7 +266,7 @@ claude:
   allowed_tools: "Write,Bash(git *),Read"
 ```
 
-### Project Config (.ralph/config.yaml)
+### Project Config (.ralph-hybrid/config.yaml)
 
 ```yaml
 defaults:
@@ -305,7 +305,7 @@ get_feature_dir() {
 
     # Sanitize: feature/user-auth → feature-user-auth
     local feature_name="${branch//\//-}"
-    echo ".ralph/${feature_name}"
+    echo ".ralph-hybrid/${feature_name}"
 }
 ```
 
@@ -406,9 +406,9 @@ Clear separation of what writes each file:
 
 | File | Written By | Read By | Purpose |
 |------|------------|---------|---------|
-| `spec.md` | `/ralph-plan`, `/ralph-amend` (Claude) | `/ralph-prd`, Claude agent | Source of truth for requirements |
-| `prd.json` | `/ralph-prd`, `/ralph-amend` (Claude) | Ralph loop, Claude agent | Machine-readable task state |
-| `progress.txt` | Claude agent (appends), `/ralph-amend` | Claude agent | Iteration history, learnings, amendments |
+| `spec.md` | `/ralph-hybrid-plan`, `/ralph-hybrid-amend` (Claude) | `/ralph-hybrid-prd`, Claude agent | Source of truth for requirements |
+| `prd.json` | `/ralph-hybrid-prd`, `/ralph-hybrid-amend` (Claude) | Ralph loop, Claude agent | Machine-readable task state |
+| `progress.txt` | Claude agent (appends), `/ralph-hybrid-amend` | Claude agent | Iteration history, learnings, amendments |
 | `status.json` | Ralph loop (bash) | Monitor script | Real-time loop status |
 | `logs/iteration-N.log` | Ralph loop (bash) | Monitor script, debugging | Raw Claude output per iteration |
 
@@ -417,7 +417,7 @@ Clear separation of what writes each file:
 ```
 spec.md (human-readable requirements)
     ↓
-    /ralph-prd generates (or /ralph-amend updates)
+    /ralph-hybrid-prd generates (or /ralph-hybrid-amend updates)
     ↓
 prd.json (machine-readable, derived)
     ↓
@@ -427,14 +427,14 @@ progress.txt (append-only history + amendment log)
 ```
 
 **Important:** `spec.md` is the source of truth. For requirement changes:
-- **During planning:** Edit `spec.md` and regenerate with `/ralph-prd`
-- **During implementation:** Use `/ralph-amend` to safely modify requirements
+- **During planning:** Edit `spec.md` and regenerate with `/ralph-hybrid-prd`
+- **During implementation:** Use `/ralph-hybrid-amend` to safely modify requirements
 
 ---
 
 ## Preflight Validation
 
-Before starting the loop, `ralph run` performs preflight checks. These can also be run standalone with `ralph validate`.
+Before starting the loop, `ralph-hybrid run` performs preflight checks. These can also be run standalone with `ralph-hybrid validate`.
 
 ### Checks Performed
 
@@ -442,7 +442,7 @@ Before starting the loop, `ralph run` performs preflight checks. These can also 
 |-------|----------|-------------|
 | Branch detected | ERROR | Must be on a branch (not detached HEAD) |
 | Protected branch | WARN | Warn if on main/master/develop |
-| Folder exists | ERROR | `.ralph/{branch}/` must exist |
+| Folder exists | ERROR | `.ralph-hybrid/{branch}/` must exist |
 | Required files | ERROR | spec.md, prd.json, progress.txt must exist |
 | prd.json schema | ERROR | Valid JSON with required fields |
 | spec.md structure | WARN | Has Problem Statement, Success Criteria, Stories |
@@ -464,7 +464,7 @@ sync_check() {
     if [[ "$current_stories" != "$spec_stories" ]]; then
         error "spec.md and prd.json are out of sync"
         diff_stories "$current_stories" "$spec_stories"
-        echo "Run '/ralph-prd' to regenerate prd.json from spec.md"
+        echo "Run '/ralph-hybrid-prd' to regenerate prd.json from spec.md"
         return 1
     fi
 }
@@ -474,9 +474,9 @@ sync_check() {
 
 | Scenario | Detection | Severity | Resolution |
 |----------|-----------|----------|------------|
-| New story in spec.md | Story in spec not in prd | ERROR | Run `/ralph-prd` |
-| Acceptance criteria changed | Criteria arrays differ | ERROR | Run `/ralph-prd` |
-| Orphaned story (passes: false) | Story in prd not in spec | WARN | Run `/ralph-prd` or add to spec |
+| New story in spec.md | Story in spec not in prd | ERROR | Run `/ralph-hybrid-prd` |
+| Acceptance criteria changed | Criteria arrays differ | ERROR | Run `/ralph-hybrid-prd` |
+| Orphaned story (passes: false) | Story in prd not in spec | WARN | Run `/ralph-hybrid-prd` or add to spec |
 | **Orphaned story (passes: true)** | Completed story in prd not in spec | **ERROR** | Requires explicit confirmation |
 | Only `passes` field differs | Ignored | OK | Expected (work in progress) |
 | Only `notes` field differs | Ignored | OK | Agent notes are ephemeral |
@@ -503,7 +503,7 @@ orphan_check() {
                 echo "  This story has passes:true but is not in spec.md"
                 echo "  Options:"
                 echo "    1. Add story back to spec.md (preserve work)"
-                echo "    2. Run '/ralph-prd --confirm-orphan-removal' (discard work)"
+                echo "    2. Run '/ralph-hybrid-prd --confirm-orphan-removal' (discard work)"
                 return 1
             else
                 warn "Orphaned story: $id (passes: false, will be removed)"
@@ -516,13 +516,13 @@ orphan_check() {
 ### Preflight Output
 
 ```
-$ ralph validate
+$ ralph-hybrid validate
 
 Preflight checks for branch: feature/user-auth
-Feature folder: .ralph/feature-user-auth/
+Feature folder: .ralph-hybrid/feature-user-auth/
 
 ✓ Branch detected: feature/user-auth
-✓ Folder exists: .ralph/feature-user-auth/
+✓ Folder exists: .ralph-hybrid/feature-user-auth/
 ✓ Required files present
 ✓ prd.json schema valid
 ✓ spec.md structure valid
@@ -532,13 +532,13 @@ All checks passed. Ready to run.
 ```
 
 ```
-$ ralph validate
+$ ralph-hybrid validate
 
 Preflight checks for branch: feature/user-auth
-Feature folder: .ralph/feature-user-auth/
+Feature folder: .ralph-hybrid/feature-user-auth/
 
 ✓ Branch detected: feature/user-auth
-✓ Folder exists: .ralph/feature-user-auth/
+✓ Folder exists: .ralph-hybrid/feature-user-auth/
 ✓ Required files present
 ✓ prd.json schema valid
 ⚠ spec.md missing "Out of Scope" section (recommended)
@@ -546,18 +546,18 @@ Feature folder: .ralph/feature-user-auth/
     - STORY-004 in spec.md not found in prd.json
     - STORY-002 acceptance criteria differs
 
-Resolve sync issues by running '/ralph-prd' in Claude Code.
+Resolve sync issues by running '/ralph-hybrid-prd' in Claude Code.
 ```
 
 **Example: Orphaned completed story detected**
 ```
-$ ralph validate
+$ ralph-hybrid validate
 
 Preflight checks for branch: feature/user-auth
-Feature folder: .ralph/feature-user-auth/
+Feature folder: .ralph-hybrid/feature-user-auth/
 
 ✓ Branch detected: feature/user-auth
-✓ Folder exists: .ralph/feature-user-auth/
+✓ Folder exists: .ralph-hybrid/feature-user-auth/
 ✓ Required files present
 ✓ prd.json schema valid
 ✓ spec.md structure valid
@@ -568,7 +568,7 @@ Feature folder: .ralph/feature-user-auth/
 This story was completed but is no longer in spec.md.
 Options:
   1. Add STORY-003 back to spec.md (preserve completed work)
-  2. Run '/ralph-prd' and confirm orphan removal (discard work)
+  2. Run '/ralph-hybrid-prd' and confirm orphan removal (discard work)
 ```
 
 ---
@@ -581,8 +581,8 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 
 | Command | Purpose |
 |---------|---------|
-| `/ralph-plan <description>` | Interactive planning workflow |
-| `/ralph-prd` | Generate prd.json from existing spec.md |
+| `/ralph-hybrid-plan <description>` | Interactive planning workflow |
+| `/ralph-hybrid-prd` | Generate prd.json from existing spec.md |
 
 ### Workflow States
 
@@ -619,7 +619,7 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 
 ### GitHub Issue Integration
 
-If the branch name contains an issue number (e.g., `feature/42-user-auth`), the `/ralph-plan` command will:
+If the branch name contains an issue number (e.g., `feature/42-user-auth`), the `/ralph-hybrid-plan` command will:
 
 1. **Detect** issue number from branch name patterns
 2. **Fetch** issue via `gh issue view 42 --json title,body,labels`
@@ -671,10 +671,10 @@ Focus on critical ambiguities:
 
 ### Output Files
 
-After `/ralph-plan` completes:
+After `/ralph-hybrid-plan` completes:
 
 ```
-.ralph/{feature}/
+.ralph-hybrid/{feature}/
 ├── spec.md           # Full specification (human-readable)
 ├── prd.json          # Machine-readable task list
 ├── progress.txt      # Empty, ready for iterations
@@ -685,12 +685,12 @@ After `/ralph-plan` completes:
 
 ```bash
 # In Claude Code session:
-/ralph-plan Add user authentication with JWT
+/ralph-hybrid-plan Add user authentication with JWT
 
 # Follow interactive prompts...
 
 # After planning completes:
-ralph run
+ralph-hybrid run
 ```
 
 ---
@@ -714,10 +714,10 @@ Ralph Hybrid treats scope changes as **expected, not exceptional**.
 
 | Command | Purpose |
 |---------|---------|
-| `/ralph-amend add <description>` | Add new requirement discovered during implementation |
-| `/ralph-amend correct <story-id> <description>` | Fix or clarify existing story |
-| `/ralph-amend remove <story-id> <reason>` | Descope story (archived, not deleted) |
-| `/ralph-amend status` | View amendment history and current state |
+| `/ralph-hybrid-amend add <description>` | Add new requirement discovered during implementation |
+| `/ralph-hybrid-amend correct <story-id> <description>` | Fix or clarify existing story |
+| `/ralph-hybrid-amend remove <story-id> <reason>` | Descope story (archived, not deleted) |
+| `/ralph-hybrid-amend status` | View amendment history and current state |
 
 ### Amendment Modes
 
@@ -814,7 +814,7 @@ Amendments are recorded in a dedicated section:
 
 **Type:** ADD
 **Reason:** User needs data export for external reporting
-**Added by:** /ralph-amend
+**Added by:** /ralph-hybrid-amend
 
 #### STORY-004: Export data as CSV
 
@@ -910,7 +910,7 @@ Amendments are logged with full context:
 ## Amendment AMD-001: 2026-01-09T14:32:00Z
 
 Type: ADD
-Command: /ralph-amend add "Users need CSV export for reporting"
+Command: /ralph-hybrid-amend add "Users need CSV export for reporting"
 
 Added Stories:
   - STORY-004: Export data as CSV (priority: 2)
@@ -932,7 +932,7 @@ need to export filtered results for monthly reporting.
 #### Adding to Completed Feature
 
 ```
-/ralph-amend add "One more thing..."
+/ralph-hybrid-amend add "One more thing..."
 
 ⚠️  All stories currently pass. Adding new story will:
   - Mark feature incomplete
@@ -944,7 +944,7 @@ Proceed? (y/N)
 #### Correcting a Blocking Story
 
 ```
-/ralph-amend correct STORY-001 "Change API contract"
+/ralph-hybrid-amend correct STORY-001 "Change API contract"
 
 ⚠️  STORY-001 is a dependency for:
   - STORY-002 (passes: true)
@@ -957,7 +957,7 @@ Reset all dependent stories? (y/N/select)
 #### Removing a Story with Dependents
 
 ```
-/ralph-amend remove STORY-002 "Not needed"
+/ralph-hybrid-amend remove STORY-002 "Not needed"
 
 ⚠️  STORY-002 blocks:
   - STORY-003 (passes: false)
@@ -1002,7 +1002,7 @@ The sync check (see [Preflight Validation](#preflight-validation)) validates ame
 
 ### Schema (prd.json)
 
-The prd.json file is a **derived artifact** generated from spec.md by `/ralph-prd`. It provides machine-readable task state for the Ralph loop.
+The prd.json file is a **derived artifact** generated from spec.md by `/ralph-hybrid-prd`. It provides machine-readable task state for the Ralph loop.
 
 > **Note:** The feature identifier is derived from the current git branch name. No `feature` or `branchName` fields are needed in prd.json.
 
@@ -1040,7 +1040,7 @@ The prd.json file is a **derived artifact** generated from spec.md by `/ralph-pr
 | `userStories[].passes` | boolean | Yes | Completion status (updated by Claude) |
 | `userStories[].notes` | string | No | Agent notes, blockers |
 | `userStories[].spec_ref` | string | No | Path to detailed spec file (e.g., "specs/validation.spec.md") |
-| `userStories[].amendment` | object | No | Amendment metadata (if added/modified via /ralph-amend) |
+| `userStories[].amendment` | object | No | Amendment metadata (if added/modified via /ralph-hybrid-amend) |
 | `userStories[].amendment.id` | string | Yes* | Amendment ID (e.g., AMD-001) |
 | `userStories[].amendment.type` | string | Yes* | "add", "correct", or "remove" |
 | `userStories[].amendment.timestamp` | ISO-8601 | Yes* | When amendment was made |
@@ -1055,7 +1055,7 @@ The prd.json file is a **derived artifact** generated from spec.md by `/ralph-pr
 
 ### Schema (spec.md)
 
-The spec.md file is a human-readable specification generated by `/ralph-plan`. It serves as the source of truth for feature requirements.
+The spec.md file is a human-readable specification generated by `/ralph-hybrid-plan`. It serves as the source of truth for feature requirements.
 
 ### Spec Files (specs/ directory)
 
@@ -1074,7 +1074,7 @@ The `specs/` directory within each feature folder provides a central location fo
 #### Directory Structure
 
 ```
-.ralph/{feature-name}/
+.ralph-hybrid/{feature-name}/
 ├── spec.md                    # Main specification (required)
 ├── prd.json                   # Machine-readable tasks (required)
 ├── progress.txt               # Iteration log (required)
@@ -1144,9 +1144,9 @@ This enables:
 
 #### How Ralph Uses Spec Files
 
-1. **During planning** (`/ralph-plan`): Complex requirements generate additional spec files
+1. **During planning** (`/ralph-hybrid-plan`): Complex requirements generate additional spec files
 2. **During implementation** (Ralph loop): Agent reads `specs/` for detailed requirements
-3. **During amendments** (`/ralph-amend`): New specs can be created for added requirements
+3. **During amendments** (`/ralph-hybrid-amend`): New specs can be created for added requirements
 
 The prompt template instructs the agent to check `specs/` for detailed requirements:
 
@@ -1172,7 +1172,7 @@ created: {ISO-8601}
 
 # {Feature Title}
 
-<!-- Feature folder: .ralph/{branch-name}/ (derived from git branch) -->
+<!-- Feature folder: .ralph-hybrid/{branch-name}/ (derived from git branch) -->
 
 ## Problem Statement
 {Description of the problem being solved}
@@ -1204,20 +1204,20 @@ created: {ISO-8601}
 ---
 
 ## Amendments
-<!-- Added by /ralph-amend - DO NOT manually edit this section -->
+<!-- Added by /ralph-hybrid-amend - DO NOT manually edit this section -->
 
 ### AMD-001: {Title} ({ISO-8601})
 
 **Type:** ADD | CORRECT | REMOVE
 **Reason:** {Why the amendment was made}
-**Added by:** /ralph-amend
+**Added by:** /ralph-hybrid-amend
 
 {Story definition for ADD, change table for CORRECT}
 
 ---
 
 ## Descoped Stories
-<!-- Stories removed via /ralph-amend remove - preserved for audit trail -->
+<!-- Stories removed via /ralph-hybrid-amend remove - preserved for audit trail -->
 
 ### {STORY-ID}: {Title} (Removed {AMD-ID})
 
@@ -1235,7 +1235,7 @@ created: {ISO-8601}
 |-------|------|----------|-------------|
 | `created` | ISO-8601 | Yes | Creation timestamp |
 
-> **Note:** No `feature` or `branch` fields. The feature is identified by the folder path, which is derived from the current git branch (e.g., branch `feature/user-auth` → folder `.ralph/feature-user-auth/`).
+> **Note:** No `feature` or `branch` fields. The feature is identified by the folder path, which is derived from the current git branch (e.g., branch `feature/user-auth` → folder `.ralph-hybrid/feature-user-auth/`).
 
 ### Story Format
 
@@ -1288,7 +1288,7 @@ Amendments are logged in progress.txt with a distinct format:
 ## Amendment AMD-001: <ISO-8601>
 
 Type: ADD | CORRECT | REMOVE
-Command: /ralph-amend <mode> "<description>"
+Command: /ralph-hybrid-amend <mode> "<description>"
 
 Added Stories:           # For ADD
   - <ID>: <Title> (priority: N)
@@ -1365,7 +1365,7 @@ Each session starts with fresh context. Memory persists via prd.json, progress.t
 ## Amendment Awareness
 
 Stories may have an `amendment` field in prd.json. This means they were added
-or modified after initial planning via `/ralph-amend`.
+or modified after initial planning via `/ralph-hybrid-amend`.
 
 When you see amended stories:
 - Check progress.txt for "## Amendment AMD-XXX" entries explaining why
@@ -1429,8 +1429,8 @@ Ralph Hybrid provides an optional tmux-based monitoring dashboard for real-time 
 
 | Command | Description |
 |---------|-------------|
-| `ralph run --monitor` | Start loop with integrated tmux dashboard |
-| `ralph monitor` | Launch standalone dashboard (attach to running loop) |
+| `ralph-hybrid run --monitor` | Start loop with integrated tmux dashboard |
+| `ralph-hybrid monitor` | Launch standalone dashboard (attach to running loop) |
 
 ### Dashboard Display
 
@@ -1583,7 +1583,7 @@ Ralph Hybrid provides a hooks system for extending and customizing behavior at v
 
 ```
 <project>/
-└── .ralph/
+└── .ralph-hybrid/
     ├── <feature-name>/
     │   └── hooks/                      # Feature-specific hooks
     │       ├── pre_run.sh
@@ -1597,7 +1597,7 @@ Ralph Hybrid provides a hooks system for extending and customizing behavior at v
 
 ### Creating Hook Scripts
 
-Hook scripts are bash scripts placed in the `.ralph/<feature>/hooks/` directory. They are named after the hook point they handle.
+Hook scripts are bash scripts placed in the `.ralph-hybrid/<feature>/hooks/` directory. They are named after the hook point they handle.
 
 **Example: post_iteration.sh**
 
@@ -1620,7 +1620,7 @@ echo "Iteration $RALPH_ITERATION completed"
 #   -d "feature=$RALPH_FEATURE_NAME&iteration=$RALPH_ITERATION"
 ```
 
-Make hooks executable: `chmod +x .ralph/<feature>/hooks/post_iteration.sh`
+Make hooks executable: `chmod +x .ralph-hybrid/<feature>/hooks/post_iteration.sh`
 
 ### Environment Variables in Hooks
 
@@ -1721,39 +1721,44 @@ export RALPH_HOOKS_ENABLED=false
 # Clone and install globally
 git clone https://github.com/krazyuniks/ralph-hybrid.git
 cd ralph-hybrid
-./install.sh                # installs to ~/.ralph/
-source ~/.bashrc            # or ~/.zshrc, or open new terminal
+./install.sh                # installs to ~/.ralph-hybrid/
 ```
 
 The install script:
-1. Copies files to `~/.ralph/` (ralph, lib/, templates/, commands/)
-2. Adds `~/.ralph` to PATH in shell rc file
-3. Creates default config.yaml
+1. Copies files to `~/.ralph-hybrid/` (ralph, lib/, templates/, commands/)
+2. Creates default config.yaml
 
-After installation, the cloned repo can be deleted.
+After installation, add `~/.ralph-hybrid` to your PATH:
+
+```bash
+# Add to your shell config (e.g., ~/.zshrc, ~/.bashrc, or your dotfiles)
+export PATH="$HOME/.ralph-hybrid:$PATH"
+```
+
+Then restart your shell or source your config file. The cloned repo can be deleted.
 
 ### Project Setup
 
 ```bash
 # In each project where you want to use Ralph:
 cd your-project
-ralph setup                 # installs Claude commands to .claude/commands/
+ralph-hybrid setup                 # installs Claude commands to .claude/commands/
 ```
 
-The setup command copies `/ralph-plan`, `/ralph-prd`, and `/ralph-amend` to your project's `.claude/commands/` directory. This is idempotent - running it again updates the commands.
+The setup command copies `/ralph-hybrid-plan`, `/ralph-hybrid-prd`, and `/ralph-hybrid-amend` to your project's `.claude/commands/` directory. This is idempotent - running it again updates the commands.
 
 ### Uninstall
 
 ```bash
 ./uninstall.sh
-# Or manually: rm -rf ~/.ralph and remove PATH entry
+# Or manually: rm -rf ~/.ralph-hybrid and remove PATH entry
 ```
 
 ### Verify Installation
 
 ```bash
 ralph --version
-ralph help
+ralph-hybrid help
 ```
 
 ---
@@ -1903,7 +1908,7 @@ export RALPH_JQ_CMD="/path/to/mock_jq_script"
     }
 
     run get_feature_dir
-    [ "$output" = ".ralph/feature-my-feature" ]
+    [ "$output" = ".ralph-hybrid/feature-my-feature" ]
 }
 ```
 

@@ -1,4 +1,4 @@
-# /ralph-prd - Generate PRD from Spec
+# /ralph-hybrid-prd - Generate PRD from Spec
 
 Generate or regenerate `prd.json` from an existing `spec.md` file.
 
@@ -11,7 +11,7 @@ Generate or regenerate `prd.json` from an existing `spec.md` file.
 - After manually editing `spec.md`
 - To regenerate `prd.json` after adding/removing stories
 - When `spec.md` exists but `prd.json` doesn't
-- When `ralph validate` reports sync errors
+- When `ralph-hybrid validate` reports sync errors
 - To reset all `passes` fields to `false`
 
 ## Workflow
@@ -20,7 +20,7 @@ Generate or regenerate `prd.json` from an existing `spec.md` file.
 
 ```
 1. Get current git branch: git branch --show-current
-2. Derive feature folder: .ralph/{branch-name}/ (slashes → dashes)
+2. Derive feature folder: .ralph-hybrid/{branch-name}/ (slashes → dashes)
 3. Look for spec.md in that folder
 4. Error if not found
 ```
@@ -46,7 +46,7 @@ For each story, extract:
 
 ### 3. Generate PRD
 
-Create `.ralph/{branch-name}/prd.json`:
+Create `.ralph-hybrid/{branch-name}/prd.json`:
 
 ```json
 {
@@ -86,7 +86,7 @@ If `progress.txt` doesn't exist, create it:
 ### 5. Report
 
 ```
-Generated: .ralph/feature-user-auth/prd.json
+Generated: .ralph-hybrid/feature-user-auth/prd.json
 
 Branch: feature/user-auth
 Stories: 4 total
@@ -96,7 +96,7 @@ Stories: 4 total
   - STORY-004: Token Refresh (passes: false)
 
 Ready to run:
-  ralph run
+  ralph-hybrid run
 ```
 
 ---
@@ -176,10 +176,10 @@ Before generating, validate:
 ## Example
 
 ```
-User: /ralph-prd
+User: /ralph-hybrid-prd
 
 Claude: Current branch: feature/user-auth
-Feature folder: .ralph/feature-user-auth/
+Feature folder: .ralph-hybrid/feature-user-auth/
 
 Reading spec.md...
 
@@ -194,10 +194,10 @@ Validation:
   ✓ All stories have test criteria
   ✓ Story sizes look reasonable
 
-Generated: .ralph/feature-user-auth/prd.json
+Generated: .ralph-hybrid/feature-user-auth/prd.json
 
 Ready to run:
-  ralph run
+  ralph-hybrid run
 ```
 
 ---
@@ -207,7 +207,7 @@ Ready to run:
 | Error | Response |
 |-------|----------|
 | Not on a branch | "Error: Not on a git branch (detached HEAD). Checkout a branch first." |
-| No feature folder | "No .ralph/{branch}/ folder found. Run /ralph-plan first." |
-| No spec.md found | "No spec.md found in .ralph/{branch}/. Run /ralph-plan first." |
+| No feature folder | "No .ralph-hybrid/{branch}/ folder found. Run /ralph-hybrid-plan first." |
+| No spec.md found | "No spec.md found in .ralph-hybrid/{branch}/. Run /ralph-hybrid-plan first." |
 | Parse error | "Could not parse spec.md. Check format at line {N}." |
 | No stories found | "No STORY-XXX sections found in spec.md." |

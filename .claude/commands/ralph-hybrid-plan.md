@@ -1,4 +1,4 @@
-# /ralph-plan - Feature Planning Workflow
+# /ralph-hybrid-plan - Feature Planning Workflow
 
 Plan a new feature for Ralph Hybrid development. Guide the user through requirements gathering, specification, and PRD generation.
 
@@ -96,11 +96,11 @@ Using provided description: "$ARGUMENTS"
 
 ### If `$ARGUMENTS` provided (no issue):
 1. Parse the feature description
-2. Check for existing `.ralph/*/` folders that might be related
+2. Check for existing `.ralph-hybrid/*/` folders that might be related
 3. Summarize understanding back to user
 
 ### If resuming (existing spec.md found):
-1. Read `.ralph/{branch}/spec.md`
+1. Read `.ralph-hybrid/{branch}/spec.md`
 2. Summarize current state
 3. Ask what needs to change
 
@@ -166,17 +166,17 @@ BRANCH=$(git branch --show-current)
 FOLDER_NAME=$(echo "$BRANCH" | tr '/' '-')
 
 # Feature folder path
-FEATURE_DIR=".ralph/${FOLDER_NAME}"
+FEATURE_DIR=".ralph-hybrid/${FOLDER_NAME}"
 ```
 
 **Examples:**
 | Branch | Folder (CORRECT) | Folder (WRONG) |
 |--------|------------------|----------------|
-| `384/job-processing-pipeline-step-3-video-com` | `.ralph/384-job-processing-pipeline-step-3-video-com/` | `.ralph/384-video-composition/` |
-| `feature/42-user-auth` | `.ralph/feature-42-user-auth/` | `.ralph/user-auth/` |
-| `fix/123-bug-fix` | `.ralph/fix-123-bug-fix/` | `.ralph/bug-fix/` |
+| `384/job-processing-pipeline-step-3-video-com` | `.ralph-hybrid/384-job-processing-pipeline-step-3-video-com/` | `.ralph-hybrid/384-video-composition/` |
+| `feature/42-user-auth` | `.ralph-hybrid/feature-42-user-auth/` | `.ralph-hybrid/user-auth/` |
+| `fix/123-bug-fix` | `.ralph-hybrid/fix-123-bug-fix/` | `.ralph-hybrid/bug-fix/` |
 
-**Why this matters:** `ralph run` derives the folder from the branch name using the same logic. If you use a different name, `ralph run` won't find your files.
+**Why this matters:** `ralph-hybrid run` derives the folder from the branch name using the same logic. If you use a different name, `ralph-hybrid run` won't find your files.
 
 #### Step 2: Create directory if it doesn't exist
 
@@ -184,7 +184,7 @@ FEATURE_DIR=".ralph/${FOLDER_NAME}"
 
 #### Step 4: Present spec to user for review
 
-> **Note:** The feature folder is derived from the current git branch. User should be on the correct branch before running `/ralph-plan`.
+> **Note:** The feature folder is derived from the current git branch. User should be on the correct branch before running `/ralph-hybrid-plan`.
 
 ### Spec Template:
 
@@ -326,7 +326,7 @@ STORY-004: Implement user login (blocked by STORY-003)
 ### Actions:
 1. Read final spec.md
 2. **Use the SAME feature folder from Phase 3** - do NOT recalculate or use a different name
-   - The folder MUST be: `.ralph/$(git branch --show-current | tr '/' '-')/`
+   - The folder MUST be: `.ralph-hybrid/$(git branch --show-current | tr '/' '-')/`
 3. Generate `prd.json` in that folder:
 
 ```json
@@ -369,7 +369,7 @@ STORY-004: Implement user login (blocked by STORY-003)
 5. **Validate folder name** before outputting summary:
    ```bash
    # Verify the folder you created matches what ralph expects
-   EXPECTED=".ralph/$(git branch --show-current | tr '/' '-')"
+   EXPECTED=".ralph-hybrid/$(git branch --show-current | tr '/' '-')"
    # If your folder doesn't match $EXPECTED, you made an error - fix it!
    ```
 
@@ -377,23 +377,23 @@ STORY-004: Implement user login (blocked by STORY-003)
 
 ```
 Planning complete for branch: {exact branch name}
-Feature folder: .ralph/{branch-with-slashes-as-dashes}/
+Feature folder: .ralph-hybrid/{branch-with-slashes-as-dashes}/
 
 Created files:
-  .ralph/{branch-with-slashes-as-dashes}/
+  .ralph-hybrid/{branch-with-slashes-as-dashes}/
   ├── spec.md          # Feature specification
   ├── prd.json         # {N} stories, all passes: false
   └── progress.txt     # Empty, ready for iterations
 
 Next steps:
   1. Review spec.md and prd.json
-  2. Run: ralph run
+  2. Run: ralph-hybrid run
 
-IMPORTANT: The command is exactly `ralph run` - do NOT substitute with
+IMPORTANT: The command is exactly `ralph-hybrid run` - do NOT substitute with
 project-specific commands like `/execute`, `npm run dev`, or any other
-command. The Ralph development loop is initiated with `ralph run` only.
+command. The Ralph development loop is initiated with `ralph-hybrid run` only.
 
-To modify: Edit spec.md, then run /ralph-prd to regenerate
+To modify: Edit spec.md, then run /ralph-hybrid-prd to regenerate
 ```
 
 ---
@@ -402,10 +402,10 @@ To modify: Edit spec.md, then run /ralph-prd to regenerate
 
 ### If user wants changes after GENERATE:
 - Edit spec.md directly
-- Run `/ralph-prd` to regenerate prd.json from updated spec
+- Run `/ralph-hybrid-prd` to regenerate prd.json from updated spec
 
 ### If feature folder already exists:
-- Ask: "Found existing .ralph/{branch}/. Resume planning or start fresh?"
+- Ask: "Found existing .ralph-hybrid/{branch}/. Resume planning or start fresh?"
 - Resume: Load spec.md, skip to DRAFT
 - Fresh: Archive existing folder first
 
@@ -420,7 +420,7 @@ To modify: Edit spec.md, then run /ralph-prd to regenerate
 ### Example 1: With GitHub Issue (typical flow)
 
 ```
-User: /ralph-plan
+User: /ralph-hybrid-plan
 
 Claude: I see you're on branch 'feature/42-user-auth'.
 
@@ -467,7 +467,7 @@ User: No, this is greenfield
 
 Claude: Got it. Let me draft the specification...
 
-[Creates .ralph/feature-42-user-auth/spec.md]
+[Creates .ralph-hybrid/feature-42-user-auth/spec.md]
 
 Here's the draft spec. Please review:
 [Shows spec.md content]
@@ -478,7 +478,7 @@ Note: This spec was generated from GitHub issue #42.
 ### Example 2: Without External Context
 
 ```
-User: /ralph-plan Add user authentication with JWT
+User: /ralph-hybrid-plan Add user authentication with JWT
 
 Claude: I see you're on branch 'feature/user-auth'.
 
@@ -516,7 +516,7 @@ User: No, this is greenfield
 
 Claude: Got it. Let me draft the specification...
 
-[Creates .ralph/feature-user-auth/spec.md]
+[Creates .ralph-hybrid/feature-user-auth/spec.md]
 
 Here's the draft spec. Please review:
 [Shows spec.md content]

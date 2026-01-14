@@ -74,7 +74,7 @@ teardown() {
 
     run get_feature_dir
     [ "$status" -eq 0 ]
-    [ "$output" = ".ralph/test-feature" ]
+    [ "$output" = ".ralph-hybrid/test-feature" ]
 }
 
 @test "get_feature_dir converts slashes to dashes" {
@@ -89,7 +89,7 @@ teardown() {
 
     run get_feature_dir
     [ "$status" -eq 0 ]
-    [ "$output" = ".ralph/feature-user-auth" ]
+    [ "$output" = ".ralph-hybrid/feature-user-auth" ]
 }
 
 @test "get_feature_dir converts multiple slashes to dashes" {
@@ -104,7 +104,7 @@ teardown() {
 
     run get_feature_dir
     [ "$status" -eq 0 ]
-    [ "$output" = ".ralph/feature-auth-oauth-google" ]
+    [ "$output" = ".ralph-hybrid/feature-auth-oauth-google" ]
 }
 
 @test "get_feature_dir errors on detached HEAD" {
@@ -137,7 +137,7 @@ teardown() {
     run get_feature_dir
     [ "$status" -eq 0 ]
     # Output contains the path and warning
-    [[ "$output" =~ ".ralph/main" ]]
+    [[ "$output" =~ ".ralph-hybrid/main" ]]
     [[ "$output" =~ "protected branch" ]] || [[ "$output" =~ "WARN" ]]
 }
 
@@ -155,7 +155,7 @@ teardown() {
     run get_feature_dir
     [ "$status" -eq 0 ]
     # Output contains the path and warning
-    [[ "$output" =~ ".ralph/master" ]]
+    [[ "$output" =~ ".ralph-hybrid/master" ]]
     [[ "$output" =~ "protected branch" ]] || [[ "$output" =~ "WARN" ]]
 }
 
@@ -172,7 +172,7 @@ teardown() {
     run get_feature_dir
     [ "$status" -eq 0 ]
     # Output contains the path and warning
-    [[ "$output" =~ ".ralph/develop" ]]
+    [[ "$output" =~ ".ralph-hybrid/develop" ]]
     [[ "$output" =~ "protected branch" ]] || [[ "$output" =~ "WARN" ]]
 }
 

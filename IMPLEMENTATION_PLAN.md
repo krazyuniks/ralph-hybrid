@@ -1,6 +1,6 @@
 # Ralph Hybrid v0.2 - Implementation Plan
 
-**Status**: In Progress (Phase 1.1 - 60% complete)
+**Status**: In Progress (Phase 1.1 - 100% complete)
 **Target**: AI-agnostic, multi-agent architecture
 **Date**: 2026-01-14
 
@@ -63,16 +63,22 @@ _RALPH_*                     → _RALPH_HYBRID_*
 - [x] Update all constants.sh variables: `RALPH_*` → `RALPH_HYBRID_*`
 - [x] Update all lib/*.sh references to renamed vars (all 17 files)
 - [x] Update ralph-hybrid main script variable references
-- [ ] Rename .claude/commands/ralph-*.md → ralph-hybrid-*.md
-- [ ] Update .claude/commands content with new references
-- [ ] Update templates/config.yaml.example paths
-- [ ] Update templates/prompt*.md references
-- [ ] Add migration script for existing .ralph folders
-- [ ] Update all documentation (README, SPEC, CLAUDE.md)
-- [ ] Update all test files (tests/*.bats) - ~20 files
+- [x] Rename .claude/commands/ralph-*.md → ralph-hybrid-*.md
+- [x] Update .claude/commands content with new references
+- [x] Update templates/config.yaml.example paths
+- [x] Update templates/prompt*.md references
+- [x] Add migration script for existing .ralph folders (migrate.sh)
+- [x] Update all documentation (README, SPEC, CLAUDE.md)
+- [x] Update all test files (tests/*.bats) - ~20 files
+- [x] Remove automatic PATH updates from install.sh (user manages own dotfiles)
 - [ ] Add backward compatibility aliases (optional)
 
-**Testing:**
+**Testing Phase 1.1:**
+- [ ] Run BATS unit tests: `bats tests/unit/`
+- [ ] Run BATS integration tests: `bats tests/integration/`
+- [ ] Create test fixture project (tests/fixtures/mock-project/)
+- [ ] Test ralph-hybrid loop end-to-end with fixture project
+
 ```bash
 # After rename, verify:
 ralph-hybrid --version
@@ -81,7 +87,40 @@ ls ~/.ralph-hybrid/
 ls .ralph-hybrid/
 ```
 
-#### 1.2 Provider Abstraction Layer
+#### 1.3 Hybrid Quality Checks Strategy (Future)
+
+Add configurable quality check strategies:
+
+```yaml
+# Option 1: Git hooks only (let pre-commit handle everything)
+quality_checks:
+  strategy: "git-hooks"
+
+# Option 2: Explicit commands (current behavior)
+quality_checks:
+  all: "just check"
+
+# Option 3: Hybrid (pre-commit + additional checks)
+quality_checks:
+  strategy: "hybrid"
+  pre_commit: true           # Run quality via git commit hooks
+  additional:                # Extra checks not covered by hooks
+    - "docker compose exec backend pytest"
+    - "npm run e2e"
+```
+
+**Rationale:**
+- Pre-commit hooks handle formatting/linting (language-specific, user-configured)
+- Additional checks for things hooks don't cover (integration tests, docker-based tests)
+- Ralph stays language-agnostic
+
+**Tasks:**
+- [ ] Add `strategy` field to quality_checks config
+- [ ] Implement git-hooks strategy (just run `git commit`, check exit code)
+- [ ] Implement hybrid strategy (run additional checks, then commit)
+- [ ] Update documentation
+
+#### 1.4 Provider Abstraction Layer
 
 **Create provider interface:**
 

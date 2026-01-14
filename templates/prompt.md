@@ -69,7 +69,7 @@ After updating:
 ## Amendment Awareness
 
 Stories may have an `amendment` field in prd.json. This indicates they were
-added or modified after initial planning via `/ralph-amend`.
+added or modified after initial planning via `/ralph-hybrid-amend`.
 
 **When you see amended stories:**
 - Check progress.txt for "## Amendment AMD-XXX" entries explaining why

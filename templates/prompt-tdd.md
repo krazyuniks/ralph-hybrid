@@ -71,7 +71,7 @@ You have been given:
 
 4. **Commit tracking:**
    ```bash
-   git add .ralph/
+   git add .ralph-hybrid/
    git commit -m "chore: Update progress for [STORY-ID]"
    ```
 
@@ -124,7 +124,7 @@ cat specs/validation.spec.md
 ## Amendment Awareness
 
 Stories may have an `amendment` field in prd.json. This indicates they were
-added or modified after initial planning via `/ralph-amend`.
+added or modified after initial planning via `/ralph-hybrid-amend`.
 
 **When you see amended stories:**
 - Check progress.txt for "## Amendment AMD-XXX" entries explaining why

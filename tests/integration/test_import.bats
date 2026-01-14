@@ -76,17 +76,17 @@ EOF
     [[ "$output" == *"Imported PRD to:"* ]]
 
     # Check that prd.json was created
-    [ -f ".ralph/feature-test-import/prd.json" ]
+    [ -f ".ralph-hybrid/feature-test-import/prd.json" ]
 
     # Check that progress.txt was created
-    [ -f ".ralph/feature-test-import/progress.txt" ]
+    [ -f ".ralph-hybrid/feature-test-import/progress.txt" ]
 
     # Check that spec.md stub was created (since we imported to a new location)
-    [ -f ".ralph/feature-test-import/spec.md" ]
+    [ -f ".ralph-hybrid/feature-test-import/spec.md" ]
 
     # Verify JSON structure
     local story_count
-    story_count=$(jq '.userStories | length' ".ralph/feature-test-import/prd.json")
+    story_count=$(jq '.userStories | length' ".ralph-hybrid/feature-test-import/prd.json")
     [ "$story_count" -eq 1 ]
 }
 
@@ -113,7 +113,7 @@ EOF
     [[ "$output" == *"Imported PRD to:"* ]]
 
     # Check that prd.json was created
-    [ -f ".ralph/feature-test-import/prd.json" ]
+    [ -f ".ralph-hybrid/feature-test-import/prd.json" ]
 }
 
 @test "ralph import respects --output flag" {
@@ -158,13 +158,13 @@ EOF
 EOF
 
     # Ensure feature directory doesn't exist
-    [ ! -d ".ralph/feature-test-import" ]
+    [ ! -d ".ralph-hybrid/feature-test-import" ]
 
     run "$PROJECT_ROOT/ralph" import spec.md
     [ "$status" -eq 0 ]
 
     # Now it should exist
-    [ -d ".ralph/feature-test-import" ]
+    [ -d ".ralph-hybrid/feature-test-import" ]
 }
 
 @test "ralph import shows story count in output" {
@@ -183,10 +183,10 @@ EOF
 
 @test "ralph import preserves existing progress.txt" {
     cd "$TEST_TEMP_DIR"
-    mkdir -p ".ralph/feature-test-import"
+    mkdir -p ".ralph-hybrid/feature-test-import"
 
     # Create existing progress.txt
-    echo "# Existing progress" > ".ralph/feature-test-import/progress.txt"
+    echo "# Existing progress" > ".ralph-hybrid/feature-test-import/progress.txt"
 
     cat > spec.md <<'EOF'
 ### STORY-001: Test
@@ -196,15 +196,15 @@ EOF
     [ "$status" -eq 0 ]
 
     # Check that existing content is preserved
-    grep -q "Existing progress" ".ralph/feature-test-import/progress.txt"
+    grep -q "Existing progress" ".ralph-hybrid/feature-test-import/progress.txt"
 }
 
 @test "ralph import preserves existing spec.md" {
     cd "$TEST_TEMP_DIR"
-    mkdir -p ".ralph/feature-test-import"
+    mkdir -p ".ralph-hybrid/feature-test-import"
 
     # Create existing spec.md
-    echo "# Existing spec" > ".ralph/feature-test-import/spec.md"
+    echo "# Existing spec" > ".ralph-hybrid/feature-test-import/spec.md"
 
     cat > input-spec.md <<'EOF'
 ### STORY-001: Test
@@ -214,7 +214,7 @@ EOF
     [ "$status" -eq 0 ]
 
     # Check that existing spec.md content is preserved
-    grep -q "Existing spec" ".ralph/feature-test-import/spec.md"
+    grep -q "Existing spec" ".ralph-hybrid/feature-test-import/spec.md"
 }
 
 @test "ralph import rejects pdf format with helpful message" {
@@ -283,8 +283,8 @@ EOF
 
     # Check the output has required fields
     local has_description has_passes
-    has_description=$(jq 'has("description")' ".ralph/feature-test-import/prd.json")
-    has_passes=$(jq '.userStories[0] | has("passes")' ".ralph/feature-test-import/prd.json")
+    has_description=$(jq 'has("description")' ".ralph-hybrid/feature-test-import/prd.json")
+    has_passes=$(jq '.userStories[0] | has("passes")' ".ralph-hybrid/feature-test-import/prd.json")
 
     [ "$has_description" = "true" ]
     [ "$has_passes" = "true" ]

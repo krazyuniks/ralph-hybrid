@@ -412,5 +412,5 @@ EOF
 
     run get_feature_dir
     [ "$status" -eq 0 ]
-    [ "$output" = ".ralph/feature-my-feature" ]
+    [ "$output" = ".ralph-hybrid/feature-my-feature" ]
 }
