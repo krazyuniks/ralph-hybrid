@@ -393,7 +393,45 @@ IMPORTANT: The command is exactly `ralph-hybrid run` - do NOT substitute with
 project-specific commands like `/execute`, `npm run dev`, or any other
 command. The Ralph development loop is initiated with `ralph-hybrid run` only.
 
-To modify: Edit spec.md, then run /ralph-hybrid-prd to regenerate
+To modify: Edit spec.md, then run /ralph-hybrid-plan --regenerate
+```
+
+---
+
+## Regenerate Mode
+
+When spec.md exists and user runs `/ralph-hybrid-plan --regenerate` (or just `/ralph-hybrid-plan` and selects regenerate):
+
+1. Read existing spec.md
+2. Parse user stories from spec
+3. Generate new prd.json (preserving `passes` status for existing stories)
+4. Report changes
+
+```
+/ralph-hybrid-plan --regenerate
+
+Current branch: feature/user-auth
+Feature folder: .ralph-hybrid/feature-user-auth/
+
+Reading spec.md...
+
+Found 4 user stories:
+  1. STORY-001: User Registration
+  2. STORY-002: User Login
+  3. STORY-003: Auth Middleware
+  4. STORY-004: Token Refresh
+
+Existing prd.json has 3/4 stories complete.
+
+Changes detected:
+  ✓ STORY-001: User Registration (passes: true) → preserved
+  ✓ STORY-002: User Login (passes: true) → preserved
+  ✓ STORY-003: Auth Middleware (passes: true) → preserved
+  + STORY-004: Token Refresh (NEW)
+
+Regenerated: .ralph-hybrid/feature-user-auth/prd.json
+
+Ready to run: ralph-hybrid run
 ```
 
 ---
@@ -402,11 +440,12 @@ To modify: Edit spec.md, then run /ralph-hybrid-prd to regenerate
 
 ### If user wants changes after GENERATE:
 - Edit spec.md directly
-- Run `/ralph-hybrid-prd` to regenerate prd.json from updated spec
+- Run `/ralph-hybrid-plan --regenerate` to regenerate prd.json from updated spec
 
 ### If feature folder already exists:
-- Ask: "Found existing .ralph-hybrid/{branch}/. Resume planning or start fresh?"
-- Resume: Load spec.md, skip to DRAFT
+- Ask: "Found existing .ralph-hybrid/{branch}/. Resume planning, regenerate prd.json, or start fresh?"
+- Resume: Load spec.md, continue planning workflow
+- Regenerate: Just regenerate prd.json from current spec.md
 - Fresh: Archive existing folder first
 
 ### If not on a feature branch:

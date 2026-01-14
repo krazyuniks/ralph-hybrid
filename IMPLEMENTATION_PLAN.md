@@ -45,8 +45,7 @@ ralph                        → ralph-hybrid
 ~/.ralph/                    → ~/.ralph-hybrid/
 .ralph/                      → .ralph-hybrid/
 .claude/commands/ralph-*     → .claude/commands/ralph-hybrid-*
-/ralph-plan                  → /ralph-hybrid-plan
-/ralph-prd                   → /ralph-hybrid-prd
+/ralph-plan                  → /ralph-hybrid-plan (includes --regenerate, formerly /ralph-prd)
 /ralph-amend                 → /ralph-hybrid-amend
 ```
 

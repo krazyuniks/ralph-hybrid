@@ -13,7 +13,7 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 | README.md | Complete - Philosophy, rationale, source material |
 | SPEC.md | Complete - Technical specification |
 | templates/ | Complete - Prompt templates, examples |
-| .claude/commands/ | Complete - `/ralph-hybrid-plan`, `/ralph-hybrid-prd`, `/ralph-hybrid-amend` commands |
+| .claude/commands/ | Complete - `/ralph-hybrid-plan`, `/ralph-hybrid-amend` commands |
 | lib/ | Complete - All library functions |
 | ralph-hybrid | Complete - Main CLI script |
 | install.sh | Complete - Global installation |
@@ -34,8 +34,7 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 
 | Command | Purpose |
 |---------|---------|
-| `/ralph-hybrid-plan <description>` | Interactive planning workflow: SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE |
-| `/ralph-hybrid-prd` | Generate/regenerate prd.json from existing spec.md |
+| `/ralph-hybrid-plan <description>` | Interactive planning workflow (or `--regenerate` to regenerate prd.json from spec.md) |
 | `/ralph-hybrid-amend` | Safely modify requirements during implementation |
 
 ## Quick Start
@@ -64,7 +63,7 @@ ralph-hybrid run --model opus         # Or with specific model
 - **Bash 4.0+** - Simple, minimal dependencies
 - **No extension on main script** - `ralph-hybrid` not `ralph-hybrid.sh` for cleaner CLI
 - **Branch-based feature folders** - `.ralph-hybrid/{branch-name}/` derived from git branch (no manual init)
-- **spec.md as source of truth** - prd.json is derived via `/ralph-hybrid-prd`
+- **spec.md as source of truth** - prd.json is derived via `/ralph-hybrid-plan --regenerate`
 - **Preflight validation** - Sync check ensures spec.md and prd.json match before running
 - **TDD-first workflow** - Default prompt template emphasizes tests first
 - **YAML config** - Global (~/.ralph-hybrid/config.yaml) and project-level (.ralph-hybrid/config.yaml)

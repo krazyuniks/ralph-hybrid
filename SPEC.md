@@ -194,7 +194,7 @@ ralph-hybrid import <file> [options]   # Import PRD from Markdown or JSON file
 ralph-hybrid help                      # Show help
 ```
 
-> **Note:** Run `ralph-hybrid setup` first in each project to install the `/ralph-hybrid-plan`, `/ralph-hybrid-prd`, and `/ralph-hybrid-amend` commands. The feature folder is derived from the current git branch name.
+> **Note:** Run `ralph-hybrid setup` first in each project to install the `/ralph-hybrid-plan` and `/ralph-hybrid-amend` commands. The feature folder is derived from the current git branch name.
 
 ### Run Options
 
@@ -406,8 +406,8 @@ Clear separation of what writes each file:
 
 | File | Written By | Read By | Purpose |
 |------|------------|---------|---------|
-| `spec.md` | `/ralph-hybrid-plan`, `/ralph-hybrid-amend` (Claude) | `/ralph-hybrid-prd`, Claude agent | Source of truth for requirements |
-| `prd.json` | `/ralph-hybrid-prd`, `/ralph-hybrid-amend` (Claude) | Ralph loop, Claude agent | Machine-readable task state |
+| `spec.md` | `/ralph-hybrid-plan`, `/ralph-hybrid-amend` (Claude) | `/ralph-hybrid-plan --regenerate`, Claude agent | Source of truth for requirements |
+| `prd.json` | `/ralph-hybrid-plan --regenerate`, `/ralph-hybrid-amend` (Claude) | Ralph loop, Claude agent | Machine-readable task state |
 | `progress.txt` | Claude agent (appends), `/ralph-hybrid-amend` | Claude agent | Iteration history, learnings, amendments |
 | `status.json` | Ralph loop (bash) | Monitor script | Real-time loop status |
 | `logs/iteration-N.log` | Ralph loop (bash) | Monitor script, debugging | Raw Claude output per iteration |
@@ -417,7 +417,7 @@ Clear separation of what writes each file:
 ```
 spec.md (human-readable requirements)
     ↓
-    /ralph-hybrid-prd generates (or /ralph-hybrid-amend updates)
+    /ralph-hybrid-plan --regenerate generates (or /ralph-hybrid-amend updates)
     ↓
 prd.json (machine-readable, derived)
     ↓
@@ -427,7 +427,7 @@ progress.txt (append-only history + amendment log)
 ```
 
 **Important:** `spec.md` is the source of truth. For requirement changes:
-- **During planning:** Edit `spec.md` and regenerate with `/ralph-hybrid-prd`
+- **During planning:** Edit `spec.md` and regenerate with `/ralph-hybrid-plan --regenerate`
 - **During implementation:** Use `/ralph-hybrid-amend` to safely modify requirements
 
 ---
@@ -464,7 +464,7 @@ sync_check() {
     if [[ "$current_stories" != "$spec_stories" ]]; then
         error "spec.md and prd.json are out of sync"
         diff_stories "$current_stories" "$spec_stories"
-        echo "Run '/ralph-hybrid-prd' to regenerate prd.json from spec.md"
+        echo "Run '/ralph-hybrid-plan --regenerate' to regenerate prd.json from spec.md"
         return 1
     fi
 }
@@ -474,9 +474,9 @@ sync_check() {
 
 | Scenario | Detection | Severity | Resolution |
 |----------|-----------|----------|------------|
-| New story in spec.md | Story in spec not in prd | ERROR | Run `/ralph-hybrid-prd` |
-| Acceptance criteria changed | Criteria arrays differ | ERROR | Run `/ralph-hybrid-prd` |
-| Orphaned story (passes: false) | Story in prd not in spec | WARN | Run `/ralph-hybrid-prd` or add to spec |
+| New story in spec.md | Story in spec not in prd | ERROR | Run `/ralph-hybrid-plan --regenerate` |
+| Acceptance criteria changed | Criteria arrays differ | ERROR | Run `/ralph-hybrid-plan --regenerate` |
+| Orphaned story (passes: false) | Story in prd not in spec | WARN | Run `/ralph-hybrid-plan --regenerate` or add to spec |
 | **Orphaned story (passes: true)** | Completed story in prd not in spec | **ERROR** | Requires explicit confirmation |
 | Only `passes` field differs | Ignored | OK | Expected (work in progress) |
 | Only `notes` field differs | Ignored | OK | Agent notes are ephemeral |
@@ -503,7 +503,7 @@ orphan_check() {
                 echo "  This story has passes:true but is not in spec.md"
                 echo "  Options:"
                 echo "    1. Add story back to spec.md (preserve work)"
-                echo "    2. Run '/ralph-hybrid-prd --confirm-orphan-removal' (discard work)"
+                echo "    2. Run '/ralph-hybrid-plan --regenerate --confirm-orphan-removal' (discard work)"
                 return 1
             else
                 warn "Orphaned story: $id (passes: false, will be removed)"
@@ -546,7 +546,7 @@ Feature folder: .ralph-hybrid/feature-user-auth/
     - STORY-004 in spec.md not found in prd.json
     - STORY-002 acceptance criteria differs
 
-Resolve sync issues by running '/ralph-hybrid-prd' in Claude Code.
+Resolve sync issues by running '/ralph-hybrid-plan --regenerate' in Claude Code.
 ```
 
 **Example: Orphaned completed story detected**
@@ -568,7 +568,7 @@ Feature folder: .ralph-hybrid/feature-user-auth/
 This story was completed but is no longer in spec.md.
 Options:
   1. Add STORY-003 back to spec.md (preserve completed work)
-  2. Run '/ralph-hybrid-prd' and confirm orphan removal (discard work)
+  2. Run '/ralph-hybrid-plan --regenerate' and confirm orphan removal (discard work)
 ```
 
 ---
@@ -582,7 +582,7 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 | Command | Purpose |
 |---------|---------|
 | `/ralph-hybrid-plan <description>` | Interactive planning workflow |
-| `/ralph-hybrid-prd` | Generate prd.json from existing spec.md |
+| `/ralph-hybrid-plan --regenerate` | Generate prd.json from existing spec.md |
 
 ### Workflow States
 
@@ -1002,7 +1002,7 @@ The sync check (see [Preflight Validation](#preflight-validation)) validates ame
 
 ### Schema (prd.json)
 
-The prd.json file is a **derived artifact** generated from spec.md by `/ralph-hybrid-prd`. It provides machine-readable task state for the Ralph loop.
+The prd.json file is a **derived artifact** generated from spec.md by `/ralph-hybrid-plan --regenerate`. It provides machine-readable task state for the Ralph loop.
 
 > **Note:** The feature identifier is derived from the current git branch name. No `feature` or `branchName` fields are needed in prd.json.
 
@@ -1745,7 +1745,7 @@ cd your-project
 ralph-hybrid setup                 # installs Claude commands to .claude/commands/
 ```
 
-The setup command copies `/ralph-hybrid-plan`, `/ralph-hybrid-prd`, and `/ralph-hybrid-amend` to your project's `.claude/commands/` directory. This is idempotent - running it again updates the commands.
+The setup command copies `/ralph-hybrid-plan` and `/ralph-hybrid-amend` to your project's `.claude/commands/` directory. This is idempotent - running it again updates the commands.
 
 ### Uninstall
 

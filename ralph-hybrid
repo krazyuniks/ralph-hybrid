@@ -561,9 +561,9 @@ cmd_setup() {
     fi
     echo ""
     log_info "Available commands in Claude Code:"
-    log_info "  /ralph-hybrid-plan   - Interactive feature planning"
-    log_info "  /ralph-hybrid-prd    - Generate prd.json from spec.md"
-    log_info "  /ralph-hybrid-amend  - Amend requirements during implementation"
+    log_info "  /ralph-hybrid-plan         - Interactive feature planning"
+    log_info "  /ralph-hybrid-plan --regen - Regenerate prd.json from spec.md"
+    log_info "  /ralph-hybrid-amend        - Amend requirements during implementation"
 
     return 0
 }
