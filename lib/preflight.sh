@@ -5,10 +5,10 @@
 set -euo pipefail
 
 # Source guard - prevent multiple sourcing
-if [[ "${_RALPH_PREFLIGHT_SOURCED:-}" == "1" ]]; then
+if [[ "${_RALPH_HYBRID_PREFLIGHT_SOURCED:-}" == "1" ]]; then
     return 0
 fi
-_RALPH_PREFLIGHT_SOURCED=1
+_RALPH_HYBRID_PREFLIGHT_SOURCED=1
 
 #=============================================================================
 # Preflight Check Results

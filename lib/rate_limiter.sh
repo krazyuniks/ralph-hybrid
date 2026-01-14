@@ -25,7 +25,7 @@ fi
 _RL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source constants.sh for default values
-if [[ "${_RALPH_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${_RL_LIB_DIR}/constants.sh" ]]; then
+if [[ "${_RALPH_HYBRID_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${_RL_LIB_DIR}/constants.sh" ]]; then
     source "${_RL_LIB_DIR}/constants.sh"
 fi
 
@@ -34,10 +34,10 @@ fi
 #=============================================================================
 
 # Default rate limit (from constants.sh)
-readonly _RL_DEFAULT_RATE_LIMIT="${RALPH_DEFAULT_RATE_LIMIT:-100}"
+readonly _RL_DEFAULT_RATE_LIMIT="${RALPH_HYBRID_DEFAULT_RATE_LIMIT:-100}"
 
 # State file name (from constants.sh)
-readonly _RL_STATE_FILE="${RALPH_STATE_FILE_RATE_LIMITER:-rate_limiter.state}"
+readonly _RL_STATE_FILE="${RALPH_HYBRID_STATE_FILE_RATE_LIMITER:-rate_limiter.state}"
 
 #=============================================================================
 # Internal State Variables
@@ -56,7 +56,7 @@ _rl_hour_start=0
 # Get the state file path
 # Output: full path to state file
 _rl_get_state_file() {
-    local state_dir="${RALPH_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
     echo "${state_dir}/${_RL_STATE_FILE}"
 }
 
@@ -65,13 +65,13 @@ _rl_get_state_file() {
 _rl_get_hour_start() {
     local now
     now=$(date +%s)
-    echo $((now - (now % _RALPH_SECONDS_PER_HOUR)))
+    echo $((now - (now % _RALPH_HYBRID_SECONDS_PER_HOUR)))
 }
 
 # Get the configured rate limit
 # Output: rate limit number
 _rl_get_limit() {
-    echo "${RALPH_RATE_LIMIT:-${_RL_DEFAULT_RATE_LIMIT}}"
+    echo "${RALPH_HYBRID_RATE_LIMIT:-${_RL_DEFAULT_RATE_LIMIT}}"
 }
 
 #=============================================================================
@@ -241,7 +241,7 @@ rl_get_wait_seconds() {
     local now hour_start next_hour seconds_remaining
     now=$(date +%s)
     hour_start=$(_rl_get_hour_start)
-    next_hour=$((hour_start + _RALPH_SECONDS_PER_HOUR))
+    next_hour=$((hour_start + _RALPH_HYBRID_SECONDS_PER_HOUR))
     seconds_remaining=$((next_hour - now))
 
     # Ensure non-negative
@@ -267,7 +267,7 @@ rl_wait_for_reset() {
     log_info "Rate limit reached. Waiting ${wait_seconds} seconds until hour resets..."
 
     local elapsed=0
-    local update_interval=$_RALPH_RATE_LIMIT_UPDATE_INTERVAL
+    local update_interval=$_RALPH_HYBRID_RATE_LIMIT_UPDATE_INTERVAL
 
     while [[ $elapsed -lt $wait_seconds ]]; do
         local remaining=$((wait_seconds - elapsed))

@@ -8,7 +8,7 @@ set -euo pipefail
 CIRCUIT_BREAKER_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source constants.sh for default values
-if [[ "${_RALPH_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${CIRCUIT_BREAKER_LIB_DIR}/constants.sh" ]]; then
+if [[ "${_RALPH_HYBRID_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${CIRCUIT_BREAKER_LIB_DIR}/constants.sh" ]]; then
     source "${CIRCUIT_BREAKER_LIB_DIR}/constants.sh"
 fi
 
@@ -22,12 +22,12 @@ fi
 #=============================================================================
 
 # Default thresholds (using constants from constants.sh)
-: "${RALPH_NO_PROGRESS_THRESHOLD:=${RALPH_DEFAULT_NO_PROGRESS_THRESHOLD:-3}}"
-: "${RALPH_SAME_ERROR_THRESHOLD:=${RALPH_DEFAULT_SAME_ERROR_THRESHOLD:-5}}"
-: "${RALPH_STATE_DIR:=${PWD}/.ralph}"
+: "${RALPH_HYBRID_NO_PROGRESS_THRESHOLD:=${RALPH_HYBRID_DEFAULT_NO_PROGRESS_THRESHOLD:-3}}"
+: "${RALPH_HYBRID_SAME_ERROR_THRESHOLD:=${RALPH_HYBRID_DEFAULT_SAME_ERROR_THRESHOLD:-5}}"
+: "${RALPH_HYBRID_STATE_DIR:=${PWD}/.ralph}"
 
 # State file location (using constant from constants.sh)
-CB_STATE_FILE="${RALPH_STATE_DIR}/${RALPH_STATE_FILE_CIRCUIT_BREAKER:-circuit_breaker.state}"
+CB_STATE_FILE="${RALPH_HYBRID_STATE_DIR}/${RALPH_HYBRID_STATE_FILE_CIRCUIT_BREAKER:-circuit_breaker.state}"
 
 # In-memory state variables (populated by cb_load_state)
 CB_NO_PROGRESS_COUNT=0
@@ -44,9 +44,9 @@ CB_LAST_PASSES_STATE=""
 # Usage: cb_init
 cb_init() {
     # Ensure state directory exists
-    if [[ ! -d "$RALPH_STATE_DIR" ]]; then
-        mkdir -p "$RALPH_STATE_DIR"
-        log_debug "Created state directory: $RALPH_STATE_DIR"
+    if [[ ! -d "$RALPH_HYBRID_STATE_DIR" ]]; then
+        mkdir -p "$RALPH_HYBRID_STATE_DIR"
+        log_debug "Created state directory: $RALPH_HYBRID_STATE_DIR"
     fi
 
     # Write initial state
@@ -115,8 +115,8 @@ cb_load_state() {
 # Usage: cb_save_state
 cb_save_state() {
     # Ensure state directory exists
-    if [[ ! -d "$RALPH_STATE_DIR" ]]; then
-        mkdir -p "$RALPH_STATE_DIR"
+    if [[ ! -d "$RALPH_HYBRID_STATE_DIR" ]]; then
+        mkdir -p "$RALPH_HYBRID_STATE_DIR"
     fi
 
     cat > "$CB_STATE_FILE" <<EOF
@@ -157,8 +157,8 @@ cb_get_no_progress_count() {
 # Returns: 0 if under threshold, 1 if at or over threshold
 # Usage: cb_check_no_progress
 cb_check_no_progress() {
-    if [[ "$CB_NO_PROGRESS_COUNT" -ge "$RALPH_NO_PROGRESS_THRESHOLD" ]]; then
-        log_debug "No-progress threshold breached: $CB_NO_PROGRESS_COUNT >= $RALPH_NO_PROGRESS_THRESHOLD"
+    if [[ "$CB_NO_PROGRESS_COUNT" -ge "$RALPH_HYBRID_NO_PROGRESS_THRESHOLD" ]]; then
+        log_debug "No-progress threshold breached: $CB_NO_PROGRESS_COUNT >= $RALPH_HYBRID_NO_PROGRESS_THRESHOLD"
         return 1
     fi
     return 0
@@ -213,8 +213,8 @@ cb_get_same_error_count() {
 # Returns: 0 if under threshold, 1 if at or over threshold
 # Usage: cb_check_same_error
 cb_check_same_error() {
-    if [[ "$CB_SAME_ERROR_COUNT" -ge "$RALPH_SAME_ERROR_THRESHOLD" ]]; then
-        log_debug "Same-error threshold breached: $CB_SAME_ERROR_COUNT >= $RALPH_SAME_ERROR_THRESHOLD"
+    if [[ "$CB_SAME_ERROR_COUNT" -ge "$RALPH_HYBRID_SAME_ERROR_THRESHOLD" ]]; then
+        log_debug "Same-error threshold breached: $CB_SAME_ERROR_COUNT >= $RALPH_HYBRID_SAME_ERROR_THRESHOLD"
         return 1
     fi
     return 0
@@ -274,17 +274,17 @@ cb_get_status() {
     local same_error_status="OK"
     local overall_status="OK"
 
-    if [[ "$CB_NO_PROGRESS_COUNT" -ge "$RALPH_NO_PROGRESS_THRESHOLD" ]]; then
+    if [[ "$CB_NO_PROGRESS_COUNT" -ge "$RALPH_HYBRID_NO_PROGRESS_THRESHOLD" ]]; then
         no_progress_status="TRIPPED"
         overall_status="TRIPPED"
     fi
 
-    if [[ "$CB_SAME_ERROR_COUNT" -ge "$RALPH_SAME_ERROR_THRESHOLD" ]]; then
+    if [[ "$CB_SAME_ERROR_COUNT" -ge "$RALPH_HYBRID_SAME_ERROR_THRESHOLD" ]]; then
         same_error_status="TRIPPED"
         overall_status="TRIPPED"
     fi
 
     echo "Circuit Breaker: ${overall_status}"
-    echo "  no_progress: ${CB_NO_PROGRESS_COUNT}/${RALPH_NO_PROGRESS_THRESHOLD} (${no_progress_status})"
-    echo "  same_error: ${CB_SAME_ERROR_COUNT}/${RALPH_SAME_ERROR_THRESHOLD} (${same_error_status})"
+    echo "  no_progress: ${CB_NO_PROGRESS_COUNT}/${RALPH_HYBRID_NO_PROGRESS_THRESHOLD} (${no_progress_status})"
+    echo "  same_error: ${CB_SAME_ERROR_COUNT}/${RALPH_HYBRID_SAME_ERROR_THRESHOLD} (${same_error_status})"
 }

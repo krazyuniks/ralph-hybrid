@@ -12,7 +12,7 @@ set -euo pipefail
 _ED_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source constants.sh for default values
-if [[ "${_RALPH_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${_ED_LIB_DIR}/constants.sh" ]]; then
+if [[ "${_RALPH_HYBRID_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${_ED_LIB_DIR}/constants.sh" ]]; then
     source "${_ED_LIB_DIR}/constants.sh"
 fi
 
@@ -31,10 +31,10 @@ fi
 #=============================================================================
 
 # Completion promise tag (using constant from constants.sh)
-RALPH_COMPLETION_PROMISE="${RALPH_COMPLETION_PROMISE:-${RALPH_DEFAULT_COMPLETION_PROMISE:-<promise>COMPLETE</promise>}}"
+RALPH_HYBRID_COMPLETION_PROMISE="${RALPH_HYBRID_COMPLETION_PROMISE:-${RALPH_HYBRID_DEFAULT_COMPLETION_PROMISE:-<promise>COMPLETE</promise>}}"
 
 # Story completion signal (one story done, start fresh iteration)
-RALPH_STORY_COMPLETE_SIGNAL="${RALPH_STORY_COMPLETE_SIGNAL:-${RALPH_DEFAULT_STORY_COMPLETE_SIGNAL:-<promise>STORY_COMPLETE</promise>}}"
+RALPH_HYBRID_STORY_COMPLETE_SIGNAL="${RALPH_HYBRID_STORY_COMPLETE_SIGNAL:-${RALPH_HYBRID_DEFAULT_STORY_COMPLETE_SIGNAL:-<promise>STORY_COMPLETE</promise>}}"
 
 # API limit detection patterns (case-insensitive matching)
 # These patterns indicate Claude has hit a usage limit
@@ -321,8 +321,8 @@ ed_check_promise() {
     fi
 
     # Check if the output contains the completion promise
-    if [[ "$output" == *"$RALPH_COMPLETION_PROMISE"* ]]; then
-        log_debug "Completion promise detected: $RALPH_COMPLETION_PROMISE"
+    if [[ "$output" == *"$RALPH_HYBRID_COMPLETION_PROMISE"* ]]; then
+        log_debug "Completion promise detected: $RALPH_HYBRID_COMPLETION_PROMISE"
         return 0
     fi
 
@@ -343,8 +343,8 @@ ed_check_story_complete() {
     fi
 
     # Check if the output contains the story completion signal
-    if [[ "$output" == *"$RALPH_STORY_COMPLETE_SIGNAL"* ]]; then
-        log_debug "Story completion signal detected: $RALPH_STORY_COMPLETE_SIGNAL"
+    if [[ "$output" == *"$RALPH_HYBRID_STORY_COMPLETE_SIGNAL"* ]]; then
+        log_debug "Story completion signal detected: $RALPH_HYBRID_STORY_COMPLETE_SIGNAL"
         return 0
     fi
 
@@ -790,7 +790,7 @@ ed_prompt_api_limit() {
     echo -n "Enter choice [w/e]: " >&2
 
     # Read user input with timeout
-    if ! read -r -t "${_RALPH_USER_INPUT_TIMEOUT:-30}" response; then
+    if ! read -r -t "${_RALPH_HYBRID_USER_INPUT_TIMEOUT:-30}" response; then
         echo "" >&2
         log_warn "No response received (timeout). Exiting."
         return 1
@@ -936,7 +936,7 @@ ed_extract_last_tool() {
 ed_get_context_usage() {
     local output="${1:-}"
     # Claude's context window size (200k tokens)
-    local context_limit="${RALPH_CONTEXT_LIMIT:-200000}"
+    local context_limit="${RALPH_HYBRID_CONTEXT_LIMIT:-200000}"
 
     if [[ -z "$output" ]]; then
         return 0
@@ -1056,7 +1056,7 @@ ed_get_uncommitted_changes() {
 #   Prints list of changed file names
 #   Always returns 0
 ed_get_changed_files() {
-    local max_files="${1:-${_RALPH_MAX_CHANGED_FILES:-5}}"
+    local max_files="${1:-${_RALPH_HYBRID_MAX_CHANGED_FILES:-5}}"
 
     # Check if we're in a git repo
     if ! git rev-parse --git-dir &>/dev/null 2>&1; then

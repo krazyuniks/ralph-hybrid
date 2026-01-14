@@ -2,7 +2,7 @@
 # Ralph Hybrid - Lockfile Library
 # Prevents multiple ralph instances from running in the same or nested directories
 #
-# Lockfiles are stored centrally in ~/.ralph/lockfiles/ for easy inspection.
+# Lockfiles are stored centrally in ~/.ralph-hybrid/lockfiles/ for easy inspection.
 # Each lockfile contains:
 #   - PID of the ralph process
 #   - Absolute path of the feature directory
@@ -16,10 +16,10 @@
 set -euo pipefail
 
 # Source guard - prevent multiple sourcing
-if [[ "${_RALPH_LOCKFILE_SOURCED:-}" == "1" ]]; then
+if [[ "${_RALPH_HYBRID_LOCKFILE_SOURCED:-}" == "1" ]]; then
     return 0
 fi
-_RALPH_LOCKFILE_SOURCED=1
+_RALPH_HYBRID_LOCKFILE_SOURCED=1
 
 #=============================================================================
 # Constants
@@ -27,10 +27,10 @@ _RALPH_LOCKFILE_SOURCED=1
 
 # Lockfile directory (centralized for easy inspection)
 # Uses constant from constants.sh if available, otherwise uses default
-RALPH_LOCKFILE_DIR="${RALPH_LOCKFILE_DIR:-${HOME}/.ralph/lockfiles}"
+RALPH_HYBRID_LOCKFILE_DIR="${RALPH_HYBRID_LOCKFILE_DIR:-${HOME}/.ralph-hybrid/lockfiles}"
 
 # Current lockfile path (set when lock is acquired)
-_RALPH_CURRENT_LOCKFILE=""
+_RALPH_HYBRID_CURRENT_LOCKFILE=""
 
 #=============================================================================
 # Helper Functions
@@ -109,9 +109,9 @@ _lf_is_descendant() {
 #=============================================================================
 
 # Initialize the lockfile directory
-# Creates ~/.ralph/lockfiles if it doesn't exist
+# Creates ~/.ralph-hybrid/lockfiles if it doesn't exist
 lf_init() {
-    mkdir -p "$RALPH_LOCKFILE_DIR"
+    mkdir -p "$RALPH_HYBRID_LOCKFILE_DIR"
 }
 
 # Clean up stale lockfiles (dead PIDs)
@@ -120,7 +120,7 @@ lf_cleanup_stale() {
     lf_init
 
     local lockfile pid
-    for lockfile in "$RALPH_LOCKFILE_DIR"/*.lock; do
+    for lockfile in "$RALPH_HYBRID_LOCKFILE_DIR"/*.lock; do
         [[ -f "$lockfile" ]] || continue
 
         pid=$(_lf_get_lockfile_pid "$lockfile")
@@ -144,7 +144,7 @@ lf_check_conflicts() {
     lf_cleanup_stale
 
     local lockfile locked_path locked_pid
-    for lockfile in "$RALPH_LOCKFILE_DIR"/*.lock; do
+    for lockfile in "$RALPH_HYBRID_LOCKFILE_DIR"/*.lock; do
         [[ -f "$lockfile" ]] || continue
 
         locked_path=$(_lf_get_lockfile_path "$lockfile")
@@ -186,7 +186,7 @@ lf_check_conflicts() {
 # Acquire a lock for the given path
 # Args: absolute_path
 # Returns: 0 on success, 1 on failure (conflict exists)
-# Sets: _RALPH_CURRENT_LOCKFILE
+# Sets: _RALPH_HYBRID_CURRENT_LOCKFILE
 lf_acquire() {
     local lock_path="$1"
 
@@ -201,14 +201,14 @@ lf_acquire() {
     # Create lockfile
     local filename
     filename=$(_lf_path_to_filename "$lock_path")
-    _RALPH_CURRENT_LOCKFILE="${RALPH_LOCKFILE_DIR}/${filename}"
+    _RALPH_HYBRID_CURRENT_LOCKFILE="${RALPH_HYBRID_LOCKFILE_DIR}/${filename}"
 
     # Write lock info
     {
         echo "$$"
         echo "$lock_path"
         echo "$(date -Iseconds)"
-    } > "$_RALPH_CURRENT_LOCKFILE"
+    } > "$_RALPH_HYBRID_CURRENT_LOCKFILE"
 
     return 0
 }
@@ -216,14 +216,14 @@ lf_acquire() {
 # Release the current lock
 # Removes the lockfile created by lf_acquire
 lf_release() {
-    if [[ -n "${_RALPH_CURRENT_LOCKFILE:-}" ]] && [[ -f "$_RALPH_CURRENT_LOCKFILE" ]]; then
+    if [[ -n "${_RALPH_HYBRID_CURRENT_LOCKFILE:-}" ]] && [[ -f "$_RALPH_HYBRID_CURRENT_LOCKFILE" ]]; then
         # Only remove if we own it (PID matches)
         local stored_pid
-        stored_pid=$(_lf_get_lockfile_pid "$_RALPH_CURRENT_LOCKFILE")
+        stored_pid=$(_lf_get_lockfile_pid "$_RALPH_HYBRID_CURRENT_LOCKFILE")
         if [[ "$stored_pid" == "$$" ]]; then
-            rm -f "$_RALPH_CURRENT_LOCKFILE"
+            rm -f "$_RALPH_HYBRID_CURRENT_LOCKFILE"
         fi
-        _RALPH_CURRENT_LOCKFILE=""
+        _RALPH_HYBRID_CURRENT_LOCKFILE=""
     fi
 }
 
@@ -236,10 +236,10 @@ lf_list() {
     local count=0
     local lockfile locked_path locked_pid locked_time
 
-    echo "Active Ralph locks in ${RALPH_LOCKFILE_DIR}:"
+    echo "Active Ralph locks in ${RALPH_HYBRID_LOCKFILE_DIR}:"
     echo ""
 
-    for lockfile in "$RALPH_LOCKFILE_DIR"/*.lock; do
+    for lockfile in "$RALPH_HYBRID_LOCKFILE_DIR"/*.lock; do
         [[ -f "$lockfile" ]] || continue
 
         locked_pid=$(_lf_get_lockfile_pid "$lockfile")

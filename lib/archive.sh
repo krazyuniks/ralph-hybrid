@@ -288,8 +288,8 @@ ar_list_archives() {
 #   "Some work deferred for future work"
 # Note: Pipe (|) is alternation operator - matches any of the terms
 #       Used with grep -iE for case-insensitive extended regex matching
-if [[ -z "${RALPH_DEFERRED_KEYWORDS:-}" ]]; then
-    RALPH_DEFERRED_KEYWORDS="DEFERRED|SCOPE CLARIFICATION|scope change|future work|incremental|out of scope"
+if [[ -z "${RALPH_HYBRID_DEFERRED_KEYWORDS:-}" ]]; then
+    RALPH_HYBRID_DEFERRED_KEYWORDS="DEFERRED|SCOPE CLARIFICATION|scope change|future work|incremental|out of scope"
 fi
 
 # Check if a story's notes contain deferred work keywords
@@ -303,7 +303,7 @@ ar_story_has_deferred_work() {
     fi
 
     # Case-insensitive search for any of the keywords
-    if echo "$notes" | grep -iE "$RALPH_DEFERRED_KEYWORDS" &>/dev/null; then
+    if echo "$notes" | grep -iE "$RALPH_HYBRID_DEFERRED_KEYWORDS" &>/dev/null; then
         return 0
     fi
 

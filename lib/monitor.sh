@@ -22,7 +22,7 @@ fi
 #=============================================================================
 
 # Source constants.sh for default values
-if [[ "${_RALPH_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${_MON_SCRIPT_DIR}/constants.sh" ]]; then
+if [[ "${_RALPH_HYBRID_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${_MON_SCRIPT_DIR}/constants.sh" ]]; then
     source "${_MON_SCRIPT_DIR}/constants.sh"
 fi
 
@@ -31,13 +31,13 @@ fi
 #=============================================================================
 
 # Default tmux session name (from constants.sh)
-readonly _MON_SESSION_NAME="${_RALPH_TMUX_SESSION_NAME:-ralph}"
+readonly _MON_SESSION_NAME="${_RALPH_HYBRID_TMUX_SESSION_NAME:-ralph-hybrid}"
 
 # Status file name (from constants.sh)
-readonly _MON_STATUS_FILE="${RALPH_STATUS_FILE:-status.json}"
+readonly _MON_STATUS_FILE="${RALPH_HYBRID_STATUS_FILE:-status.json}"
 
 # Dashboard refresh interval in seconds (from constants.sh)
-readonly _MON_REFRESH_INTERVAL="${_RALPH_MONITOR_REFRESH_INTERVAL:-2}"
+readonly _MON_REFRESH_INTERVAL="${_RALPH_HYBRID_MONITOR_REFRESH_INTERVAL:-2}"
 
 #=============================================================================
 # Internal Helper Functions
@@ -46,14 +46,14 @@ readonly _MON_REFRESH_INTERVAL="${_RALPH_MONITOR_REFRESH_INTERVAL:-2}"
 # Get the status file path
 # Output: full path to status.json
 _mon_get_status_file() {
-    local state_dir="${RALPH_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
     echo "${state_dir}/${_MON_STATUS_FILE}"
 }
 
 # Get the tmux session name
 # Output: session name
 _mon_get_session_name() {
-    echo "${RALPH_TMUX_SESSION:-${_MON_SESSION_NAME}}"
+    echo "${RALPH_HYBRID_TMUX_SESSION:-${_MON_SESSION_NAME}}"
 }
 
 # Check if tmux is available
@@ -92,21 +92,21 @@ mon_write_status() {
     fi
 
     # Get max iterations from environment or default
-    local max_iterations="${RALPH_MAX_ITERATIONS:-$RALPH_DEFAULT_MAX_ITERATIONS}"
+    local max_iterations="${RALPH_HYBRID_MAX_ITERATIONS:-$RALPH_HYBRID_DEFAULT_MAX_ITERATIONS}"
 
     # Get rate limit from environment or default
-    local rate_limit="${RALPH_RATE_LIMIT:-$RALPH_DEFAULT_RATE_LIMIT}"
+    local rate_limit="${RALPH_HYBRID_RATE_LIMIT:-$RALPH_HYBRID_DEFAULT_RATE_LIMIT}"
 
     # Calculate rate limit reset time (next hour boundary)
     local now
     now=$(date +%s)
-    local hour_start=$((now - (now % _RALPH_SECONDS_PER_HOUR)))
-    local rate_limit_resets_at=$((hour_start + _RALPH_SECONDS_PER_HOUR))
+    local hour_start=$((now - (now % _RALPH_HYBRID_SECONDS_PER_HOUR)))
+    local rate_limit_resets_at=$((hour_start + _RALPH_HYBRID_SECONDS_PER_HOUR))
     local rate_limit_resets_at_iso
     rate_limit_resets_at_iso=$(date -u -r "$rate_limit_resets_at" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -d "@$rate_limit_resets_at" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")
 
     # Get feature name from environment or directory
-    local feature="${RALPH_FEATURE_NAME:-unknown}"
+    local feature="${RALPH_HYBRID_FEATURE_NAME:-unknown}"
 
     # Get started_at from existing status file or use current time
     local started_at=""
@@ -156,14 +156,14 @@ mon_read_status() {
         cat <<EOF
 {
   "iteration": 0,
-  "maxIterations": ${RALPH_DEFAULT_MAX_ITERATIONS:-20},
+  "maxIterations": ${RALPH_HYBRID_DEFAULT_MAX_ITERATIONS:-20},
   "status": "unknown",
   "feature": "",
   "storiesComplete": 0,
   "storiesTotal": 0,
   "currentStory": "",
   "apiCallsUsed": 0,
-  "apiCallsLimit": ${RALPH_DEFAULT_RATE_LIMIT:-100},
+  "apiCallsLimit": ${RALPH_HYBRID_DEFAULT_RATE_LIMIT:-100},
   "rateLimitResetsAt": "",
   "startedAt": "",
   "lastUpdated": ""
@@ -201,14 +201,14 @@ mon_render_dashboard() {
     local started_at last_updated
 
     iteration=$(echo "$status" | jq -r '.iteration // 0')
-    max_iterations=$(echo "$status" | jq -r ".maxIterations // ${RALPH_DEFAULT_MAX_ITERATIONS:-20}")
+    max_iterations=$(echo "$status" | jq -r ".maxIterations // ${RALPH_HYBRID_DEFAULT_MAX_ITERATIONS:-20}")
     loop_status=$(echo "$status" | jq -r '.status // "unknown"')
     feature=$(echo "$status" | jq -r '.feature // ""')
     stories_complete=$(echo "$status" | jq -r '.storiesComplete // 0')
     stories_total=$(echo "$status" | jq -r '.storiesTotal // 0')
     current_story=$(echo "$status" | jq -r '.currentStory // ""')
     api_calls_used=$(echo "$status" | jq -r '.apiCallsUsed // 0')
-    api_calls_limit=$(echo "$status" | jq -r ".apiCallsLimit // ${RALPH_DEFAULT_RATE_LIMIT:-100}")
+    api_calls_limit=$(echo "$status" | jq -r ".apiCallsLimit // ${RALPH_HYBRID_DEFAULT_RATE_LIMIT:-100}")
     rate_limit_resets_at=$(echo "$status" | jq -r '.rateLimitResetsAt // ""')
     started_at=$(echo "$status" | jq -r '.startedAt // ""')
     last_updated=$(echo "$status" | jq -r '.lastUpdated // ""')
@@ -266,7 +266,7 @@ mon_render_dashboard() {
     echo "------------------------------------------"
 
     # Show recent log entries
-    local state_dir="${RALPH_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
     local logs_dir="${state_dir}/logs"
     if [[ -d "$logs_dir" ]]; then
         # Get the most recent log file
@@ -274,14 +274,14 @@ mon_render_dashboard() {
         latest_log=$(ls -t "${logs_dir}"/iteration-*.log 2>/dev/null | head -1)
         if [[ -n "$latest_log" && -f "$latest_log" ]]; then
             # Parse JSON stream for meaningful entries
-            tail -"${_RALPH_DASHBOARD_ACTIVITY_LINES:-20}" "$latest_log" 2>/dev/null | while IFS= read -r line; do
+            tail -"${_RALPH_HYBRID_DASHBOARD_ACTIVITY_LINES:-20}" "$latest_log" 2>/dev/null | while IFS= read -r line; do
                 # Try to extract useful info from JSON stream
                 if echo "$line" | jq -e '.message.content' &>/dev/null 2>&1; then
                     local display
                     display=$(echo "$line" | jq -r "
                         .message.content[]? |
                         if .type == \"text\" then
-                            \"[\" + (.text | split(\"\n\")[0] | .[0:${_RALPH_MONITOR_TEXT_TRUNCATE:-60}]) + \"]\"
+                            \"[\" + (.text | split(\"\n\")[0] | .[0:${_RALPH_HYBRID_MONITOR_TEXT_TRUNCATE:-60}]) + \"]\"
                         elif .type == \"tool_use\" then
                             \"Tool: \" + .name
                         else empty end
@@ -290,7 +290,7 @@ mon_render_dashboard() {
                         echo "  $display"
                     fi
                 fi
-            done | tail -"${_RALPH_MONITOR_LOG_LINES:-8}"
+            done | tail -"${_RALPH_HYBRID_MONITOR_LOG_LINES:-8}"
         else
             echo "  (no logs yet)"
         fi
@@ -354,7 +354,7 @@ mon_start_dashboard() {
     # Create new tmux session in detached mode
     # Left pane: Ralph loop
     # Right pane: Monitor dashboard
-    tmux new-session -d -s "$session_name" -x "${_RALPH_TMUX_WINDOW_WIDTH:-160}" -y "${_RALPH_TMUX_WINDOW_HEIGHT:-40}"
+    tmux new-session -d -s "$session_name" -x "${_RALPH_HYBRID_TMUX_WINDOW_WIDTH:-160}" -y "${_RALPH_HYBRID_TMUX_WINDOW_HEIGHT:-40}"
 
     # Split window vertically (left/right)
     tmux split-window -h -t "$session_name"
@@ -371,7 +371,7 @@ mon_start_dashboard() {
     tmux send-keys -t "${session_name}:0.1" "source '$monitor_script' && mon_run_dashboard_loop" C-m
 
     # Set pane sizes (60% left, 40% right)
-    tmux resize-pane -t "${session_name}:0.0" -x "${_RALPH_TMUX_LEFT_PANE_WIDTH:-95}"
+    tmux resize-pane -t "${session_name}:0.0" -x "${_RALPH_HYBRID_TMUX_LEFT_PANE_WIDTH:-95}"
 
     # Select the left pane
     tmux select-pane -t "${session_name}:0.0"
@@ -455,11 +455,11 @@ mon_iteration_start() {
     # Note: -E enables extended regex, ^ anchors to line start
     local api_calls_count=0
     local rate_limit_remaining=0
-    local state_dir="${RALPH_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
     if [[ -f "${state_dir}/rate_limiter.state" ]]; then
         api_calls_count=$(grep -E '^CALL_COUNT=' "${state_dir}/rate_limiter.state" | cut -d= -f2 || echo 0)
     fi
-    local rate_limit="${RALPH_RATE_LIMIT:-100}"
+    local rate_limit="${RALPH_HYBRID_RATE_LIMIT:-100}"
     rate_limit_remaining=$((rate_limit - api_calls_count))
     if [[ $rate_limit_remaining -lt 0 ]]; then
         rate_limit_remaining=0
@@ -489,11 +489,11 @@ mon_iteration_end() {
     # Get API usage from rate limiter state
     local api_calls_count=0
     local rate_limit_remaining=0
-    local state_dir="${RALPH_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
     if [[ -f "${state_dir}/rate_limiter.state" ]]; then
         api_calls_count=$(grep -E '^CALL_COUNT=' "${state_dir}/rate_limiter.state" | cut -d= -f2 || echo 0)
     fi
-    local rate_limit="${RALPH_RATE_LIMIT:-100}"
+    local rate_limit="${RALPH_HYBRID_RATE_LIMIT:-100}"
     rate_limit_remaining=$((rate_limit - api_calls_count))
     if [[ $rate_limit_remaining -lt 0 ]]; then
         rate_limit_remaining=0
@@ -522,11 +522,11 @@ mon_mark_complete() {
 
     # Get API usage
     local api_calls_count=0
-    local state_dir="${RALPH_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
     if [[ -f "${state_dir}/rate_limiter.state" ]]; then
         api_calls_count=$(grep -E '^CALL_COUNT=' "${state_dir}/rate_limiter.state" | cut -d= -f2 || echo 0)
     fi
-    local rate_limit="${RALPH_RATE_LIMIT:-100}"
+    local rate_limit="${RALPH_HYBRID_RATE_LIMIT:-100}"
     local rate_limit_remaining=$((rate_limit - api_calls_count))
 
     mon_write_status "$iteration" "complete" "$stories_complete" "$stories_total" "$api_calls_count" "$rate_limit_remaining" ""
@@ -552,11 +552,11 @@ mon_mark_error() {
 
     # Get API usage
     local api_calls_count=0
-    local state_dir="${RALPH_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
     if [[ -f "${state_dir}/rate_limiter.state" ]]; then
         api_calls_count=$(grep -E '^CALL_COUNT=' "${state_dir}/rate_limiter.state" | cut -d= -f2 || echo 0)
     fi
-    local rate_limit="${RALPH_RATE_LIMIT:-100}"
+    local rate_limit="${RALPH_HYBRID_RATE_LIMIT:-100}"
     local rate_limit_remaining=$((rate_limit - api_calls_count))
 
     mon_write_status "$iteration" "error" "$stories_complete" "$stories_total" "$api_calls_count" "$rate_limit_remaining" ""

@@ -5,11 +5,11 @@
 # This module provides:
 # - Theme definitions (Default, Dracula, Nord)
 # - Semantic UI color variables (UI_*)
-# - Theme loading based on RALPH_THEME setting
+# - Theme loading based on RALPH_HYBRID_THEME setting
 #
 # Usage:
 #   source lib/theme.sh
-#   theme_load  # Call after RALPH_THEME is set
+#   theme_load  # Call after RALPH_HYBRID_THEME is set
 #
 # Semantic colors:
 #   UI_BORDER    - Box drawing characters, dividers
@@ -26,10 +26,10 @@
 # not executed directly. The calling script's settings apply.
 
 # Source guard - prevent multiple sourcing
-if [[ "${_RALPH_THEME_SOURCED:-}" == "1" ]]; then
+if [[ "${_RALPH_HYBRID_THEME_SOURCED:-}" == "1" ]]; then
     return 0
 fi
-_RALPH_THEME_SOURCED=1
+_RALPH_HYBRID_THEME_SOURCED=1
 
 #=============================================================================
 # Theme Definitions
@@ -40,7 +40,7 @@ _RALPH_THEME_SOURCED=1
 #   Colors: 30-37 (fg), 40-47 (bg)
 
 # Available themes
-readonly RALPH_AVAILABLE_THEMES="default dracula nord"
+readonly RALPH_HYBRID_AVAILABLE_THEMES="default dracula nord"
 
 #-----------------------------------------------------------------------------
 # Default Theme - Cyan/Yellow/Green
@@ -115,9 +115,9 @@ UI_RESET=""
 
 # Load theme colors into UI_* variables
 # Usage: theme_load [theme_name]
-# If theme_name not provided, uses RALPH_THEME env var or default
+# If theme_name not provided, uses RALPH_HYBRID_THEME env var or default
 theme_load() {
-    local theme_name="${1:-${RALPH_THEME:-default}}"
+    local theme_name="${1:-${RALPH_HYBRID_THEME:-default}}"
 
     # Normalize to lowercase
     theme_name="${theme_name,,}"
@@ -170,13 +170,13 @@ theme_load() {
 # Get current theme name
 # Returns: theme name (default, dracula, nord)
 theme_current() {
-    echo "${RALPH_THEME:-default}"
+    echo "${RALPH_HYBRID_THEME:-default}"
 }
 
 # List available themes
 # Returns: space-separated list
 theme_list() {
-    echo "$RALPH_AVAILABLE_THEMES"
+    echo "$RALPH_HYBRID_AVAILABLE_THEMES"
 }
 
 # Check if theme is valid
@@ -184,13 +184,13 @@ theme_list() {
 # Returns: 0 if valid, 1 if not
 theme_is_valid() {
     local name="$1"
-    [[ " $RALPH_AVAILABLE_THEMES " == *" $name "* ]]
+    [[ " $RALPH_HYBRID_AVAILABLE_THEMES " == *" $name "* ]]
 }
 
 #=============================================================================
 # Auto-load default theme
 #=============================================================================
 # Load immediately so UI_* variables are available
-# Can be reloaded by calling theme_load() after setting RALPH_THEME
+# Can be reloaded by calling theme_load() after setting RALPH_HYBRID_THEME
 
 theme_load

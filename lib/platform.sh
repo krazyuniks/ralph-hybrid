@@ -5,17 +5,17 @@
 set -euo pipefail
 
 # Source guard - prevent multiple sourcing
-if [[ "${_RALPH_PLATFORM_SOURCED:-}" == "1" ]]; then
+if [[ "${_RALPH_HYBRID_PLATFORM_SOURCED:-}" == "1" ]]; then
     return 0
 fi
-_RALPH_PLATFORM_SOURCED=1
+_RALPH_HYBRID_PLATFORM_SOURCED=1
 
 # Ensure dependencies are available
 SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
-if [[ "${_RALPH_CONSTANTS_SOURCED:-}" != "1" ]]; then
+if [[ "${_RALPH_HYBRID_CONSTANTS_SOURCED:-}" != "1" ]]; then
     source "${SCRIPT_DIR}/constants.sh"
 fi
-if [[ "${_RALPH_LOGGING_SOURCED:-}" != "1" ]]; then
+if [[ "${_RALPH_HYBRID_LOGGING_SOURCED:-}" != "1" ]]; then
     source "${SCRIPT_DIR}/logging.sh"
 fi
 
@@ -72,7 +72,7 @@ get_timeout_cmd() {
 # Check that bash version meets minimum requirement
 # Exits with error if version is too low
 plat_check_bash_version() {
-    local min_version="${_RALPH_MIN_BASH_VERSION:-4}"
+    local min_version="${_RALPH_HYBRID_MIN_BASH_VERSION:-4}"
     if [[ "${BASH_VERSINFO[0]}" -lt "$min_version" ]]; then
         log_error "Bash ${min_version}.0+ required. Current version: $BASH_VERSION"
         exit 1

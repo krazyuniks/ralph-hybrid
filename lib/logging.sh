@@ -5,10 +5,10 @@
 set -euo pipefail
 
 # Source guard - prevent multiple sourcing
-if [[ "${_RALPH_LOGGING_SOURCED:-}" == "1" ]]; then
+if [[ "${_RALPH_HYBRID_LOGGING_SOURCED:-}" == "1" ]]; then
     return 0
 fi
-_RALPH_LOGGING_SOURCED=1
+_RALPH_HYBRID_LOGGING_SOURCED=1
 
 #=============================================================================
 # Source Dependencies Abstraction Layer
@@ -114,11 +114,11 @@ log_warn() {
     echo "[WARN] $(get_timestamp) $message" >&2
 }
 
-# Log debug message to stderr (only if RALPH_DEBUG=1)
+# Log debug message to stderr (only if RALPH_HYBRID_DEBUG=1)
 # Usage: log_debug "message"
 log_debug() {
     local message="$1"
-    if [[ "${RALPH_DEBUG:-0}" == "1" ]]; then
+    if [[ "${RALPH_HYBRID_DEBUG:-0}" == "1" ]]; then
         echo "[DEBUG] $(get_timestamp) $message" >&2
     fi
 }

@@ -2,7 +2,7 @@
 # Ralph Hybrid - Main Script
 # Autonomous development loop orchestrator for Claude Code
 #
-# Usage: ralph <command> [options]
+# Usage: ralph-hybrid <command> [options]
 # Commands: run, status, archive, validate, import, help, version
 #
 # Note: Feature folder is automatically derived from current git branch.
@@ -37,16 +37,16 @@ source "${SCRIPT_DIR}/lib/lockfile.sh"
 #=============================================================================
 
 # Run options (use defaults from constants.sh)
-RALPH_MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-$RALPH_DEFAULT_MAX_ITERATIONS}"
-RALPH_TIMEOUT_MINUTES="${RALPH_TIMEOUT_MINUTES:-$RALPH_DEFAULT_TIMEOUT_MINUTES}"
-RALPH_RATE_LIMIT="${RALPH_RATE_LIMIT:-$RALPH_DEFAULT_RATE_LIMIT}"
-RALPH_PROMPT_FILE=""
-RALPH_VERBOSE=false
-RALPH_NO_ARCHIVE=false
-RALPH_DRY_RUN=false
-RALPH_SKIP_PREFLIGHT=false
-RALPH_DANGEROUSLY_SKIP_PERMISSIONS="${RALPH_DANGEROUSLY_SKIP_PERMISSIONS:-false}"
-RALPH_MONITOR=false
+RALPH_HYBRID_MAX_ITERATIONS="${RALPH_HYBRID_MAX_ITERATIONS:-$RALPH_HYBRID_DEFAULT_MAX_ITERATIONS}"
+RALPH_HYBRID_TIMEOUT_MINUTES="${RALPH_HYBRID_TIMEOUT_MINUTES:-$RALPH_HYBRID_DEFAULT_TIMEOUT_MINUTES}"
+RALPH_HYBRID_RATE_LIMIT="${RALPH_HYBRID_RATE_LIMIT:-$RALPH_HYBRID_DEFAULT_RATE_LIMIT}"
+RALPH_HYBRID_PROMPT_FILE=""
+RALPH_HYBRID_VERBOSE=false
+RALPH_HYBRID_NO_ARCHIVE=false
+RALPH_HYBRID_DRY_RUN=false
+RALPH_HYBRID_SKIP_PREFLIGHT=false
+RALPH_HYBRID_DANGEROUSLY_SKIP_PERMISSIONS="${RALPH_HYBRID_DANGEROUSLY_SKIP_PERMISSIONS:-false}"
+RALPH_HYBRID_MONITOR=false
 
 #=============================================================================
 # Help / Usage
@@ -56,7 +56,7 @@ show_help() {
     cat << EOF
 Ralph Hybrid - Autonomous Development Loop for Claude Code
 
-Usage: ralph <command> [options]
+Usage: ralph-hybrid <command> [options]
 
 Commands:
   run [options]          Execute the development loop
@@ -66,18 +66,18 @@ Commands:
   archive                Archive a completed feature
   restore                Restore a feature from archive
   validate               Run preflight checks without starting loop
-  setup                  Install Claude commands (/ralph-plan, etc.) to project
+  setup                  Install Claude commands (/ralph-hybrid-plan, etc.) to project
   import <file>          Import PRD from Markdown or JSON file
   help                   Show this help message
   version                Show version information
 
 Note: Feature folder is automatically derived from current git branch.
-      Run 'ralph setup' first, then use /ralph-plan in Claude Code.
+      Run 'ralph-hybrid setup' first, then use /ralph-hybrid-plan in Claude Code.
 
 Run Options:
-  -n, --max-iterations N     Maximum iterations (default: ${RALPH_DEFAULT_MAX_ITERATIONS})
-  -t, --timeout N            Per-iteration timeout in minutes (default: ${RALPH_DEFAULT_TIMEOUT_MINUTES})
-  -r, --rate-limit N         Max API calls per hour (default: ${RALPH_DEFAULT_RATE_LIMIT})
+  -n, --max-iterations N     Maximum iterations (default: ${RALPH_HYBRID_DEFAULT_MAX_ITERATIONS})
+  -t, --timeout N            Per-iteration timeout in minutes (default: ${RALPH_HYBRID_DEFAULT_TIMEOUT_MINUTES})
+  -r, --rate-limit N         Max API calls per hour (default: ${RALPH_HYBRID_DEFAULT_RATE_LIMIT})
   -p, --prompt FILE          Custom prompt file
   -v, --verbose              Enable verbose output
   --no-archive               Don't archive on completion
@@ -92,22 +92,22 @@ Archive Options:
 
 Import Options:
   --format FORMAT          Override format detection (markdown, json)
-  --output PATH            Output path (default: .ralph/{branch}/prd.json)
+  --output PATH            Output path (default: .ralph-hybrid/{branch}/prd.json)
 
 Examples:
-  ralph run -n 30 -t 20
-  ralph status
-  ralph archive
-  ralph validate
-  ralph import spec.md
-  ralph import requirements.json --output ./prd.json
+  ralph-hybrid run -n 30 -t 20
+  ralph-hybrid status
+  ralph-hybrid archive
+  ralph-hybrid validate
+  ralph-hybrid import spec.md
+  ralph-hybrid import requirements.json --output ./prd.json
 
 For more information, see: https://github.com/krazyuniks/ralph-hybrid
 EOF
 }
 
 show_version() {
-    echo "ralph version ${RALPH_VERSION}"
+    echo "ralph-hybrid version ${RALPH_HYBRID_VERSION}"
 }
 
 #=============================================================================
@@ -198,7 +198,7 @@ cmd_status() {
     echo ""
 
     # Show circuit breaker state if it exists
-    export RALPH_STATE_DIR="${feature_dir}"
+    export RALPH_HYBRID_STATE_DIR="${feature_dir}"
     if [[ -f "${feature_dir}/circuit_breaker.state" ]]; then
         cb_load_state
         cb_get_status
@@ -319,7 +319,7 @@ cmd_kill() {
     local filename
     filename="${abs_feature_dir//\//__}"
     filename="${filename#__}.lock"
-    local lockfile="${HOME}/.ralph/lockfiles/${filename}"
+    local lockfile="${HOME}/.ralph-hybrid/lockfiles/${filename}"
 
     # Check if lockfile exists
     if [[ ! -f "$lockfile" ]]; then
@@ -505,14 +505,14 @@ cmd_restore() {
 #=============================================================================
 
 cmd_setup() {
-    local ralph_home="${HOME}/.ralph"
+    local ralph_home="${HOME}/.ralph-hybrid"
     local commands_src="${ralph_home}/commands"
     local project_dir="${PWD}"
     local commands_dest="${project_dir}/.claude/commands"
 
-    # Check if ralph is installed
+    # Check if ralph-hybrid is installed
     if [[ ! -d "$ralph_home" ]]; then
-        log_error "Ralph not installed. Run install.sh first."
+        log_error "Ralph Hybrid not installed. Run install.sh first."
         return 1
     fi
 
@@ -561,9 +561,9 @@ cmd_setup() {
     fi
     echo ""
     log_info "Available commands in Claude Code:"
-    log_info "  /ralph-plan   - Interactive feature planning"
-    log_info "  /ralph-prd    - Generate prd.json from spec.md"
-    log_info "  /ralph-amend  - Amend requirements during implementation"
+    log_info "  /ralph-hybrid-plan   - Interactive feature planning"
+    log_info "  /ralph-hybrid-prd    - Generate prd.json from spec.md"
+    log_info "  /ralph-hybrid-amend  - Amend requirements during implementation"
 
     return 0
 }
@@ -615,7 +615,7 @@ cmd_import() {
     # Validate input file
     if [[ -z "$input_file" ]]; then
         log_error "No input file specified"
-        log_info "Usage: ralph import <file> [--format FORMAT] [--output PATH]"
+        log_info "Usage: ralph-hybrid import <file> [--format FORMAT] [--output PATH]"
         return 1
     fi
 
@@ -760,48 +760,48 @@ parse_run_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -n|--max-iterations)
-                RALPH_MAX_ITERATIONS="${2:-}"
+                RALPH_HYBRID_MAX_ITERATIONS="${2:-}"
                 shift 2
                 ;;
             -t|--timeout)
-                RALPH_TIMEOUT_MINUTES="${2:-}"
+                RALPH_HYBRID_TIMEOUT_MINUTES="${2:-}"
                 shift 2
                 ;;
             -r|--rate-limit)
-                RALPH_RATE_LIMIT="${2:-}"
+                RALPH_HYBRID_RATE_LIMIT="${2:-}"
                 shift 2
                 ;;
             -p|--prompt)
-                RALPH_PROMPT_FILE="${2:-}"
+                RALPH_HYBRID_PROMPT_FILE="${2:-}"
                 shift 2
                 ;;
             -v|--verbose)
-                RALPH_VERBOSE=true
-                export RALPH_DEBUG=1
+                RALPH_HYBRID_VERBOSE=true
+                export RALPH_HYBRID_DEBUG=1
                 shift
                 ;;
             --no-archive)
-                RALPH_NO_ARCHIVE=true
+                RALPH_HYBRID_NO_ARCHIVE=true
                 shift
                 ;;
             --dry-run)
-                RALPH_DRY_RUN=true
+                RALPH_HYBRID_DRY_RUN=true
                 shift
                 ;;
             --skip-preflight)
-                RALPH_SKIP_PREFLIGHT=true
+                RALPH_HYBRID_SKIP_PREFLIGHT=true
                 shift
                 ;;
             --dangerously-skip-permissions)
-                RALPH_DANGEROUSLY_SKIP_PERMISSIONS=true
+                RALPH_HYBRID_DANGEROUSLY_SKIP_PERMISSIONS=true
                 shift
                 ;;
             --monitor)
-                RALPH_MONITOR=true
+                RALPH_HYBRID_MONITOR=true
                 shift
                 ;;
             -m|--model)
-                RALPH_MODEL="${2:-}"
+                RALPH_HYBRID_MODEL="${2:-}"
                 shift 2
                 ;;
             -*)
@@ -830,7 +830,7 @@ _run_validate_args() {
     parse_run_args "$@" || return 1
 
     # Run preflight checks (unless skipped)
-    if [[ "$RALPH_SKIP_PREFLIGHT" == true ]]; then
+    if [[ "$RALPH_HYBRID_SKIP_PREFLIGHT" == true ]]; then
         log_warn "Skipping preflight validation (--skip-preflight). Use with caution."
     else
         # Check git repo first (required for preflight)
@@ -881,7 +881,7 @@ build_prompt() {
 **What's Already Done:**
 - Project structure exists (check with \`ls\` if needed, but only once)
 - Configuration files in place
-- \`.ralph/\` contains Ralph state files (DO NOT MODIFY)
+- \`.ralph-hybrid/\` contains Ralph Hybrid state files (DO NOT MODIFY)
 
 **Your Job:** Implement the next incomplete story from prd.json below.
 
@@ -889,7 +889,7 @@ build_prompt() {
 - Don't explore unnecessarily
 - Don't read files that aren't relevant to the story
 - Focus on: read story → implement → commit → done
-- Ralph handles quality checks automatically
+- Ralph Hybrid handles quality checks automatically
 
 ---
 
@@ -999,7 +999,7 @@ _display_title_bar() {
     local iteration="$3"
     local max_iterations="$4"
     local start_time="${5:-}"
-    local timeout_minutes="${6:-${RALPH_TIMEOUT_MINUTES:-15}}"
+    local timeout_minutes="${6:-${RALPH_HYBRID_TIMEOUT_MINUTES:-15}}"
 
     local term_width
     term_width=$(_get_terminal_width)
@@ -1202,7 +1202,7 @@ run_validate_setup() {
     theme_load
 
     # Override config with CLI args (already done via parse_run_args)
-    export RALPH_RATE_LIMIT
+    export RALPH_HYBRID_RATE_LIMIT
 
     # Get feature directory from current git branch
     RUN_FEATURE_DIR=$(get_feature_dir) || return 1
@@ -1216,22 +1216,22 @@ run_validate_setup() {
     fi
 
     # Verify custom prompt file if specified
-    if [[ -n "$RALPH_PROMPT_FILE" ]] && [[ ! -f "$RALPH_PROMPT_FILE" ]]; then
-        log_error "Prompt file not found: ${RALPH_PROMPT_FILE}"
+    if [[ -n "$RALPH_HYBRID_PROMPT_FILE" ]] && [[ ! -f "$RALPH_HYBRID_PROMPT_FILE" ]]; then
+        log_error "Prompt file not found: ${RALPH_HYBRID_PROMPT_FILE}"
         return 1
     fi
 
     # Set up state directory for this feature
-    export RALPH_STATE_DIR="${RUN_FEATURE_DIR}"
+    export RALPH_HYBRID_STATE_DIR="${RUN_FEATURE_DIR}"
 
     # Set up hooks directory
-    export RALPH_HOOKS_DIR="${RUN_FEATURE_DIR}/${RALPH_HOOKS_DIR_NAME}"
-    export RALPH_FEATURE_DIR="${RUN_FEATURE_DIR}"
-    export RALPH_PRD_FILE="${RUN_PRD_FILE}"
+    export RALPH_HYBRID_HOOKS_DIR="${RUN_FEATURE_DIR}/${RALPH_HYBRID_HOOKS_DIR_NAME}"
+    export RALPH_HYBRID_FEATURE_DIR="${RUN_FEATURE_DIR}"
+    export RALPH_HYBRID_PRD_FILE="${RUN_PRD_FILE}"
 
     # Load custom completion patterns from config
-    if [[ -n "${RALPH_CUSTOM_COMPLETION_PATTERNS:-}" ]]; then
-        IFS=',' read -ra patterns <<< "$RALPH_CUSTOM_COMPLETION_PATTERNS"
+    if [[ -n "${RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS:-}" ]]; then
+        IFS=',' read -ra patterns <<< "$RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS"
         for pattern in "${patterns[@]}"; do
             pattern=$(echo "$pattern" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             [[ -n "$pattern" ]] && hk_add_completion_pattern "$pattern"
@@ -1254,15 +1254,15 @@ run_show_dry_run() {
     echo "DRY RUN - Would execute the following:"
     echo "=========================================="
     echo "Feature: ${feature_name}"
-    echo "Max iterations: ${RALPH_MAX_ITERATIONS}"
-    echo "Timeout: ${RALPH_TIMEOUT_MINUTES} minutes"
-    echo "Rate limit: ${RALPH_RATE_LIMIT}/hour"
-    echo "Auto-archive: $([ "$RALPH_NO_ARCHIVE" = true ] && echo "no" || echo "yes")"
-    echo "Skip permissions: ${RALPH_DANGEROUSLY_SKIP_PERMISSIONS}"
+    echo "Max iterations: ${RALPH_HYBRID_MAX_ITERATIONS}"
+    echo "Timeout: ${RALPH_HYBRID_TIMEOUT_MINUTES} minutes"
+    echo "Rate limit: ${RALPH_HYBRID_RATE_LIMIT}/hour"
+    echo "Auto-archive: $([ "$RALPH_HYBRID_NO_ARCHIVE" = true ] && echo "no" || echo "yes")"
+    echo "Skip permissions: ${RALPH_HYBRID_DANGEROUSLY_SKIP_PERMISSIONS}"
     echo ""
     echo "Prompt preview:"
     echo "---"
-    build_prompt "$feature_dir" "$RALPH_PROMPT_FILE" | head -"$_RALPH_DRY_RUN_PREVIEW_LINES"
+    build_prompt "$feature_dir" "$RALPH_HYBRID_PROMPT_FILE" | head -"$_RALPH_HYBRID_DRY_RUN_PREVIEW_LINES"
     echo "..."
     echo "---"
 }
@@ -1321,8 +1321,8 @@ _run_invoke_claude() {
     local claude_args="--permission-mode bypassPermissions"
 
     # Add model if specified
-    if [[ -n "${RALPH_MODEL:-}" ]]; then
-        claude_args+=" --model ${RALPH_MODEL}"
+    if [[ -n "${RALPH_HYBRID_MODEL:-}" ]]; then
+        claude_args+=" --model ${RALPH_HYBRID_MODEL}"
     fi
 
     # Run Claude with timeout and real-time output
@@ -1339,14 +1339,14 @@ _run_invoke_claude() {
     # Parse JSON stream to show activity while also saving raw output
     # Run in background to allow proper signal handling
     (
-        echo "$prompt_content" | $timeout_cmd "${RALPH_TIMEOUT_MINUTES}m" \
+        echo "$prompt_content" | $timeout_cmd "${RALPH_HYBRID_TIMEOUT_MINUTES}m" \
             claude -p $claude_args --output-format stream-json --verbose 2>&1 | \
             tee -a "$log_file"
     ) | \
         {
             # Scrolling window - keep last N lines visible
             declare -a buffer=()
-            local window_size=$_RALPH_SCROLLING_WINDOW_SIZE
+            local window_size=$_RALPH_HYBRID_SCROLLING_WINDOW_SIZE
             local line_count=0
             local tool_count=0
             local start_time=$(date +%s)
@@ -1365,9 +1365,9 @@ _run_invoke_claude() {
                     display=$(echo "$line" | jq -r "
                         .message.content[]? |
                         if .type == \"text\" then
-                            \"${UI_TEXT}  text: \" + (.text | split(\"\n\")[0] | .[0:$_RALPH_TEXT_TRUNCATE]) + \"${UI_RESET}\"
+                            \"${UI_TEXT}  text: \" + (.text | split(\"\n\")[0] | .[0:$_RALPH_HYBRID_TEXT_TRUNCATE]) + \"${UI_RESET}\"
                         elif .type == \"tool_use\" then
-                            \"${UI_TOOL}  tool: ${UI_TOOL_NAME}\" + .name + \"${UI_RESET}${UI_MUTED}: \" + (.input | tostring | .[0:$_RALPH_TOOL_OUTPUT_TRUNCATE]) + \"${UI_RESET}\"
+                            \"${UI_TOOL}  tool: ${UI_TOOL_NAME}\" + .name + \"${UI_RESET}${UI_MUTED}: \" + (.input | tostring | .[0:$_RALPH_HYBRID_TOOL_OUTPUT_TRUNCATE]) + \"${UI_RESET}\"
                         else empty end
                     " 2>/dev/null)
                     if echo "$line" | jq -e '.message.content[]? | select(.type == "tool_use")' &>/dev/null; then
@@ -1393,7 +1393,7 @@ _run_invoke_claude() {
                     local elapsed=$(( now_secs - start_time ))
                     local elapsed_str=$(printf "%02d:%02d" $((elapsed/60)) $((elapsed%60)))
                     # Use awk for floating point support (fractional minutes like 0.083)
-                    local timeout_secs=$(awk -v tm="${RALPH_TIMEOUT_MINUTES:-15}" 'BEGIN { print int(tm*60) }')
+                    local timeout_secs=$(awk -v tm="${RALPH_HYBRID_TIMEOUT_MINUTES:-15}" 'BEGIN { print int(tm*60) }')
                     local remaining=$((timeout_secs - elapsed))
                     [[ $remaining -lt 0 ]] && remaining=0
                     local remaining_str=$(printf "%02d:%02d" $((remaining/60)) $((remaining%60)))
@@ -1488,11 +1488,11 @@ _run_handle_completion() {
             log_success "All stories complete!"
 
             # Execute on_completion hooks
-            if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+            if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
                 hk_on_completion || log_warn "Some on_completion hooks failed"
             fi
 
-            if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
+            if [[ "$RALPH_HYBRID_NO_ARCHIVE" != true ]]; then
                 # Prompt user to archive
                 echo ""
                 read -r -p "Archive now? [y/N] " response
@@ -1502,11 +1502,11 @@ _run_handle_completion() {
                         _run_archive_with_deferred_check "$prd_file"
                         ;;
                     *)
-                        log_info "Skipping archive. You can run 'ralph archive' later."
+                        log_info "Skipping archive. You can run 'ralph-hybrid archive' later."
                         ;;
                 esac
             fi
-            return "$RALPH_EXIT_COMPLETE"  # Special code for completion
+            return "$RALPH_HYBRID_EXIT_COMPLETE"  # Special code for completion
             ;;
         story_complete)
             # One story completed successfully - continue to next iteration with fresh context
@@ -1524,11 +1524,11 @@ _run_handle_completion() {
             log_warn "API limit detected in output."
             if ed_prompt_api_limit; then
                 log_info "Waiting for limit reset..."
-                sleep "$_RALPH_API_LIMIT_WAIT"
+                sleep "$_RALPH_HYBRID_API_LIMIT_WAIT"
                 return 0  # Continue to next iteration
             else
                 log_info "User chose to exit."
-                return "$RALPH_EXIT_USER"
+                return "$RALPH_HYBRID_EXIT_USER"
             fi
             ;;
         continue)
@@ -1572,16 +1572,16 @@ _run_iteration() {
     local timer_row=$((start_row + 3))
 
     # Display the title bar with full context and timeout countdown
-    _display_title_bar "$feature_name" "$prd_file" "$iteration" "$RALPH_MAX_ITERATIONS" "$iteration_start_time" "$RALPH_TIMEOUT_MINUTES"
+    _display_title_bar "$feature_name" "$prd_file" "$iteration" "$RALPH_HYBRID_MAX_ITERATIONS" "$iteration_start_time" "$RALPH_HYBRID_TIMEOUT_MINUTES"
 
     # Start background countdown timer updater
-    _start_countdown_timer "$timer_row" "$iteration_start_time" "$RALPH_TIMEOUT_MINUTES" "$term_width"
+    _start_countdown_timer "$timer_row" "$iteration_start_time" "$RALPH_HYBRID_TIMEOUT_MINUTES" "$term_width"
 
     # Export iteration number for hooks
-    export RALPH_ITERATION="$iteration"
+    export RALPH_HYBRID_ITERATION="$iteration"
 
     # Execute pre_iteration hooks
-    if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
         hk_pre_iteration || log_warn "Some pre_iteration hooks failed"
     fi
 
@@ -1591,10 +1591,10 @@ _run_iteration() {
         log_error "Circuit breaker tripped! Stopping loop."
         cb_get_status
         # Execute on_error hooks
-        if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
-            export RALPH_ERROR_TYPE="circuit_breaker"
+        if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
+            export RALPH_HYBRID_ERROR_TYPE="circuit_breaker"
             hk_on_error || log_warn "Some on_error hooks failed"
-            unset RALPH_ERROR_TYPE
+            unset RALPH_HYBRID_ERROR_TYPE
         fi
         return 1
     fi
@@ -1607,7 +1607,7 @@ _run_iteration() {
         rl_wait_for_reset
         # Restart timer after wait (reset start time)
         iteration_start_time=$(date +%s)
-        _start_countdown_timer "$timer_row" "$iteration_start_time" "$RALPH_TIMEOUT_MINUTES" "$term_width"
+        _start_countdown_timer "$timer_row" "$iteration_start_time" "$RALPH_HYBRID_TIMEOUT_MINUTES" "$term_width"
     fi
 
     # Snapshot passes state before
@@ -1616,7 +1616,7 @@ _run_iteration() {
 
     # Build prompt
     local prompt_content
-    prompt_content=$(build_prompt "$feature_dir" "$RALPH_PROMPT_FILE")
+    prompt_content=$(build_prompt "$feature_dir" "$RALPH_HYBRID_PROMPT_FILE")
 
     # Ensure logs directory exists
     mkdir -p "${feature_dir}/logs"
@@ -1629,8 +1629,8 @@ _run_iteration() {
     _stop_countdown_timer
 
     # Handle timeout
-    if [[ $INVOKE_EXIT_CODE -eq $RALPH_EXIT_TIMEOUT ]]; then
-        log_warn "Iteration timed out after ${RALPH_TIMEOUT_MINUTES} minutes"
+    if [[ $INVOKE_EXIT_CODE -eq $RALPH_HYBRID_EXIT_TIMEOUT ]]; then
+        log_warn "Iteration timed out after ${RALPH_HYBRID_TIMEOUT_MINUTES} minutes"
 
         # Read output from log for context
         local timeout_output
@@ -1679,14 +1679,14 @@ _run_iteration() {
     cb_save_state
 
     # Verbose output
-    if [[ "$RALPH_VERBOSE" == true ]]; then
+    if [[ "$RALPH_HYBRID_VERBOSE" == true ]]; then
         echo "--- Claude Output ---"
-        echo "$output" | head -"$_RALPH_VERBOSE_OUTPUT_LINES"
+        echo "$output" | head -"$_RALPH_HYBRID_VERBOSE_OUTPUT_LINES"
         echo "--- End Output ---"
     fi
 
     # Execute post_iteration hooks
-    if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
         hk_post_iteration || log_warn "Some post_iteration hooks failed"
     fi
 
@@ -1713,28 +1713,28 @@ cmd_run() {
     fi
 
     # Export feature name for monitor
-    export RALPH_FEATURE_NAME="$RUN_FEATURE_NAME"
+    export RALPH_HYBRID_FEATURE_NAME="$RUN_FEATURE_NAME"
 
     # Dry run mode - show what would happen
-    if [[ "$RALPH_DRY_RUN" == true ]]; then
+    if [[ "$RALPH_HYBRID_DRY_RUN" == true ]]; then
         run_show_dry_run "$RUN_FEATURE_NAME" "$RUN_FEATURE_DIR"
         lf_release
         return 0
     fi
 
     # Monitor mode - launch in tmux
-    if [[ "$RALPH_MONITOR" == true ]]; then
-        # Build the ralph run command without --monitor to avoid recursion
-        local run_cmd="ralph run"
-        [[ -n "${RALPH_MAX_ITERATIONS:-}" ]] && run_cmd+=" -n $RALPH_MAX_ITERATIONS"
-        [[ -n "${RALPH_TIMEOUT_MINUTES:-}" ]] && run_cmd+=" -t $RALPH_TIMEOUT_MINUTES"
-        [[ -n "${RALPH_RATE_LIMIT:-}" ]] && run_cmd+=" -r $RALPH_RATE_LIMIT"
-        [[ -n "${RALPH_PROMPT_FILE:-}" ]] && run_cmd+=" -p $RALPH_PROMPT_FILE"
-        [[ "$RALPH_VERBOSE" == true ]] && run_cmd+=" -v"
-        [[ "$RALPH_NO_ARCHIVE" == true ]] && run_cmd+=" --no-archive"
-        [[ "$RALPH_SKIP_PREFLIGHT" == true ]] && run_cmd+=" --skip-preflight"
-        [[ "$RALPH_DANGEROUSLY_SKIP_PERMISSIONS" == true ]] && run_cmd+=" --dangerously-skip-permissions"
-        [[ -n "${RALPH_MODEL:-}" ]] && run_cmd+=" -m $RALPH_MODEL"
+    if [[ "$RALPH_HYBRID_MONITOR" == true ]]; then
+        # Build the ralph-hybrid run command without --monitor to avoid recursion
+        local run_cmd="ralph-hybrid run"
+        [[ -n "${RALPH_HYBRID_MAX_ITERATIONS:-}" ]] && run_cmd+=" -n $RALPH_HYBRID_MAX_ITERATIONS"
+        [[ -n "${RALPH_HYBRID_TIMEOUT_MINUTES:-}" ]] && run_cmd+=" -t $RALPH_HYBRID_TIMEOUT_MINUTES"
+        [[ -n "${RALPH_HYBRID_RATE_LIMIT:-}" ]] && run_cmd+=" -r $RALPH_HYBRID_RATE_LIMIT"
+        [[ -n "${RALPH_HYBRID_PROMPT_FILE:-}" ]] && run_cmd+=" -p $RALPH_HYBRID_PROMPT_FILE"
+        [[ "$RALPH_HYBRID_VERBOSE" == true ]] && run_cmd+=" -v"
+        [[ "$RALPH_HYBRID_NO_ARCHIVE" == true ]] && run_cmd+=" --no-archive"
+        [[ "$RALPH_HYBRID_SKIP_PREFLIGHT" == true ]] && run_cmd+=" --skip-preflight"
+        [[ "$RALPH_HYBRID_DANGEROUSLY_SKIP_PERMISSIONS" == true ]] && run_cmd+=" --dangerously-skip-permissions"
+        [[ -n "${RALPH_HYBRID_MODEL:-}" ]] && run_cmd+=" -m $RALPH_HYBRID_MODEL"
 
         # Start tmux with dashboard
         # Release lock - the inner ralph run will acquire its own
@@ -1746,7 +1746,7 @@ cmd_run() {
     # Check if already complete
     if all_stories_complete "$RUN_PRD_FILE"; then
         log_success "All stories already complete!"
-        if [[ "$RALPH_NO_ARCHIVE" != true ]]; then
+        if [[ "$RALPH_HYBRID_NO_ARCHIVE" != true ]]; then
             # Prompt user to archive
             echo ""
             read -r -p "Archive now? [y/N] " response
@@ -1756,7 +1756,7 @@ cmd_run() {
                     _run_archive_with_deferred_check "$RUN_PRD_FILE"
                     ;;
                 *)
-                    log_info "Skipping archive. You can run 'ralph archive' later."
+                    log_info "Skipping archive. You can run 'ralph-hybrid archive' later."
                     ;;
             esac
         fi
@@ -1775,16 +1775,16 @@ cmd_run() {
     mon_write_status 0 "starting" 0 0 0 0 ""
 
     # Execute pre_run hooks
-    if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
+    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
         hk_pre_run || log_warn "Some pre_run hooks failed"
     fi
 
     # Run main iteration loop
     log_info "Starting Ralph loop for feature: ${RUN_FEATURE_NAME}"
-    log_info "Max iterations: ${RALPH_MAX_ITERATIONS}, Timeout: ${RALPH_TIMEOUT_MINUTES}m"
+    log_info "Max iterations: ${RALPH_HYBRID_MAX_ITERATIONS}, Timeout: ${RALPH_HYBRID_TIMEOUT_MINUTES}m"
 
     local iteration=0
-    while [[ $iteration -lt $RALPH_MAX_ITERATIONS ]]; do
+    while [[ $iteration -lt $RALPH_HYBRID_MAX_ITERATIONS ]]; do
         iteration=$((iteration + 1))
 
         # Update monitor status at start of iteration
@@ -1794,64 +1794,64 @@ cmd_run() {
         _run_iteration "$iteration" "$RUN_FEATURE_DIR" "$RUN_PRD_FILE" "$timeout_cmd" "$RUN_FEATURE_NAME" || iter_result=$?
 
         case $iter_result in
-            "$RALPH_EXIT_SUCCESS")
+            "$RALPH_HYBRID_EXIT_SUCCESS")
                 # Update monitor status and continue
                 mon_iteration_end "$iteration" "$RUN_PRD_FILE" "running" ""
-                sleep "$_RALPH_ITERATION_SLEEP"
+                sleep "$_RALPH_HYBRID_ITERATION_SLEEP"
                 ;;
-            "$RALPH_EXIT_ERROR")
+            "$RALPH_HYBRID_EXIT_ERROR")
                 # Error - mark as error and stop loop
                 mon_mark_error "$RUN_PRD_FILE"
                 # Execute post_run hooks
-                if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
-                    export RALPH_RUN_STATUS="error"
+                if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
+                    export RALPH_HYBRID_RUN_STATUS="error"
                     hk_post_run || log_warn "Some post_run hooks failed"
-                    unset RALPH_RUN_STATUS
+                    unset RALPH_HYBRID_RUN_STATUS
                 fi
                 lf_release
-                return "$RALPH_EXIT_ERROR"
+                return "$RALPH_HYBRID_EXIT_ERROR"
                 ;;
-            "$RALPH_EXIT_USER")
+            "$RALPH_HYBRID_EXIT_USER")
                 # User exit
                 mon_iteration_end "$iteration" "$RUN_PRD_FILE" "paused" ""
                 # Execute post_run hooks
-                if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
-                    export RALPH_RUN_STATUS="user_exit"
+                if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
+                    export RALPH_HYBRID_RUN_STATUS="user_exit"
                     hk_post_run || log_warn "Some post_run hooks failed"
-                    unset RALPH_RUN_STATUS
+                    unset RALPH_HYBRID_RUN_STATUS
                 fi
                 lf_release
-                return "$RALPH_EXIT_USER"
+                return "$RALPH_HYBRID_EXIT_USER"
                 ;;
-            "$RALPH_EXIT_COMPLETE")
+            "$RALPH_HYBRID_EXIT_COMPLETE")
                 # Completion - mark as complete
                 mon_mark_complete "$RUN_PRD_FILE"
                 # Execute post_run hooks
-                if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
-                    export RALPH_RUN_STATUS="complete"
+                if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
+                    export RALPH_HYBRID_RUN_STATUS="complete"
                     hk_post_run || log_warn "Some post_run hooks failed"
-                    unset RALPH_RUN_STATUS
+                    unset RALPH_HYBRID_RUN_STATUS
                 fi
                 lf_release
-                return "$RALPH_EXIT_SUCCESS"
+                return "$RALPH_HYBRID_EXIT_SUCCESS"
                 ;;
         esac
     done
 
     # Max iterations reached
     mon_mark_error "$RUN_PRD_FILE"
-    log_error "Max iterations (${RALPH_MAX_ITERATIONS}) reached without completion."
+    log_error "Max iterations (${RALPH_HYBRID_MAX_ITERATIONS}) reached without completion."
     # Execute on_error hooks for max iterations
-    if [[ "${RALPH_HOOKS_ENABLED:-true}" == "true" ]]; then
-        export RALPH_ERROR_TYPE="max_iterations"
+    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
+        export RALPH_HYBRID_ERROR_TYPE="max_iterations"
         hk_on_error || log_warn "Some on_error hooks failed"
-        unset RALPH_ERROR_TYPE
-        export RALPH_RUN_STATUS="error"
+        unset RALPH_HYBRID_ERROR_TYPE
+        export RALPH_HYBRID_RUN_STATUS="error"
         hk_post_run || log_warn "Some post_run hooks failed"
-        unset RALPH_RUN_STATUS
+        unset RALPH_HYBRID_RUN_STATUS
     fi
     lf_release
-    return "$RALPH_EXIT_ERROR"
+    return "$RALPH_HYBRID_EXIT_ERROR"
 }
 
 #=============================================================================
@@ -1969,7 +1969,7 @@ cleanup() {
         kill -KILL $descendants 2>/dev/null || true
     fi
 
-    exit "$RALPH_EXIT_INTERRUPT"
+    exit "$RALPH_HYBRID_EXIT_INTERRUPT"
 }
 
 # Handle Ctrl+C gracefully

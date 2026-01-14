@@ -6,7 +6,7 @@
 # Usage: ./uninstall.sh
 #
 # What it does:
-#   1. Removes ~/.ralph directory
+#   1. Removes ~/.ralph-hybrid directory
 #   2. Removes PATH entries from .bashrc and .zshrc
 
 set -euo pipefail
@@ -15,7 +15,7 @@ set -euo pipefail
 # Configuration
 # -----------------------------------------------------------------------------
 
-INSTALL_DIR="${HOME}/.ralph"
+INSTALL_DIR="${HOME}/.ralph-hybrid"
 
 # Colors for output (if terminal supports it)
 if [[ -t 1 ]]; then
@@ -74,7 +74,7 @@ remove_install_dir() {
 # Shell Configuration Cleanup
 # -----------------------------------------------------------------------------
 
-# Remove Ralph PATH entries from a shell rc file
+# Remove Ralph Hybrid PATH entries from a shell rc file
 # Uses platform-appropriate sed syntax
 remove_from_rc_file() {
     local rc_file="$1"
@@ -84,23 +84,23 @@ remove_from_rc_file() {
     fi
 
     # Check if our entries exist
-    if ! grep -q "# Ralph Hybrid PATH\|\.ralph" "$rc_file" 2>/dev/null; then
+    if ! grep -q "# Ralph Hybrid PATH\|\.ralph-hybrid" "$rc_file" 2>/dev/null; then
         print_info "No entries in $(basename "$rc_file")"
         return 0
     fi
 
     # Create backup
-    cp "$rc_file" "${rc_file}.ralph-backup"
+    cp "$rc_file" "${rc_file}.ralph-hybrid-backup"
 
     # Platform-specific sed -i syntax
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS requires '' after -i
         sed -i '' '/# Ralph Hybrid PATH/d' "$rc_file"
-        sed -i '' '/\.ralph/d' "$rc_file"
+        sed -i '' '/\.ralph-hybrid/d' "$rc_file"
     else
         # Linux/GNU sed
         sed -i '/# Ralph Hybrid PATH/d' "$rc_file"
-        sed -i '/\.ralph/d' "$rc_file"
+        sed -i '/\.ralph-hybrid/d' "$rc_file"
     fi
 
     # Remove empty lines at end of file (cleanup)
@@ -114,7 +114,7 @@ remove_from_rc_file() {
     fi
 
     # Remove backup if successful
-    rm -f "${rc_file}.ralph-backup"
+    rm -f "${rc_file}.ralph-hybrid-backup"
 
     print_info "Cleaned $(basename "$rc_file")"
 }
@@ -137,7 +137,7 @@ clean_shell_config() {
 
 print_success() {
     echo ""
-    echo -e "${GREEN}Ralph has been uninstalled.${NC}"
+    echo -e "${GREEN}Ralph Hybrid has been uninstalled.${NC}"
     echo ""
 }
 

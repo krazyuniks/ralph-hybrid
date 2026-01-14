@@ -10,17 +10,17 @@
 # There are two ways to mock these dependencies in tests:
 #
 # 1. Environment Variable Overrides:
-#    Set RALPH_MOCK_<COMMAND>=1 and define a mock function:
+#    Set RALPH_HYBRID_MOCK_<COMMAND>=1 and define a mock function:
 #
-#    export RALPH_MOCK_JQ=1
-#    _ralph_mock_jq() {
+#    export RALPH_HYBRID_MOCK_JQ=1
+#    _ralph_hybrid_mock_jq() {
 #        echo '{"mocked": true}'
 #    }
 #
 # 2. Command Path Overrides:
 #    Set RALPH_<COMMAND>_CMD to point to a mock script:
 #
-#    export RALPH_JQ_CMD="/path/to/mock_jq"
+#    export RALPH_HYBRID_JQ_CMD="/path/to/mock_jq"
 #
 # AVAILABLE WRAPPERS:
 # ===================
@@ -37,8 +37,8 @@
 #     source "$PROJECT_ROOT/lib/deps.sh"
 #
 #     # Mock jq to return canned data
-#     export RALPH_MOCK_JQ=1
-#     _ralph_mock_jq() {
+#     export RALPH_HYBRID_MOCK_JQ=1
+#     _ralph_hybrid_mock_jq() {
 #         case "$*" in
 #             *".userStories | length"*)
 #                 echo "3"
@@ -51,37 +51,37 @@
 # }
 #
 # teardown() {
-#     unset RALPH_MOCK_JQ
-#     unset -f _ralph_mock_jq
+#     unset RALPH_HYBRID_MOCK_JQ
+#     unset -f _ralph_hybrid_mock_jq
 # }
 
 set -euo pipefail
 
 # Source guard - prevent multiple sourcing
-if [[ "${_RALPH_DEPS_SOURCED:-}" == "1" ]]; then
+if [[ "${_RALPH_HYBRID_DEPS_SOURCED:-}" == "1" ]]; then
     return 0
 fi
-_RALPH_DEPS_SOURCED=1
+_RALPH_HYBRID_DEPS_SOURCED=1
 
 #=============================================================================
 # jq Wrapper
 #=============================================================================
 
 # Wrapper for jq command
-# Allows mocking via RALPH_MOCK_JQ=1 and _ralph_mock_jq function
-# or via RALPH_JQ_CMD environment variable
+# Allows mocking via RALPH_HYBRID_MOCK_JQ=1 and _ralph_hybrid_mock_jq function
+# or via RALPH_HYBRID_JQ_CMD environment variable
 #
 # Usage: deps_jq [jq_args...]
 # Example: deps_jq '.userStories | length' file.json
 deps_jq() {
     # Check for mock function override
-    if [[ "${RALPH_MOCK_JQ:-}" == "1" ]] && declare -f _ralph_mock_jq &>/dev/null; then
-        _ralph_mock_jq "$@"
+    if [[ "${RALPH_HYBRID_MOCK_JQ:-}" == "1" ]] && declare -f _ralph_hybrid_mock_jq &>/dev/null; then
+        _ralph_hybrid_mock_jq "$@"
         return $?
     fi
 
     # Check for command path override
-    local jq_cmd="${RALPH_JQ_CMD:-jq}"
+    local jq_cmd="${RALPH_HYBRID_JQ_CMD:-jq}"
     "$jq_cmd" "$@"
 }
 
@@ -90,20 +90,20 @@ deps_jq() {
 #=============================================================================
 
 # Wrapper for date command
-# Allows mocking via RALPH_MOCK_DATE=1 and _ralph_mock_date function
-# or via RALPH_DATE_CMD environment variable
+# Allows mocking via RALPH_HYBRID_MOCK_DATE=1 and _ralph_hybrid_mock_date function
+# or via RALPH_HYBRID_DATE_CMD environment variable
 #
 # Usage: deps_date [date_args...]
 # Example: deps_date -u +"%Y-%m-%dT%H:%M:%SZ"
 deps_date() {
     # Check for mock function override
-    if [[ "${RALPH_MOCK_DATE:-}" == "1" ]] && declare -f _ralph_mock_date &>/dev/null; then
-        _ralph_mock_date "$@"
+    if [[ "${RALPH_HYBRID_MOCK_DATE:-}" == "1" ]] && declare -f _ralph_hybrid_mock_date &>/dev/null; then
+        _ralph_hybrid_mock_date "$@"
         return $?
     fi
 
     # Check for command path override
-    local date_cmd="${RALPH_DATE_CMD:-date}"
+    local date_cmd="${RALPH_HYBRID_DATE_CMD:-date}"
     "$date_cmd" "$@"
 }
 
@@ -112,20 +112,20 @@ deps_date() {
 #=============================================================================
 
 # Wrapper for git command
-# Allows mocking via RALPH_MOCK_GIT=1 and _ralph_mock_git function
-# or via RALPH_GIT_CMD environment variable
+# Allows mocking via RALPH_HYBRID_MOCK_GIT=1 and _ralph_hybrid_mock_git function
+# or via RALPH_HYBRID_GIT_CMD environment variable
 #
 # Usage: deps_git [git_args...]
 # Example: deps_git branch --show-current
 deps_git() {
     # Check for mock function override
-    if [[ "${RALPH_MOCK_GIT:-}" == "1" ]] && declare -f _ralph_mock_git &>/dev/null; then
-        _ralph_mock_git "$@"
+    if [[ "${RALPH_HYBRID_MOCK_GIT:-}" == "1" ]] && declare -f _ralph_hybrid_mock_git &>/dev/null; then
+        _ralph_hybrid_mock_git "$@"
         return $?
     fi
 
     # Check for command path override
-    local git_cmd="${RALPH_GIT_CMD:-git}"
+    local git_cmd="${RALPH_HYBRID_GIT_CMD:-git}"
     "$git_cmd" "$@"
 }
 
@@ -134,20 +134,20 @@ deps_git() {
 #=============================================================================
 
 # Wrapper for claude CLI command
-# Allows mocking via RALPH_MOCK_CLAUDE=1 and _ralph_mock_claude function
-# or via RALPH_CLAUDE_CMD environment variable
+# Allows mocking via RALPH_HYBRID_MOCK_CLAUDE=1 and _ralph_hybrid_mock_claude function
+# or via RALPH_HYBRID_CLAUDE_CMD environment variable
 #
 # Usage: deps_claude [claude_args...]
 # Example: deps_claude -p --output-format json
 deps_claude() {
     # Check for mock function override
-    if [[ "${RALPH_MOCK_CLAUDE:-}" == "1" ]] && declare -f _ralph_mock_claude &>/dev/null; then
-        _ralph_mock_claude "$@"
+    if [[ "${RALPH_HYBRID_MOCK_CLAUDE:-}" == "1" ]] && declare -f _ralph_hybrid_mock_claude &>/dev/null; then
+        _ralph_hybrid_mock_claude "$@"
         return $?
     fi
 
     # Check for command path override
-    local claude_cmd="${RALPH_CLAUDE_CMD:-claude}"
+    local claude_cmd="${RALPH_HYBRID_CLAUDE_CMD:-claude}"
     "$claude_cmd" "$@"
 }
 
@@ -156,20 +156,20 @@ deps_claude() {
 #=============================================================================
 
 # Wrapper for tmux command
-# Allows mocking via RALPH_MOCK_TMUX=1 and _ralph_mock_tmux function
-# or via RALPH_TMUX_CMD environment variable
+# Allows mocking via RALPH_HYBRID_MOCK_TMUX=1 and _ralph_hybrid_mock_tmux function
+# or via RALPH_HYBRID_TMUX_CMD environment variable
 #
 # Usage: deps_tmux [tmux_args...]
 # Example: deps_tmux has-session -t ralph
 deps_tmux() {
     # Check for mock function override
-    if [[ "${RALPH_MOCK_TMUX:-}" == "1" ]] && declare -f _ralph_mock_tmux &>/dev/null; then
-        _ralph_mock_tmux "$@"
+    if [[ "${RALPH_HYBRID_MOCK_TMUX:-}" == "1" ]] && declare -f _ralph_hybrid_mock_tmux &>/dev/null; then
+        _ralph_hybrid_mock_tmux "$@"
         return $?
     fi
 
     # Check for command path override
-    local tmux_cmd="${RALPH_TMUX_CMD:-tmux}"
+    local tmux_cmd="${RALPH_HYBRID_TMUX_CMD:-tmux}"
     "$tmux_cmd" "$@"
 }
 
@@ -178,21 +178,21 @@ deps_tmux() {
 #=============================================================================
 
 # Wrapper for timeout command (handles macOS/Linux differences)
-# Allows mocking via RALPH_MOCK_TIMEOUT=1 and _ralph_mock_timeout function
-# or via RALPH_TIMEOUT_CMD environment variable
+# Allows mocking via RALPH_HYBRID_MOCK_TIMEOUT=1 and _ralph_hybrid_mock_timeout function
+# or via RALPH_HYBRID_TIMEOUT_CMD environment variable
 #
 # Usage: deps_timeout [timeout_args...]
 # Example: deps_timeout 60s some_command
 deps_timeout() {
     # Check for mock function override
-    if [[ "${RALPH_MOCK_TIMEOUT:-}" == "1" ]] && declare -f _ralph_mock_timeout &>/dev/null; then
-        _ralph_mock_timeout "$@"
+    if [[ "${RALPH_HYBRID_MOCK_TIMEOUT:-}" == "1" ]] && declare -f _ralph_hybrid_mock_timeout &>/dev/null; then
+        _ralph_hybrid_mock_timeout "$@"
         return $?
     fi
 
     # Check for command path override
-    if [[ -n "${RALPH_TIMEOUT_CMD:-}" ]]; then
-        "$RALPH_TIMEOUT_CMD" "$@"
+    if [[ -n "${RALPH_HYBRID_TIMEOUT_CMD:-}" ]]; then
+        "$RALPH_HYBRID_TIMEOUT_CMD" "$@"
         return $?
     fi
 
@@ -221,8 +221,8 @@ deps_timeout() {
 # Returns: 0 if available, 1 if not
 deps_check_available() {
     local dep="$1"
-    local mock_var="RALPH_MOCK_${dep^^}"
-    local cmd_var="RALPH_${dep^^}_CMD"
+    local mock_var="RALPH_HYBRID_MOCK_${dep^^}"
+    local cmd_var="RALPH_HYBRID_${dep^^}_CMD"
 
     # Check if mocked
     if [[ "${!mock_var:-}" == "1" ]]; then
@@ -268,27 +268,27 @@ deps_check_all() {
 # Reset all mocks (useful in test teardown)
 # Usage: deps_reset_mocks
 deps_reset_mocks() {
-    unset RALPH_MOCK_JQ
-    unset RALPH_MOCK_DATE
-    unset RALPH_MOCK_GIT
-    unset RALPH_MOCK_CLAUDE
-    unset RALPH_MOCK_TMUX
-    unset RALPH_MOCK_TIMEOUT
+    unset RALPH_HYBRID_MOCK_JQ
+    unset RALPH_HYBRID_MOCK_DATE
+    unset RALPH_HYBRID_MOCK_GIT
+    unset RALPH_HYBRID_MOCK_CLAUDE
+    unset RALPH_HYBRID_MOCK_TMUX
+    unset RALPH_HYBRID_MOCK_TIMEOUT
 
-    unset RALPH_JQ_CMD
-    unset RALPH_DATE_CMD
-    unset RALPH_GIT_CMD
-    unset RALPH_CLAUDE_CMD
-    unset RALPH_TMUX_CMD
-    unset RALPH_TIMEOUT_CMD
+    unset RALPH_HYBRID_JQ_CMD
+    unset RALPH_HYBRID_DATE_CMD
+    unset RALPH_HYBRID_GIT_CMD
+    unset RALPH_HYBRID_CLAUDE_CMD
+    unset RALPH_HYBRID_TMUX_CMD
+    unset RALPH_HYBRID_TIMEOUT_CMD
 
     # Unset mock functions if they exist
-    unset -f _ralph_mock_jq 2>/dev/null || true
-    unset -f _ralph_mock_date 2>/dev/null || true
-    unset -f _ralph_mock_git 2>/dev/null || true
-    unset -f _ralph_mock_claude 2>/dev/null || true
-    unset -f _ralph_mock_tmux 2>/dev/null || true
-    unset -f _ralph_mock_timeout 2>/dev/null || true
+    unset -f _ralph_hybrid_mock_jq 2>/dev/null || true
+    unset -f _ralph_hybrid_mock_date 2>/dev/null || true
+    unset -f _ralph_hybrid_mock_git 2>/dev/null || true
+    unset -f _ralph_hybrid_mock_claude 2>/dev/null || true
+    unset -f _ralph_hybrid_mock_tmux 2>/dev/null || true
+    unset -f _ralph_hybrid_mock_timeout 2>/dev/null || true
 }
 
 # Set up a simple mock that returns a fixed value
@@ -296,10 +296,10 @@ deps_reset_mocks() {
 deps_setup_simple_mock() {
     local dep="$1"
     local return_value="$2"
-    local mock_var="RALPH_MOCK_${dep^^}"
+    local mock_var="RALPH_HYBRID_MOCK_${dep^^}"
 
     export "${mock_var}=1"
 
     # Create the mock function dynamically
-    eval "_ralph_mock_${dep}() { echo '$return_value'; }"
+    eval "_ralph_hybrid_mock_${dep}() { echo '$return_value'; }"
 }

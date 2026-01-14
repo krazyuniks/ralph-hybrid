@@ -5,22 +5,22 @@
 set -euo pipefail
 
 # Source guard - prevent multiple sourcing
-if [[ "${_RALPH_QUALITY_CHECK_SOURCED:-}" == "1" ]]; then
+if [[ "${_RALPH_HYBRID_QUALITY_CHECK_SOURCED:-}" == "1" ]]; then
     return 0
 fi
-_RALPH_QUALITY_CHECK_SOURCED=1
+_RALPH_HYBRID_QUALITY_CHECK_SOURCED=1
 
 # Get the directory containing this script
 _QC_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source dependencies
-if [[ "${_RALPH_LOGGING_SOURCED:-}" != "1" ]] && [[ -f "${_QC_LIB_DIR}/logging.sh" ]]; then
+if [[ "${_RALPH_HYBRID_LOGGING_SOURCED:-}" != "1" ]] && [[ -f "${_QC_LIB_DIR}/logging.sh" ]]; then
     source "${_QC_LIB_DIR}/logging.sh"
 fi
-if [[ "${_RALPH_CONFIG_SOURCED:-}" != "1" ]] && [[ -f "${_QC_LIB_DIR}/config.sh" ]]; then
+if [[ "${_RALPH_HYBRID_CONFIG_SOURCED:-}" != "1" ]] && [[ -f "${_QC_LIB_DIR}/config.sh" ]]; then
     source "${_QC_LIB_DIR}/config.sh"
 fi
-if [[ "${_RALPH_UTILS_SOURCED:-}" != "1" ]] && [[ -f "${_QC_LIB_DIR}/utils.sh" ]]; then
+if [[ "${_RALPH_HYBRID_UTILS_SOURCED:-}" != "1" ]] && [[ -f "${_QC_LIB_DIR}/utils.sh" ]]; then
     source "${_QC_LIB_DIR}/utils.sh"
 fi
 

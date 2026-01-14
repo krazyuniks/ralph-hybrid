@@ -5,17 +5,17 @@
 set -euo pipefail
 
 # Source guard - prevent multiple sourcing
-if [[ "${_RALPH_CONFIG_SOURCED:-}" == "1" ]]; then
+if [[ "${_RALPH_HYBRID_CONFIG_SOURCED:-}" == "1" ]]; then
     return 0
 fi
-_RALPH_CONFIG_SOURCED=1
+_RALPH_HYBRID_CONFIG_SOURCED=1
 
 # Ensure logging is available
 SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
-if [[ "${_RALPH_CONSTANTS_SOURCED:-}" != "1" ]]; then
+if [[ "${_RALPH_HYBRID_CONSTANTS_SOURCED:-}" != "1" ]]; then
     source "${SCRIPT_DIR}/constants.sh"
 fi
-if [[ "${_RALPH_LOGGING_SOURCED:-}" != "1" ]]; then
+if [[ "${_RALPH_HYBRID_LOGGING_SOURCED:-}" != "1" ]]; then
     source "${SCRIPT_DIR}/logging.sh"
 fi
 
@@ -24,8 +24,8 @@ fi
 #=============================================================================
 
 # Default config paths (using constants as base)
-RALPH_GLOBAL_CONFIG="${RALPH_GLOBAL_CONFIG:-$HOME/.ralph/config.yaml}"
-RALPH_PROJECT_CONFIG="${RALPH_PROJECT_CONFIG:-.ralph/config.yaml}"
+RALPH_HYBRID_GLOBAL_CONFIG="${RALPH_HYBRID_GLOBAL_CONFIG:-$HOME/.ralph-hybrid/config.yaml}"
+RALPH_HYBRID_PROJECT_CONFIG="${RALPH_HYBRID_PROJECT_CONFIG:-.ralph-hybrid/config.yaml}"
 
 #=============================================================================
 # YAML Parsing Functions
@@ -140,8 +140,8 @@ cfg_get_value() {
     local value=""
 
     # Try project config first
-    if [[ -f "$RALPH_PROJECT_CONFIG" ]]; then
-        value=$(cfg_load_yaml_value "$RALPH_PROJECT_CONFIG" "$key")
+    if [[ -f "$RALPH_HYBRID_PROJECT_CONFIG" ]]; then
+        value=$(cfg_load_yaml_value "$RALPH_HYBRID_PROJECT_CONFIG" "$key")
         if [[ -n "$value" ]]; then
             echo "$value"
             return 0
@@ -149,8 +149,8 @@ cfg_get_value() {
     fi
 
     # Fall back to global config
-    if [[ -f "$RALPH_GLOBAL_CONFIG" ]]; then
-        value=$(cfg_load_yaml_value "$RALPH_GLOBAL_CONFIG" "$key")
+    if [[ -f "$RALPH_HYBRID_GLOBAL_CONFIG" ]]; then
+        value=$(cfg_load_yaml_value "$RALPH_HYBRID_GLOBAL_CONFIG" "$key")
         if [[ -n "$value" ]]; then
             echo "$value"
             return 0
@@ -165,63 +165,63 @@ get_config_value() {
     cfg_get_value "$@"
 }
 
-# Load configuration into RALPH_* environment variables
+# Load configuration into RALPH_HYBRID_* environment variables
 # Usage: cfg_load
 cfg_load() {
     # Defaults - use constants from constants.sh as fallbacks
-    export RALPH_MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-$(cfg_get_value "defaults.max_iterations")}"
-    export RALPH_MAX_ITERATIONS="${RALPH_MAX_ITERATIONS:-$RALPH_DEFAULT_MAX_ITERATIONS}"
+    export RALPH_HYBRID_MAX_ITERATIONS="${RALPH_HYBRID_MAX_ITERATIONS:-$(cfg_get_value "defaults.max_iterations")}"
+    export RALPH_HYBRID_MAX_ITERATIONS="${RALPH_HYBRID_MAX_ITERATIONS:-$RALPH_HYBRID_DEFAULT_MAX_ITERATIONS}"
 
-    export RALPH_TIMEOUT_MINUTES="${RALPH_TIMEOUT_MINUTES:-$(cfg_get_value "defaults.timeout_minutes")}"
-    export RALPH_TIMEOUT_MINUTES="${RALPH_TIMEOUT_MINUTES:-$RALPH_DEFAULT_TIMEOUT_MINUTES}"
+    export RALPH_HYBRID_TIMEOUT_MINUTES="${RALPH_HYBRID_TIMEOUT_MINUTES:-$(cfg_get_value "defaults.timeout_minutes")}"
+    export RALPH_HYBRID_TIMEOUT_MINUTES="${RALPH_HYBRID_TIMEOUT_MINUTES:-$RALPH_HYBRID_DEFAULT_TIMEOUT_MINUTES}"
 
-    export RALPH_RATE_LIMIT_PER_HOUR="${RALPH_RATE_LIMIT_PER_HOUR:-$(cfg_get_value "defaults.rate_limit_per_hour")}"
-    export RALPH_RATE_LIMIT_PER_HOUR="${RALPH_RATE_LIMIT_PER_HOUR:-$RALPH_DEFAULT_RATE_LIMIT}"
+    export RALPH_HYBRID_RATE_LIMIT_PER_HOUR="${RALPH_HYBRID_RATE_LIMIT_PER_HOUR:-$(cfg_get_value "defaults.rate_limit_per_hour")}"
+    export RALPH_HYBRID_RATE_LIMIT_PER_HOUR="${RALPH_HYBRID_RATE_LIMIT_PER_HOUR:-$RALPH_HYBRID_DEFAULT_RATE_LIMIT}"
 
-    export RALPH_PROMPT_TEMPLATE="${RALPH_PROMPT_TEMPLATE:-$(cfg_get_value "defaults.prompt_template")}"
-    export RALPH_PROMPT_TEMPLATE="${RALPH_PROMPT_TEMPLATE:-$RALPH_DEFAULT_PROMPT_TEMPLATE}"
+    export RALPH_HYBRID_PROMPT_TEMPLATE="${RALPH_HYBRID_PROMPT_TEMPLATE:-$(cfg_get_value "defaults.prompt_template")}"
+    export RALPH_HYBRID_PROMPT_TEMPLATE="${RALPH_HYBRID_PROMPT_TEMPLATE:-$RALPH_HYBRID_DEFAULT_PROMPT_TEMPLATE}"
 
     # Circuit breaker - use constants from constants.sh as fallbacks
-    export RALPH_NO_PROGRESS_THRESHOLD="${RALPH_NO_PROGRESS_THRESHOLD:-$(cfg_get_value "circuit_breaker.no_progress_threshold")}"
-    export RALPH_NO_PROGRESS_THRESHOLD="${RALPH_NO_PROGRESS_THRESHOLD:-$RALPH_DEFAULT_NO_PROGRESS_THRESHOLD}"
+    export RALPH_HYBRID_NO_PROGRESS_THRESHOLD="${RALPH_HYBRID_NO_PROGRESS_THRESHOLD:-$(cfg_get_value "circuit_breaker.no_progress_threshold")}"
+    export RALPH_HYBRID_NO_PROGRESS_THRESHOLD="${RALPH_HYBRID_NO_PROGRESS_THRESHOLD:-$RALPH_HYBRID_DEFAULT_NO_PROGRESS_THRESHOLD}"
 
-    export RALPH_SAME_ERROR_THRESHOLD="${RALPH_SAME_ERROR_THRESHOLD:-$(cfg_get_value "circuit_breaker.same_error_threshold")}"
-    export RALPH_SAME_ERROR_THRESHOLD="${RALPH_SAME_ERROR_THRESHOLD:-$RALPH_DEFAULT_SAME_ERROR_THRESHOLD}"
+    export RALPH_HYBRID_SAME_ERROR_THRESHOLD="${RALPH_HYBRID_SAME_ERROR_THRESHOLD:-$(cfg_get_value "circuit_breaker.same_error_threshold")}"
+    export RALPH_HYBRID_SAME_ERROR_THRESHOLD="${RALPH_HYBRID_SAME_ERROR_THRESHOLD:-$RALPH_HYBRID_DEFAULT_SAME_ERROR_THRESHOLD}"
 
     # Completion - use constant from constants.sh as fallback
-    export RALPH_COMPLETION_PROMISE="${RALPH_COMPLETION_PROMISE:-$(cfg_get_value "completion.promise")}"
-    export RALPH_COMPLETION_PROMISE="${RALPH_COMPLETION_PROMISE:-$RALPH_DEFAULT_COMPLETION_PROMISE}"
+    export RALPH_HYBRID_COMPLETION_PROMISE="${RALPH_HYBRID_COMPLETION_PROMISE:-$(cfg_get_value "completion.promise")}"
+    export RALPH_HYBRID_COMPLETION_PROMISE="${RALPH_HYBRID_COMPLETION_PROMISE:-$RALPH_HYBRID_DEFAULT_COMPLETION_PROMISE}"
 
     # Claude settings
-    export RALPH_SKIP_PERMISSIONS="${RALPH_SKIP_PERMISSIONS:-$(cfg_get_value "claude.dangerously_skip_permissions")}"
-    export RALPH_SKIP_PERMISSIONS="${RALPH_SKIP_PERMISSIONS:-false}"
+    export RALPH_HYBRID_SKIP_PERMISSIONS="${RALPH_HYBRID_SKIP_PERMISSIONS:-$(cfg_get_value "claude.dangerously_skip_permissions")}"
+    export RALPH_HYBRID_SKIP_PERMISSIONS="${RALPH_HYBRID_SKIP_PERMISSIONS:-false}"
 
-    export RALPH_ALLOWED_TOOLS="${RALPH_ALLOWED_TOOLS:-$(cfg_get_value "claude.allowed_tools")}"
+    export RALPH_HYBRID_ALLOWED_TOOLS="${RALPH_HYBRID_ALLOWED_TOOLS:-$(cfg_get_value "claude.allowed_tools")}"
 
     # Git settings - use constant from constants.sh as fallback
-    export RALPH_AUTO_CREATE_BRANCH="${RALPH_AUTO_CREATE_BRANCH:-$(cfg_get_value "git.auto_create_branch")}"
-    export RALPH_AUTO_CREATE_BRANCH="${RALPH_AUTO_CREATE_BRANCH:-true}"
+    export RALPH_HYBRID_AUTO_CREATE_BRANCH="${RALPH_HYBRID_AUTO_CREATE_BRANCH:-$(cfg_get_value "git.auto_create_branch")}"
+    export RALPH_HYBRID_AUTO_CREATE_BRANCH="${RALPH_HYBRID_AUTO_CREATE_BRANCH:-true}"
 
-    export RALPH_BRANCH_PREFIX="${RALPH_BRANCH_PREFIX:-$(cfg_get_value "git.branch_prefix")}"
-    export RALPH_BRANCH_PREFIX="${RALPH_BRANCH_PREFIX:-$RALPH_DEFAULT_BRANCH_PREFIX}"
+    export RALPH_HYBRID_BRANCH_PREFIX="${RALPH_HYBRID_BRANCH_PREFIX:-$(cfg_get_value "git.branch_prefix")}"
+    export RALPH_HYBRID_BRANCH_PREFIX="${RALPH_HYBRID_BRANCH_PREFIX:-$RALPH_HYBRID_DEFAULT_BRANCH_PREFIX}"
 
     # Archive settings - use constant from constants.sh as fallback
-    export RALPH_AUTO_ARCHIVE="${RALPH_AUTO_ARCHIVE:-$(cfg_get_value "archive.auto_archive")}"
-    export RALPH_AUTO_ARCHIVE="${RALPH_AUTO_ARCHIVE:-true}"
+    export RALPH_HYBRID_AUTO_ARCHIVE="${RALPH_HYBRID_AUTO_ARCHIVE:-$(cfg_get_value "archive.auto_archive")}"
+    export RALPH_HYBRID_AUTO_ARCHIVE="${RALPH_HYBRID_AUTO_ARCHIVE:-true}"
 
-    export RALPH_ARCHIVE_DIRECTORY="${RALPH_ARCHIVE_DIRECTORY:-$(cfg_get_value "archive.directory")}"
-    export RALPH_ARCHIVE_DIRECTORY="${RALPH_ARCHIVE_DIRECTORY:-$RALPH_ARCHIVE_DIR_NAME}"
+    export RALPH_HYBRID_ARCHIVE_DIRECTORY="${RALPH_HYBRID_ARCHIVE_DIRECTORY:-$(cfg_get_value "archive.directory")}"
+    export RALPH_HYBRID_ARCHIVE_DIRECTORY="${RALPH_HYBRID_ARCHIVE_DIRECTORY:-$RALPH_HYBRID_ARCHIVE_DIR_NAME}"
 
     # Custom completion patterns (comma-separated in config)
-    export RALPH_CUSTOM_COMPLETION_PATTERNS="${RALPH_CUSTOM_COMPLETION_PATTERNS:-$(cfg_get_value "completion.custom_patterns")}"
+    export RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS="${RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS:-$(cfg_get_value "completion.custom_patterns")}"
 
     # Hooks enabled flag
-    export RALPH_HOOKS_ENABLED="${RALPH_HOOKS_ENABLED:-$(cfg_get_value "hooks.enabled")}"
-    export RALPH_HOOKS_ENABLED="${RALPH_HOOKS_ENABLED:-true}"
+    export RALPH_HYBRID_HOOKS_ENABLED="${RALPH_HYBRID_HOOKS_ENABLED:-$(cfg_get_value "hooks.enabled")}"
+    export RALPH_HYBRID_HOOKS_ENABLED="${RALPH_HYBRID_HOOKS_ENABLED:-true}"
 
     # Display/Theme settings
-    export RALPH_THEME="${RALPH_THEME:-$(cfg_get_value "display.theme")}"
-    export RALPH_THEME="${RALPH_THEME:-$RALPH_DEFAULT_THEME}"
+    export RALPH_HYBRID_THEME="${RALPH_HYBRID_THEME:-$(cfg_get_value "display.theme")}"
+    export RALPH_HYBRID_THEME="${RALPH_HYBRID_THEME:-$RALPH_HYBRID_DEFAULT_THEME}"
 
     log_debug "Configuration loaded"
 }

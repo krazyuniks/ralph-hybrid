@@ -19,20 +19,20 @@
 set -euo pipefail
 
 # Source guard - prevent multiple sourcing
-if [[ "${_RALPH_HOOKS_SOURCED:-}" == "1" ]]; then
+if [[ "${_RALPH_HYBRID_HOOKS_SOURCED:-}" == "1" ]]; then
     return 0
 fi
-_RALPH_HOOKS_SOURCED=1
+_RALPH_HYBRID_HOOKS_SOURCED=1
 
 # Get the directory containing this script
 _HOOKS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source dependencies
-if [[ "${_RALPH_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${_HOOKS_LIB_DIR}/constants.sh" ]]; then
+if [[ "${_RALPH_HYBRID_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${_HOOKS_LIB_DIR}/constants.sh" ]]; then
     source "${_HOOKS_LIB_DIR}/constants.sh"
 fi
 
-if [[ "${_RALPH_LOGGING_SOURCED:-}" != "1" ]] && [[ -f "${_HOOKS_LIB_DIR}/logging.sh" ]]; then
+if [[ "${_RALPH_HYBRID_LOGGING_SOURCED:-}" != "1" ]] && [[ -f "${_HOOKS_LIB_DIR}/logging.sh" ]]; then
     source "${_HOOKS_LIB_DIR}/logging.sh"
 fi
 
@@ -41,7 +41,7 @@ fi
 #=============================================================================
 
 # Valid hook points
-readonly -a RALPH_HOOK_POINTS=(
+readonly -a RALPH_HYBRID_HOOK_POINTS=(
     "pre_run"
     "post_run"
     "pre_iteration"
@@ -51,10 +51,10 @@ readonly -a RALPH_HOOK_POINTS=(
 )
 
 # Hooks directory name (under .ralph/)
-readonly RALPH_HOOKS_DIR_NAME="hooks"
+readonly RALPH_HYBRID_HOOKS_DIR_NAME="hooks"
 
 # Default hooks directory path (can be overridden)
-: "${RALPH_HOOKS_DIR:=${PWD}/.ralph/${RALPH_HOOKS_DIR_NAME}}"
+: "${RALPH_HYBRID_HOOKS_DIR:=${PWD}/.ralph/${RALPH_HYBRID_HOOKS_DIR_NAME}}"
 
 #=============================================================================
 # Hook Registry
@@ -62,13 +62,13 @@ readonly RALPH_HOOKS_DIR_NAME="hooks"
 
 # Associative arrays for registered hooks (function names)
 # Each key is a hook point, value is a colon-separated list of function names
-declare -gA _RALPH_HOOKS_REGISTRY=()
+declare -gA _RALPH_HYBRID_HOOKS_REGISTRY=()
 
 # Initialize registry if not already done
 _hk_init_registry() {
-    for point in "${RALPH_HOOK_POINTS[@]}"; do
-        if [[ -z "${_RALPH_HOOKS_REGISTRY[$point]+isset}" ]]; then
-            _RALPH_HOOKS_REGISTRY[$point]=""
+    for point in "${RALPH_HYBRID_HOOK_POINTS[@]}"; do
+        if [[ -z "${_RALPH_HYBRID_HOOKS_REGISTRY[$point]+isset}" ]]; then
+            _RALPH_HYBRID_HOOKS_REGISTRY[$point]=""
         fi
     done
 }
@@ -88,7 +88,7 @@ _hk_init_registry
 hk_is_valid_hook_point() {
     local point="${1:-}"
 
-    for valid_point in "${RALPH_HOOK_POINTS[@]}"; do
+    for valid_point in "${RALPH_HYBRID_HOOK_POINTS[@]}"; do
         if [[ "$point" == "$valid_point" ]]; then
             return 0
         fi
@@ -110,7 +110,7 @@ hk_register() {
     # Validate hook point
     if ! hk_is_valid_hook_point "$hook_point"; then
         log_error "Invalid hook point: $hook_point"
-        log_error "Valid hook points: ${RALPH_HOOK_POINTS[*]}"
+        log_error "Valid hook points: ${RALPH_HYBRID_HOOK_POINTS[*]}"
         return 1
     fi
 
@@ -121,10 +121,10 @@ hk_register() {
     fi
 
     # Add to registry (colon-separated)
-    if [[ -z "${_RALPH_HOOKS_REGISTRY[$hook_point]}" ]]; then
-        _RALPH_HOOKS_REGISTRY[$hook_point]="$func_name"
+    if [[ -z "${_RALPH_HYBRID_HOOKS_REGISTRY[$hook_point]}" ]]; then
+        _RALPH_HYBRID_HOOKS_REGISTRY[$hook_point]="$func_name"
     else
-        _RALPH_HOOKS_REGISTRY[$hook_point]="${_RALPH_HOOKS_REGISTRY[$hook_point]}:$func_name"
+        _RALPH_HYBRID_HOOKS_REGISTRY[$hook_point]="${_RALPH_HYBRID_HOOKS_REGISTRY[$hook_point]}:$func_name"
     fi
 
     log_debug "Registered hook '$func_name' for point '$hook_point'"
@@ -147,7 +147,7 @@ hk_unregister() {
         return 1
     fi
 
-    local current="${_RALPH_HOOKS_REGISTRY[$hook_point]:-}"
+    local current="${_RALPH_HYBRID_HOOKS_REGISTRY[$hook_point]:-}"
     if [[ -z "$current" ]]; then
         return 0
     fi
@@ -165,7 +165,7 @@ hk_unregister() {
         fi
     done
 
-    _RALPH_HOOKS_REGISTRY[$hook_point]="$new_list"
+    _RALPH_HYBRID_HOOKS_REGISTRY[$hook_point]="$new_list"
     log_debug "Unregistered hook '$func_name' from point '$hook_point'"
     return 0
 }
@@ -180,8 +180,8 @@ hk_clear() {
 
     if [[ -z "$hook_point" ]]; then
         # Clear all hooks
-        for point in "${RALPH_HOOK_POINTS[@]}"; do
-            _RALPH_HOOKS_REGISTRY[$point]=""
+        for point in "${RALPH_HYBRID_HOOK_POINTS[@]}"; do
+            _RALPH_HYBRID_HOOKS_REGISTRY[$point]=""
         done
         log_debug "Cleared all hooks"
     else
@@ -189,7 +189,7 @@ hk_clear() {
             log_error "Invalid hook point: $hook_point"
             return 1
         fi
-        _RALPH_HOOKS_REGISTRY[$hook_point]=""
+        _RALPH_HYBRID_HOOKS_REGISTRY[$hook_point]=""
         log_debug "Cleared hooks for point '$hook_point'"
     fi
 
@@ -208,7 +208,7 @@ hk_get_hooks() {
         return 1
     fi
 
-    echo "${_RALPH_HOOKS_REGISTRY[$hook_point]:-}"
+    echo "${_RALPH_HYBRID_HOOKS_REGISTRY[$hook_point]:-}"
     return 0
 }
 
@@ -224,10 +224,10 @@ hk_get_hooks() {
 #   0 if all hooks succeed, 1 if any hook fails (continues executing remaining hooks)
 #
 # Environment variables set for hooks:
-#   RALPH_HOOK_POINT - The current hook point being executed
-#   RALPH_ITERATION - Current iteration number (for iteration hooks)
-#   RALPH_FEATURE_DIR - Path to feature directory
-#   RALPH_PRD_FILE - Path to prd.json
+#   RALPH_HYBRID_HOOK_POINT - The current hook point being executed
+#   RALPH_HYBRID_ITERATION - Current iteration number (for iteration hooks)
+#   RALPH_HYBRID_FEATURE_DIR - Path to feature directory
+#   RALPH_HYBRID_PRD_FILE - Path to prd.json
 hk_execute() {
     local hook_point="${1:-}"
     shift || true
@@ -238,12 +238,12 @@ hk_execute() {
     fi
 
     # Export the hook point for use by hooks
-    export RALPH_HOOK_POINT="$hook_point"
+    export RALPH_HYBRID_HOOK_POINT="$hook_point"
 
     local failed=0
 
     # Execute registered function hooks
-    local registered="${_RALPH_HOOKS_REGISTRY[$hook_point]:-}"
+    local registered="${_RALPH_HYBRID_HOOKS_REGISTRY[$hook_point]:-}"
     if [[ -n "$registered" ]]; then
         IFS=':' read -ra hooks <<< "$registered"
         for func_name in "${hooks[@]}"; do
@@ -267,7 +267,7 @@ hk_execute() {
     # Execute hooks from hooks directory
     _hk_execute_directory_hooks "$hook_point" "$@" || failed=1
 
-    unset RALPH_HOOK_POINT
+    unset RALPH_HYBRID_HOOK_POINT
 
     [[ $failed -eq 0 ]]
 }
@@ -282,7 +282,7 @@ _hk_execute_directory_hooks() {
     local hook_point="${1:-}"
     shift || true
 
-    local hooks_dir="${RALPH_HOOKS_DIR}"
+    local hooks_dir="${RALPH_HYBRID_HOOKS_DIR}"
     local hook_file="${hooks_dir}/${hook_point}.sh"
 
     # Check for hook file
@@ -301,7 +301,7 @@ _hk_execute_directory_hooks() {
     # Execute the hook in a subshell to isolate failures
     (
         # Export all RALPH_ environment variables
-        export RALPH_HOOK_POINT="$hook_point"
+        export RALPH_HYBRID_HOOK_POINT="$hook_point"
 
         # Source or execute the hook file
         # shellcheck disable=SC1090
@@ -326,10 +326,10 @@ _hk_execute_directory_hooks() {
 #=============================================================================
 
 # Array for custom completion patterns (in addition to built-in)
-declare -ga _RALPH_CUSTOM_COMPLETION_PATTERNS=()
+declare -ga _RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS=()
 
 # Built-in completion patterns
-readonly -a _RALPH_BUILTIN_COMPLETION_PATTERNS=(
+readonly -a _RALPH_HYBRID_BUILTIN_COMPLETION_PATTERNS=(
     "<promise>COMPLETE</promise>"
 )
 
@@ -346,7 +346,7 @@ hk_add_completion_pattern() {
         return 1
     fi
 
-    _RALPH_CUSTOM_COMPLETION_PATTERNS+=("$pattern")
+    _RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS+=("$pattern")
     log_debug "Added custom completion pattern: $pattern"
     return 0
 }
@@ -355,7 +355,7 @@ hk_add_completion_pattern() {
 # Returns:
 #   0 on success
 hk_clear_completion_patterns() {
-    _RALPH_CUSTOM_COMPLETION_PATTERNS=()
+    _RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS=()
     log_debug "Cleared custom completion patterns"
     return 0
 }
@@ -365,12 +365,12 @@ hk_clear_completion_patterns() {
 #   Prints all patterns, one per line
 hk_get_completion_patterns() {
     # Built-in patterns
-    for pattern in "${_RALPH_BUILTIN_COMPLETION_PATTERNS[@]}"; do
+    for pattern in "${_RALPH_HYBRID_BUILTIN_COMPLETION_PATTERNS[@]}"; do
         echo "$pattern"
     done
 
     # Custom patterns
-    for pattern in "${_RALPH_CUSTOM_COMPLETION_PATTERNS[@]}"; do
+    for pattern in "${_RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS[@]}"; do
         echo "$pattern"
     done
 }
@@ -388,7 +388,7 @@ hk_check_completion_patterns() {
     fi
 
     # Check built-in patterns
-    for pattern in "${_RALPH_BUILTIN_COMPLETION_PATTERNS[@]}"; do
+    for pattern in "${_RALPH_HYBRID_BUILTIN_COMPLETION_PATTERNS[@]}"; do
         if [[ "$output" == *"$pattern"* ]]; then
             log_debug "Matched built-in completion pattern: $pattern"
             return 0
@@ -396,7 +396,7 @@ hk_check_completion_patterns() {
     done
 
     # Check custom patterns
-    for pattern in "${_RALPH_CUSTOM_COMPLETION_PATTERNS[@]}"; do
+    for pattern in "${_RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS[@]}"; do
         if [[ "$output" == *"$pattern"* ]]; then
             log_debug "Matched custom completion pattern: $pattern"
             return 0
@@ -453,7 +453,7 @@ hk_load_completion_patterns_from_config() {
 #   0 on success
 hk_init_hooks_dir() {
     local base_dir="${1:-${PWD}/.ralph}"
-    local hooks_dir="${base_dir}/${RALPH_HOOKS_DIR_NAME}"
+    local hooks_dir="${base_dir}/${RALPH_HYBRID_HOOKS_DIR_NAME}"
 
     if [[ -d "$hooks_dir" ]]; then
         log_debug "Hooks directory already exists: $hooks_dir"
@@ -486,11 +486,11 @@ The following environment variables are available in hooks:
 
 | Variable | Description |
 |----------|-------------|
-| `RALPH_HOOK_POINT` | Current hook point being executed |
-| `RALPH_ITERATION` | Current iteration number (iteration hooks only) |
-| `RALPH_FEATURE_DIR` | Path to feature directory |
-| `RALPH_PRD_FILE` | Path to prd.json |
-| `RALPH_FEATURE_NAME` | Name of the current feature |
+| `RALPH_HYBRID_HOOK_POINT` | Current hook point being executed |
+| `RALPH_HYBRID_ITERATION` | Current iteration number (iteration hooks only) |
+| `RALPH_HYBRID_FEATURE_DIR` | Path to feature directory |
+| `RALPH_HYBRID_PRD_FILE` | Path to prd.json |
+| `RALPH_HYBRID_FEATURE_NAME` | Name of the current feature |
 
 ## Example Hook
 
@@ -498,7 +498,7 @@ The following environment variables are available in hooks:
 #!/bin/bash
 # post_iteration.sh - Run after each iteration
 
-echo "Iteration $RALPH_ITERATION completed"
+echo "Iteration $RALPH_HYBRID_ITERATION completed"
 
 # Example: Send notification
 # curl -X POST "https://hooks.slack.com/..." -d '{"text":"Iteration done"}'
@@ -519,7 +519,7 @@ EOF
 # Returns:
 #   Prints list of found hook files
 hk_list_hooks() {
-    local hooks_dir="${1:-${RALPH_HOOKS_DIR}}"
+    local hooks_dir="${1:-${RALPH_HYBRID_HOOKS_DIR}}"
 
     if [[ ! -d "$hooks_dir" ]]; then
         echo "No hooks directory found at: $hooks_dir"
@@ -527,7 +527,7 @@ hk_list_hooks() {
     fi
 
     echo "Hook files in $hooks_dir:"
-    for point in "${RALPH_HOOK_POINTS[@]}"; do
+    for point in "${RALPH_HYBRID_HOOK_POINTS[@]}"; do
         local hook_file="${hooks_dir}/${point}.sh"
         if [[ -f "$hook_file" ]]; then
             local status="found"

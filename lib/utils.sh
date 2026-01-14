@@ -15,46 +15,46 @@
 set -euo pipefail
 
 # Source guard - prevent multiple sourcing
-if [[ "${_RALPH_UTILS_SOURCED:-}" == "1" ]]; then
+if [[ "${_RALPH_HYBRID_UTILS_SOURCED:-}" == "1" ]]; then
     return 0
 fi
-_RALPH_UTILS_SOURCED=1
+_RALPH_HYBRID_UTILS_SOURCED=1
 
 #=============================================================================
 # Determine Library Directory
 #=============================================================================
 
 # Get the directory containing this script
-_RALPH_LIB_DIR="${_RALPH_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+_RALPH_HYBRID_LIB_DIR="${_RALPH_HYBRID_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
 #=============================================================================
 # Source Focused Libraries
 #=============================================================================
 
 # Constants (must be first for default values)
-source "${_RALPH_LIB_DIR}/constants.sh"
+source "${_RALPH_HYBRID_LIB_DIR}/constants.sh"
 
 # Dependencies abstraction layer (must be second)
-source "${_RALPH_LIB_DIR}/deps.sh"
+source "${_RALPH_HYBRID_LIB_DIR}/deps.sh"
 
 # Logging and timestamps
-source "${_RALPH_LIB_DIR}/logging.sh"
+source "${_RALPH_HYBRID_LIB_DIR}/logging.sh"
 
 # Configuration loading
-source "${_RALPH_LIB_DIR}/config.sh"
+source "${_RALPH_HYBRID_LIB_DIR}/config.sh"
 
 # PRD/JSON helpers
-source "${_RALPH_LIB_DIR}/prd.sh"
+source "${_RALPH_HYBRID_LIB_DIR}/prd.sh"
 
 # Platform detection and file utilities
-source "${_RALPH_LIB_DIR}/platform.sh"
+source "${_RALPH_HYBRID_LIB_DIR}/platform.sh"
 
 #=============================================================================
 # Protected Branches
 #=============================================================================
 
 # Default list of protected branches (using constant from constants.sh)
-RALPH_PROTECTED_BRANCHES="${RALPH_PROTECTED_BRANCHES:-$RALPH_DEFAULT_PROTECTED_BRANCHES}"
+RALPH_HYBRID_PROTECTED_BRANCHES="${RALPH_HYBRID_PROTECTED_BRANCHES:-$RALPH_HYBRID_DEFAULT_PROTECTED_BRANCHES}"
 
 # Check if a branch is protected
 # Args: branch_name
@@ -63,7 +63,7 @@ ut_is_protected_branch() {
     local branch="$1"
     local protected
 
-    for protected in $RALPH_PROTECTED_BRANCHES; do
+    for protected in $RALPH_HYBRID_PROTECTED_BRANCHES; do
         if [[ "$branch" == "$protected" ]]; then
             return 0
         fi
@@ -81,9 +81,9 @@ is_protected_branch() {
 # Feature Detection
 #=============================================================================
 
-# Get the .ralph directory path
+# Get the .ralph-hybrid directory path
 ut_get_ralph_dir() {
-    echo ".ralph"
+    echo ".ralph-hybrid"
 }
 
 # Alias for backwards compatibility
@@ -93,9 +93,9 @@ get_ralph_dir() {
 
 # Get the feature directory based on current git branch
 # The feature folder is derived from the git branch name with slashes converted to dashes
-# Example: feature/user-auth → .ralph/feature-user-auth
+# Example: feature/user-auth → .ralph-hybrid/feature-user-auth
 #
-# Returns: Path to feature directory (e.g., ".ralph/feature-user-auth")
+# Returns: Path to feature directory (e.g., ".ralph-hybrid/feature-user-auth")
 # Exits with error if:
 #   - Not in a git repository
 #   - In detached HEAD state (no branch)
@@ -125,7 +125,7 @@ ut_get_feature_dir() {
 
     # Sanitize: feature/user-auth → feature-user-auth
     local feature_name="${branch//\//-}"
-    echo ".ralph/${feature_name}"
+    echo ".ralph-hybrid/${feature_name}"
 }
 
 # Alias for backwards compatibility

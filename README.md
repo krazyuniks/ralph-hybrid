@@ -1,57 +1,202 @@
 # Ralph Hybrid
 
-> An **inner-loop focused** implementation of the Ralph Wiggum technique for autonomous, iterative AI development.
+> An **AI-agnostic, multi-agent** implementation of the Ralph Wiggum technique for autonomous, iterative software development.
+
+**Status**: Active development | Refactoring to agent-agnostic architecture
 
 ---
 
 ## Table of Contents
 
-1. [The Ralph Wiggum Technique](#the-ralph-wiggum-technique)
-2. [Plans Are Living Documents](#plans-are-living-documents)
-3. [Origins and Source Material](#origins-and-source-material)
-4. [Why a Hybrid Implementation?](#why-a-hybrid-implementation)
-5. [Foundational Principles](#foundational-principles)
-6. [Feature Comparison](#feature-comparison)
-7. [This Implementation](#this-implementation)
-8. [Getting Started](#getting-started)
-9. [Documentation](#documentation)
+1. [What is Ralph Wiggum?](#what-is-ralph-wiggum)
+2. [Architecture](#architecture)
+3. [Key Benefits](#key-benefits)
+4. [Architectural Evolution](#architectural-evolution)
+5. [Sources and Inspiration](#sources-and-inspiration)
+6. [Getting Started](#getting-started)
+7. [Documentation](#documentation)
+8. [Contributing](#contributing)
 
 ---
 
-## The Ralph Wiggum Technique
+## What is Ralph Wiggum?
 
-### What Is It?
+The Ralph Wiggum technique is an approach to AI-assisted software development where an AI coding agent runs **in a loop** until a task is complete. Named after the persistently optimistic Simpsons character, it embodies iterative refinement over single-shot perfection.
 
-The Ralph Wiggum technique is an approach to AI-assisted software development where an AI coding agent runs **in a loop** until a task is complete. Named after the persistently optimistic Simpsons character, it embodies the philosophy of iterative refinement over single-shot perfection.
+**Core concept**: Progress persists in files and git, not in the LLM's context window. When context fills up, you get a fresh agent with fresh context.
 
-At its core, Ralph is elegantly simple:
-
+At its simplest:
 ```bash
 while :; do cat PROMPT.md | claude; done
 ```
 
-### The Key Insight
-
-> "Progress persists in files and git, not in the LLM's context window. When context fills up, you get a fresh agent with fresh context."
-
 Each iteration:
-1. **Fresh context window** - Avoids context rot from accumulated tokens
-2. **Reads state from files** - prd.json, progress.txt, git history
-3. **Does focused work** - One task, one commit
-4. **Persists state to files** - Updates progress, commits code
-5. **Exits cleanly** - Loop continues with fresh session
+1. **Fresh context** - Avoids context rot
+2. **Read state from files** - prd.json, progress.txt, git history
+3. **Do focused work** - Implement one story, run tests, commit
+4. **Persist state** - Update progress files
+5. **Exit** - Loop spawns fresh session
 
-### Philosophy
-
-**"Deterministically bad in an undeterministic world"** - When failures occur, you refine prompts by adding guardrails rather than changing tools. Failed iterations are data points for improvement.
-
-**The agent chooses the task** - You define the end state (PRD with success criteria). Ralph figures out how to get there.
-
-**Tests as success criteria** - TDD workflow where passing tests define "done." The feedback loop (tests, types, linting) keeps the agent on track.
+**Philosophy**: Tests define "done." Failed iterations are data points for improvement. The agent chooses task order; you define the end state.
 
 ---
 
-## Plans Are Living Documents
+## Architecture
+
+Ralph Hybrid uses a **four-agent architecture** that separates planning, orchestration, implementation, and verification.
+
+### High-Level Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         HUMAN                               │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+         ┌───────────▼──────────────┐
+         │   PLANNER AGENT          │  ← Interactive, strategic
+         │   - Refine requirements  │  ← Model: Opus
+         │   - Iterative planning   │  ← One-time per feature
+         │   - Generate spec.md     │
+         │   - Output: prd.json     │
+         └───────────┬──────────────┘
+                     │
+         ┌───────────▼──────────────┐
+         │   ORCHESTRATOR AGENT     │  ← Autonomous, strategic
+         │   - Manage ralph loop    │  ← Model: Opus
+         │   - Monitor progress     │  ← Long-running session
+         │   - Handle blockers      │  ← No MCP servers
+         │   - Adjust prompts       │
+         └───────────┬──────────────┘
+                     │ spawns ralph-hybrid work
+         ┌───────────▼──────────────┐
+         │   ralph-hybrid work      │  ← Loop coordinator
+         │   (per iteration)        │
+         └───────────┬──────────────┘
+                     │
+         ┌───────────▼──────────────┐
+         │   CODER AGENT (Phase 1)  │  ← Tactical, implementation
+         │   - Read prd.json story  │  ← Model: Sonnet
+         │   - Implement code       │  ← MCP: ChromeDevTools
+         │   - Write tests          │
+         │   - Commit changes       │
+         └───────────┬──────────────┘
+                     │
+         ┌───────────▼──────────────┐
+         │   REVIEWER AGENT (Phase 2)│ ← Tactical, verification
+         │   - Run quality checks   │  ← Model: Haiku
+         │   - Detect progress      │  ← MCP: Playwright
+         │   - Provide feedback     │
+         │   - Update prd.json      │
+         │   - Signal BLOCKED if stuck
+         └───────────┬──────────────┘
+                     │
+         ┌───────────▼──────────────┐
+         │   Codebase + Git         │
+         └──────────────────────────┘
+```
+
+### Agent Responsibilities
+
+| Agent | Model | MCP Servers | Runs | Purpose |
+|-------|-------|-------------|------|---------|
+| **Planner** | Opus | None | Once per feature | Iteratively refine spec, ensure agreement before execution |
+| **Orchestrator** | Opus | None | Long-lived | Start/stop loops, handle blockers, don't implement code |
+| **Coder** | Sonnet | ChromeDevTools | Per iteration | Implement one story, write tests, commit |
+| **Reviewer** | Haiku | Playwright | Per iteration | Verify quality, detect no-progress, signal BLOCKED |
+
+### Two-Tier Architecture
+
+This is inspired by **person-pitch's workflow** where Claude acts as orchestrator managing a worker loop:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     META LAYER                          │
+│   (Strategic decisions, blocker handling)               │
+│                                                         │
+│   Orchestrator: "Work on STORY-003 next"               │
+│                 "STORY-004 blocked on auth, skip it"    │
+│                 "No progress for 3 iterations, adjust"  │
+└─────────────────────┬───────────────────────────────────┘
+                      │
+         ┌────────────▼──────────────┐
+         │   AUTOMATION LAYER        │
+         │   (Loop management)       │
+         │                           │
+         │   ralph-hybrid work       │
+         └────────────┬──────────────┘
+                      │ per iteration
+         ┌────────────▼──────────────┐
+         │   IMPLEMENTATION LAYER    │
+         │   (Code execution)        │
+         │                           │
+         │   Coder → Reviewer        │
+         └───────────────────────────┘
+```
+
+**Benefits:**
+- **Cost optimization**: Expensive model (Opus) only for decisions, cheap models (Sonnet/Haiku) grind through work
+- **Better blocker handling**: Worker signals `BLOCKED`, orchestrator intervenes
+- **Separation of concerns**: Strategic vs tactical thinking
+- **Context management**: Orchestrator maintains long-term context, workers get fresh context
+
+### Provider Abstraction
+
+Ralph Hybrid is **AI-agnostic** through a provider abstraction layer:
+
+```
+ralph-hybrid
+    ├─ lib/llm_provider.sh          # Provider interface
+    └─ lib/providers/
+        ├─ claude_code.sh           # Claude Code implementation
+        ├─ aider.sh                 # Aider support
+        ├─ openai_codex.sh          # OpenAI Codex
+        ├─ gemini.sh                # Google Gemini
+        └─ custom.sh                # User-defined
+
+# Configuration-driven selection
+provider: claude_code  # or aider, codex, gemini
+model: opus           # or sonnet, haiku
+mcp_servers:          # Dynamic per agent
+  - chromdevtools
+```
+
+**Any provider** can be used for any agent role. The workflow is the same; only invocation details differ.
+
+---
+
+## Key Benefits
+
+### 1. Fresh Context Per Iteration
+Each loop spawns a new AI session. No context rot, no accumulated tokens degrading performance.
+
+### 2. Multi-Agent Specialization
+- **Planner**: Focus on requirements, not code
+- **Orchestrator**: Manage process, not implementation
+- **Coder**: Write code, not strategy
+- **Reviewer**: Verify quality, not design
+
+Each agent excels at its role with optimized model and tools.
+
+### 3. Cost Optimization
+- Opus for strategic decisions (few calls)
+- Sonnet for complex coding
+- Haiku for verification tasks
+- Only load MCP servers where needed (saves context)
+
+### 4. Robust Error Handling
+- **Reviewer detects**: Same error 3 times → signal BLOCKED
+- **Orchestrator decides**: Adjust prompt? Skip story? Escalate to human?
+- **Circuit breaker**: Stops runaway loops automatically
+
+### 5. AI-Agnostic Design
+Swap providers without changing workflow:
+```bash
+ralph-hybrid work --provider aider      # Use Aider
+ralph-hybrid work --provider codex      # Use OpenAI Codex
+ralph-hybrid work --provider claude     # Use Claude Code
+```
+
+### 6. Plans Are Living Documents
 
 > **"No plan survives first contact with implementation."**
 
@@ -182,386 +327,271 @@ Context: Discovered during STORY-002 that users need export for reporting
 
 ---
 
-## Origins and Source Material
+## Architectural Evolution
 
-### Primary Sources
+### Initial Implementation (v0.1)
+- Single-tier: ralph loop spawns Claude Code directly
+- Tight coupling to Claude Code CLI
+- Single model for all tasks
+- Manual blocker handling (circuit breaker exits)
 
-| Source | Author | Description |
-|--------|--------|-------------|
-| [Ralph Wiggum as a "software engineer"](https://ghuntley.com/ralph/) | Geoffrey Huntley | **The original technique.** The foundational article introducing the concept. |
-| [CURSED Programming Language](https://ghuntley.com/cursed/) | Geoffrey Huntley | Real-world example: an entire programming language built using Ralph over 3 months. |
+### Current Refactor (v0.2 - In Progress)
+Based on insights from:
+1. **madhavajay/ralph** (Rust) - Multi-provider harness abstraction
+2. **person-pitch** (Reddit) - Two-tier orchestrator pattern
+3. **Boris Cherny** - Dedicated agents for plan/code/verify
 
-### Implementations Studied
+**Key decisions:**
 
-| Implementation | Focus | Key Features |
-|----------------|-------|--------------|
-| [Anthropic Claude Code Plugin](https://github.com/anthropics/claude-code/tree/main/plugins/ralph-wiggum) | Claude Code native | Stop-hook based, single session (not true fresh context) |
-| [snarktank/ralph](https://github.com/snarktank/ralph) | Amp CLI | prd.json, progress.txt, archiving, branch management |
-| [frankbria/ralph-claude-code](https://github.com/frankbria/ralph-claude-code) | Claude Code | Circuit breaker, rate limiting, timeouts, 145 tests |
-| [ralph-orchestrator](https://github.com/mikeyobrien/ralph-orchestrator) | Multi-agent | Python orchestrator, ACP protocol, .agent/ structure |
-
-### Articles and Guides
-
-| Article | Author | Key Insights |
-|---------|--------|--------------|
-| [11 Tips For AI Coding With Ralph Wiggum](https://www.aihero.dev/tips-for-ai-coding-with-ralph-wiggum) | Matt Pocock | Comprehensive practitioner guide. HITL vs AFK modes, scope definition formats, quality guidelines. |
-| [The Ralph Wiggum Approach: Running AI Coding Agents for Hours](https://dev.to/sivarampg/the-ralph-wiggum-approach-running-ai-coding-agents-for-hours-not-minutes-57c1) | Sivaram PG | progress.txt pattern, TDD integration, practical workflow. |
-| [Ralph Wiggum Coding: Ship Features While You Sleep](https://samcouch.com/articles/ralph-wiggum-coding/) | Sam Couch | File architecture, success factors, ideal use cases. |
-| [A Brief History of Ralph](https://www.humanlayer.dev/blog/brief-history-of-ralph) | HumanLayer | Evolution timeline, different implementation approaches. |
-| [How Ralph Works with Amp](https://snarktank.github.io/ralph/) | Ryan Carson | Interactive guide, flowchart, workflow documentation. |
-
-### Community Resources
-
-- [Ralph Wiggum - Awesome Claude](https://awesomeclaude.ai/ralph-wiggum) - Curated resource list
-- [VentureBeat Coverage](https://venturebeat.com/technology/how-ralph-wiggum-went-from-the-simpsons-to-the-biggest-name-in-ai-right-now/) - Mainstream coverage of the technique
-
----
-
-## Why a Hybrid Implementation?
-
-### Context: An Experiment in Abstraction Layers
-
-The agentic development ecosystem is evolving rapidly. Methods like [BMAD](https://github.com/bmadcode/BMAD-METHOD) offer comprehensive, well-designed workflow solutions that integrate task tracking, dependencies, and GitHub PR/CI workflows. We've used BMAD successfully for managing multi-session work and task prioritization.
-
-However, we wanted to experiment with something more direct—a tighter feedback loop at the feature implementation level. This project explores **managing abstraction layers between agentic sessions and the wider project management workflow**.
-
-The hypothesis: by clearly separating the **inner loop** (iterative feature implementation) from the **outer loop** (project workflow, PRs, CI), we can:
-- Iterate faster on prompt engineering and TDD patterns
-- Swap implementations as the ecosystem matures
-- Integrate with any outer-loop workflow (BMAD, GitHub Issues, Linear, etc.)
-
-This is an experiment, not a replacement for otherw comprehensive solutions.
-
-### The Problem
-
-No single existing Ralph implementation provides everything we were looking in a robust, production-ready Ralph workflow:
-
-| Gap | Which implementations have it? | Why it matters |
-|-----|-------------------------------|----------------|
-| **Fresh context per iteration** | snarktank, frankbria, raw bash | Anthropic plugin uses single session (context rot) |
-| **Max iterations safety net** | snarktank, raw bash | frankbria relies only on intelligent exit detection |
-| **progress.txt for agent continuity** | snarktank | frankbria uses logs/ (not read by agent) |
-| **Circuit breaker for stuck loops** | frankbria | snarktank has no stuck loop detection |
-| **Rate limiting** | frankbria | Others don't manage API costs |
-| **Per-iteration timeout** | frankbria | Others can hang on single iteration |
-| **Archiving completed features** | snarktank | Learning from past runs |
-| **Feature folder isolation** | None | Avoid conflicts between features |
-
-### The Solution
-
-Combine the best of each:
-
-- **Mental model from snarktank**: prd.json with `passes` field, progress.txt for continuity, max iterations, archiving
-- **Safety features from frankbria**: Circuit breaker, rate limiting, timeouts, API limit handling
-- **Custom additions**: Feature folders, TDD-first workflow, spec files for detailed requirements
-
----
-
-## Foundational Principles
+| Decision | Rationale |
+|----------|-----------|
+| **Four agents** | Separation of concerns: plan, orchestrate, code, verify |
+| **Provider abstraction** | AI-agnostic design, swap Claude/Codex/Gemini/Aider |
+| **Two-tier orchestration** | Meta-layer (strategy) vs implementation-layer (tactics) |
+| **BLOCKED protocol** | Workers signal blockers, orchestrator handles them |
+| **Dynamic model/MCP selection** | Cost optimization, specialized tooling per role |
+| **Comprehensive logging** | Full playback for analysis, debugging, improvement |
 
 ### Inner Loop vs Outer Loop
 
-This implementation is deliberately **outer-loop agnostic**. It focuses exclusively on the **inner loop** of feature development.
+Ralph Hybrid is deliberately **outer-loop agnostic**. It focuses on the **inner loop** of feature development.
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              OUTER LOOP                                     │
-│                    (Project workflow - NOT Ralph's concern)                 │
-│                                                                             │
-│   ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐  │
-│   │ Issue/  │───▶│ Branch  │───▶│ Feature │───▶│   PR    │───▶│  Merge  │  │
-│   │ Task    │    │ Setup   │    │  Work   │    │ Review  │    │ Deploy  │  │
-│   └─────────┘    └─────────┘    └────┬────┘    └─────────┘    └─────────┘  │
-│                                      │                                      │
-└──────────────────────────────────────┼──────────────────────────────────────┘
-                                       │
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              INNER LOOP                                     │
-│                    (Ralph Hybrid's domain)                                  │
-│                                                                             │
-│   ┌─────────────────────────────────────────────────────────────────────┐  │
-│   │                                                                     │  │
-│   │   ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    │  │
-│   │   │  Read    │───▶│ Implement│───▶│  Test &  │───▶│  Commit  │    │  │
-│   │   │  State   │    │  Story   │    │  Check   │    │ & Update │    │  │
-│   │   └──────────┘    └──────────┘    └──────────┘    └────┬─────┘    │  │
-│   │        ▲                                               │          │  │
-│   │        │              Fresh Context                    │          │  │
-│   │        └───────────────────────────────────────────────┘          │  │
-│   │                                                                     │  │
-│   │                    Repeat until PRD complete                        │  │
-│   │                                                                     │  │
-│   └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     OUTER LOOP                              │
+│   (Project workflow - NOT Ralph's concern)                  │
+│                                                             │
+│   Issue → Branch → Feature → PR → Merge                    │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────────┐
+│                     INNER LOOP                              │
+│   (Ralph Hybrid's domain)                                   │
+│                                                             │
+│   Read State → Implement → Test → Commit → Repeat          │
+│   (Fresh context each iteration)                            │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Outer Loop** (your existing workflow):
-- Issue tracking (GitHub, Linear)
-- Branch/worktree management
-- Pull request creation
-- Code review
-- CI/CD and merge
+**Outer Loop** (your workflow): Issue tracking, branches, PRs, CI/CD
+**Inner Loop** (Ralph): Iterative feature implementation until complete
 
-**Inner Loop** (Ralph Hybrid):
-- Read PRD and progress
-- Select next incomplete story
-- Implement using TDD
-- Run quality checks
-- Commit and update progress
-- Repeat until all stories pass
-
-### Why This Separation Matters
-
-1. **Integrate with any workflow** - Ralph doesn't care how you manage branches or PRs
-2. **Clear responsibility boundaries** - Ralph does feature implementation, not project orchestration
-3. **Composable** - Use Ralph inside worktrees, inside orchestrator agents, or standalone
-4. **Focused scope** - Each tool does one thing well
-
-### Core Principles
-
-| Principle | Description |
-|-----------|-------------|
-| **Fresh context per iteration** | Each loop starts a new Claude session to avoid context rot |
-| **Memory via files** | progress.txt and prd.json persist state, not LLM context |
-| **Agent chooses the task** | PRD defines the end state; agent decides execution order |
-| **Tests as success criteria** | TDD workflow where passing tests define "done" |
-| **One story per iteration** | Focused work within single context window |
-| **Fail fast with safety nets** | Circuit breaker, timeouts, max iterations prevent runaway |
-| **Plans are living documents** | Scope changes are expected; `/ralph-amend` handles them safely |
-| **Learn from iterations** | progress.txt and amendments enable retrospective analysis |
+**Why this matters**: Ralph integrates with any outer-loop workflow (BMAD, GitHub Issues, Linear, etc.)
 
 ---
 
-## Feature Comparison
+## Sources and Inspiration
 
-### Detailed Comparison
+### Original Technique
 
-| Feature | Anthropic Plugin | snarktank/ralph | frankbria/ralph-claude-code | **Ralph Hybrid** |
-|---------|------------------|-----------------|-----------------------------|-----------------------|
-| **AI Tool** | Claude Code | Amp | Claude Code | Claude Code |
-| **Fresh context per iteration** | No (single session) | Yes | Yes | **Yes** |
-| **Max iterations** | Yes | Yes (CLI arg) | No (uses exit detection) | **Yes (CLI arg)** |
-| **PRD format** | N/A | JSON with `passes` | Markdown @fix_plan.md | **JSON with `passes`** |
-| **Progress memory** | N/A | progress.txt | logs/ (not read by agent) | **progress.txt** |
-| **Completion signal** | `<promise>` | `<promise>` | Multi-signal | **Both** |
-| **Circuit breaker** | No | No | Yes | **Yes** |
-| **Rate limiting** | No | No | Yes | **Yes** |
-| **Per-iteration timeout** | No | No | Yes | **Yes** |
-| **5-hour API handling** | No | No | Yes | **Yes** |
-| **Archiving** | No | Yes | No | **Yes** |
-| **Branch management** | No | Yes | No | **Yes** |
-| **Feature folder isolation** | No | No | No | **Yes** |
-| **TDD-first workflow** | No | No | No | **Yes** |
-| **Spec files support** | No | No | Yes (specs/) | **Yes (specs/)** |
-| **Mid-implementation amendments** | No | No | No | **Yes (/ralph-amend)** |
-| **Test suite** | No | No | 145 tests | **Planned** |
+| Source | Author | Contribution |
+|--------|--------|--------------|
+| [Ralph Wiggum as a "software engineer"](https://ghuntley.com/ralph/) | Geoffrey Huntley | **Original technique** - Fresh context loops, progress in files |
+| [CURSED Programming Language](https://ghuntley.com/cursed/) | Geoffrey Huntley | Real-world case study - 3-month project using Ralph |
 
-### Why Each Feature Matters
+### Implementations That Shaped This Project
 
-| Feature | Why We Need It |
-|---------|----------------|
-| **Fresh context** | Prevents context rot over long runs |
-| **Max iterations** | Hard safety ceiling when intelligent detection fails |
-| **prd.json with passes** | Explicit completion tracking, agent updates state |
-| **progress.txt** | Agent reads prior work, avoids re-exploration |
-| **Completion promise** | Explicit signal, predictable behavior |
-| **Circuit breaker** | Detects stuck loops automatically |
-| **Rate limiting** | Prevents cost runaway |
-| **Timeout** | Single iteration can't hang forever |
-| **Archiving** | Learn from past runs, build prompt library |
-| **Feature folders** | Multiple features don't conflict |
-| **TDD workflow** | Tests define done, quality built-in |
-| **Spec files** | Detailed requirements without bloating prd.json |
-| **Mid-implementation amendments** | Plans evolve; handle scope changes without losing progress |
+| Implementation | Key Learnings | What We Adopted |
+|----------------|---------------|-----------------|
+| [madhavajay/ralph](https://github.com/madhavajay/ralph) | **Multi-provider harness abstraction** in Rust. Wraps multiple AI CLIs (Claude, Codex, Pi, Gemini). Composition over modification. | Provider abstraction layer, configuration-driven agent selection |
+| [snarktank/ralph](https://github.com/snarktank/ralph) | prd.json with `passes` field, progress.txt for agent continuity, archiving completed features, branch-based folders | Core state file patterns, archiving workflow |
+| [frankbria/ralph-claude-code](https://github.com/frankbria/ralph-claude-code) | Circuit breaker, rate limiting, per-iteration timeout, API limit detection, 145 test suite | Safety mechanisms, robust error handling |
 
----
+### Workflow Patterns
 
-## This Implementation
+| Source | Author | Key Insight | What We Adopted |
+|--------|--------|-------------|-----------------|
+| [Reddit: The Ralph Wiggum Loop](https://www.reddit.com/r/ClaudeCode/comments/1q9qjk4/the_ralphwiggum_loop/) | person-pitch | **Two-tier orchestration**: Claude orchestrator manages Codex worker loop. Orchestrator handles meta-layer (what to work on, blockers, auth), worker grinds through implementation. | Two-tier architecture with orchestrator agent managing worker loop |
+| [Boris Cherny's Claude Code Workflow](https://karozieminski.substack.com/p/boris-cherny-claude-code-workflow) | Boris Cherny | **Dedicated agents**: One to plan (iterative refinement), one to code, one to verify. "Don't let a system act before you've agreed on intent." Hooks for automation. | Four specialized agents, plan-first workflow, comprehensive hooks system |
+| [Progress vs Context](https://x.com/agrimsingh/status/2010412150918189210) | Agrim Singh | Trade-off between maintaining context vs making progress. Fresh context enables progress. | Fresh context per iteration, state persisted in files |
 
-### What Ralph Hybrid Provides
+### Practitioner Guides
 
-A bash-based autonomous development loop that:
+| Article | Author | Key Insights |
+|---------|--------|--------------|
+| [11 Tips For AI Coding With Ralph Wiggum](https://www.aihero.dev/tips-for-ai-coding-with-ralph-wiggum) | Matt Pocock | HITL vs AFK modes, scope definition formats, quality guidelines |
+| [Running AI Agents for Hours](https://dev.to/sivarampg/the-ralph-wiggum-approach-running-ai-coding-agents-for-hours-not-minutes-57c1) | Sivaram PG | progress.txt pattern, TDD integration |
+| [Ship Features While You Sleep](https://samcouch.com/articles/ralph-wiggum-coding/) | Sam Couch | File architecture, success factors, ideal use cases |
 
-1. **Initializes** a feature folder with prd.json, progress.txt, prompt.md, specs/
-2. **Loops** through fresh Claude Code sessions up to max iterations
-3. **Tracks** progress via prd.json (passes field) and progress.txt
-4. **Protects** against runaway with circuit breaker, rate limiting, timeouts
-5. **Archives** completed features for learning and retrospective
+### Design Decisions Log
 
-### File Structure
+| Decision | Rationale | Source |
+|----------|-----------|--------|
+| **AI-agnostic provider layer** | Avoid Claude Code lock-in, support Aider/Codex/Gemini | madhavajay/ralph |
+| **Four specialized agents** | Separation of concerns, optimized models per role | Boris Cherny |
+| **Orchestrator manages workers** | Cost optimization, better blocker handling | person-pitch |
+| **Fresh context per iteration** | Avoid context rot over long runs | Geoffrey Huntley |
+| **BLOCKED protocol** | Workers signal blockers, orchestrator intervenes | person-pitch |
+| **Dynamic MCP server selection** | Save context, load only relevant tools | Boris Cherny |
+| **Comprehensive playback logging** | Debug, optimize, learn from all executions | Original contribution |
 
-**The Ralph tool** (installed globally):
+### Iteration Workflow
+
+Each **ralph-hybrid work** iteration runs two phases:
+
 ```
-~/.ralph/
-├── ralph                 # Main loop script
-├── lib/                  # Circuit breaker, rate limiter, etc.
-├── templates/            # Default prompts, prd.json example
-├── commands/             # Claude slash commands (/ralph-plan, etc.)
-└── config.yaml           # Global configuration
-```
-
-**Per-project usage**:
-```
-your-project/
-├── .claude/
-│   └── commands/             # Installed via 'ralph setup'
-│       ├── ralph-plan.md     # /ralph-plan command
-│       ├── ralph-prd.md      # /ralph-prd command
-│       └── ralph-amend.md    # /ralph-amend command
-└── .ralph/
-    ├── config.yaml           # Project settings (optional)
-    └── <feature-name>/       # One folder per feature (from git branch)
-        ├── spec.md           # Source of truth requirements
-        ├── prd.json          # Derived task state (from spec.md)
-        ├── progress.txt      # Iteration log (agent reads this)
-        └── specs/            # Additional spec files (optional)
+┌─────────────────────────────────────────────────────────────┐
+│  Iteration N                                                │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  PHASE 1: CODER                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 1. Read prd.json, progress.txt, specs/             │   │
+│  │ 2. Select next incomplete story                     │   │
+│  │ 3. Implement code + tests                           │   │
+│  │ 4. Commit changes                                   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                          │                                  │
+│  PHASE 2: REVIEWER                                          │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 1. Run quality checks (typecheck, tests, lint)     │   │
+│  │ 2. Compare with previous iteration (progress?)     │   │
+│  │ 3. Update prd.json passes field                    │   │
+│  │ 4. Write feedback to progress.txt                  │   │
+│  │ 5. If stuck 3x → signal BLOCKED to orchestrator    │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Status
+**If BLOCKED**, orchestrator decides:
+- Adjust coder prompt?
+- Skip story, work on another?
+- Escalate to human?
 
-**Implementation Complete**
+### State Management
 
-- [x] Specification complete ([SPEC.md](SPEC.md))
-- [x] Templates created
-- [x] Core loop implementation (ralph)
-- [x] Library functions (lib/)
-- [x] Tests (430 BATS tests)
-- [x] Installation script
+| File | Owner | Purpose | Format |
+|------|-------|---------|--------|
+| **spec.md** | Human + Planner | Source of truth requirements | Markdown |
+| **prd.json** | Planner + Coder + Reviewer | Execution state (stories, passes) | JSON |
+| **progress.txt** | Coder + Reviewer | Historical log, agent continuity | Append-only text |
+| **last_error.txt** | Reviewer | Error feedback for next iteration | Text |
+| **playback/** | All agents | Comprehensive log for analysis | JSON + Markdown |
+
+**Atomic updates**: All file writes use temp-then-move for atomicity.
+
+### Plans Are Living Documents
+
+> **"No plan survives first contact with implementation."**
+
+Ralph Hybrid treats scope changes as **expected, not exceptional** with the `/ralph-amend` system:
+
+```bash
+# Discover new requirement mid-implementation
+/ralph-amend add "Users need CSV export for reporting"
+
+# Stakeholder clarifies a requirement
+/ralph-amend correct STORY-003 "Email validation should use RFC 5322"
+
+# Descope for MVP
+/ralph-amend remove STORY-005 "Defer to v2, tracked in issue #89"
+```
+
+**What gets preserved:**
+- Completed stories stay completed
+- Full audit trail in spec.md, prd.json, progress.txt
+- Warnings before resetting completed work
 
 ---
 
 ## Getting Started
 
+**Note**: v0.2 refactor in progress. The architecture described above is the target; current implementation is single-tier (v0.1).
+
 ### Prerequisites
 
 - Bash 4.0+
-- [Claude Code CLI](https://claude.ai/code)
-- jq
-- Git
+- [Claude Code CLI](https://claude.ai/code) (or other AI CLI: aider, codex)
+- jq, git, timeout (GNU coreutils)
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/krazyuniks/ralph-hybrid.git
+git clone https://github.com/your-org/ralph-hybrid.git
 cd ralph-hybrid
 
-# Install globally (to ~/.ralph/)
+# Install globally (to ~/.ralph-hybrid/)
 ./install.sh
 
-# Restart your shell or run:
+# Restart shell or source:
 source ~/.zshrc  # or ~/.bashrc
 ```
 
-### Project Setup
+### Workflow
 
 ```bash
-# Navigate to your project
-cd your-project
+# 1. Create feature branch
+git checkout -b feature/user-auth
 
-# Install Claude commands to your project
-ralph setup
+# 2. Plan feature (interactive, in Claude Code)
+/ralph-hybrid-plan "Add user authentication with OAuth"
 
-# This creates:
-#   .claude/commands/ralph-plan.md
-#   .claude/commands/ralph-prd.md
-#   .claude/commands/ralph-amend.md
+# 3. Run implementation
+ralph-hybrid work
+
+# 4. If requirements change mid-implementation
+/ralph-hybrid-amend add "Also need 2FA support"
+
+# 5. Continue execution
+ralph-hybrid work
+
+# 6. Auto-archives when complete
+ralph-hybrid status
 ```
 
-### Quick Start
+### Orchestrator Mode (Coming in v0.2)
 
 ```bash
-# Create a feature branch
-git checkout -b feature/my-feature
+# Let Claude orchestrate the loop
+ralph-hybrid orchestrate
 
-# Plan the feature (interactive, in Claude Code)
-/ralph-plan "Add user authentication"
-
-# Run the implementation loop
-ralph run
-
-# Or with a specific model
-ralph run --model opus
-
-# Monitor progress
-ralph status
-```
-
-### Themes
-
-Ralph Hybrid includes three built-in themes for the UI display:
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  RALPH: feature-user-auth                                            │  <- Title
-│  Story 3/5: STORY-003 - Implement login validation                   │  <- Subtitle
-│  [████████░░░░░░░░░░░░] 40%  2/5 passed              Iteration 3/20  │  <- Progress
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-**Available Themes:**
-
-| Theme | Border | Subtitle | Description |
-|-------|--------|----------|-------------|
-| `default` | Cyan | Yellow | Current Ralph look - clean and readable |
-| `dracula` | Purple | Pink | Based on draculatheme.com |
-| `nord` | Blue | Cyan | Based on nordtheme.com - calm and focused |
-
-**Setting a Theme:**
-
-```yaml
-# In ~/.ralph/config.yaml or .ralph/config.yaml
-display:
-  theme: "dracula"
-```
-
-Or via environment variable:
-```bash
-RALPH_THEME=nord ralph run
-```
-
----
-
-### When Requirements Change (They Will)
-
-```bash
-# Discover you need something new
-/ralph-amend add "Also need CSV export"
-
-# Stakeholder clarifies a requirement
-/ralph-amend correct STORY-003 "Email should use RFC 5322"
-
-# Descope for MVP
-/ralph-amend remove STORY-005 "Defer to v2"
-
-# Continue implementation
-ralph run
-```
-
-### Full Workflow
-
-```
-1. Create branch          git checkout -b feature/my-feature
-2. Plan feature           /ralph-plan
-3. Run implementation     ralph run
-4. [Optional] Amend       /ralph-amend add|correct|remove
-5. Continue               ralph run
-6. Complete               Feature auto-archives when all stories pass
+# Orchestrator will:
+# - Start worker loops
+# - Monitor progress
+# - Handle blockers
+# - Escalate to you only when stuck
 ```
 
 ---
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
+| Document | Purpose |
+|----------|---------|
 | [SPEC.md](SPEC.md) | Complete technical specification |
-| [templates/](templates/) | Prompt templates, prd.json example, config example |
-| [.claude/commands/ralph-plan.md](.claude/commands/ralph-plan.md) | Feature planning workflow |
-| [.claude/commands/ralph-amend.md](.claude/commands/ralph-amend.md) | Mid-implementation scope changes |
-| [.claude/commands/ralph-prd.md](.claude/commands/ralph-prd.md) | PRD regeneration from spec |
+| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | v0.2 refactor roadmap |
+| [templates/](templates/) | Prompt templates, examples, config |
+| [.claude/commands/](.claude/commands/) | Planning/amendment slash commands |
+
+---
+
+## Contributing
+
+Ralph Hybrid is an experiment in multi-agent, AI-agnostic development workflows. Contributions welcome!
+
+**Areas for contribution:**
+- Provider implementations (Aider, Codex, Gemini support)
+- Agent prompt optimization
+- Playback analysis tools
+- Test coverage expansion
+- Documentation improvements
+
+**Before contributing:**
+1. Read [SPEC.md](SPEC.md) for architecture
+2. Check [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for roadmap
+3. Open an issue to discuss major changes
+
+### Philosophy
+
+We value:
+- **Simplicity** over features
+- **Reliability** over cleverness
+- **Observability** over magic
+- **Composition** over monoliths
+
+Ralph Hybrid should remain a focused tool for the inner loop. Outer-loop concerns belong elsewhere.
 
 ---
 

@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # install.sh - Ralph Hybrid installer
 #
-# Installs Ralph Hybrid to ~/.ralph and updates shell configuration.
+# Installs Ralph Hybrid to ~/.ralph-hybrid and updates shell configuration.
 #
 # Usage: ./install.sh
 #
 # What it does:
 #   1. Checks prerequisites (Bash 4.0+, jq, git, claude CLI)
-#   2. Creates ~/.ralph directory
-#   3. Copies ralph, lib/, templates/
+#   2. Creates ~/.ralph-hybrid directory
+#   3. Copies ralph-hybrid, lib/, templates/
 #   4. Creates default config.yaml (if not exists)
-#   5. Adds ~/.ralph to PATH in shell rc files
+#   5. Adds ~/.ralph-hybrid to PATH in shell rc files
 
 set -euo pipefail
 
@@ -18,7 +18,7 @@ set -euo pipefail
 # Configuration
 # -----------------------------------------------------------------------------
 
-INSTALL_DIR="${HOME}/.ralph"
+INSTALL_DIR="${HOME}/.ralph-hybrid"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors for output (if terminal supports it)
@@ -152,17 +152,17 @@ create_install_dir() {
 }
 
 copy_ralph_executable() {
-    local src="${SCRIPT_DIR}/ralph"
+    local src="${SCRIPT_DIR}/ralph-hybrid"
 
     if [[ -f "$src" ]]; then
         local action="Installed"
-        [[ -f "${INSTALL_DIR}/ralph" ]] && action="Updated"
-        cp "$src" "${INSTALL_DIR}/ralph"
-        chmod +x "${INSTALL_DIR}/ralph"
-        print_info "${action} ralph executable"
+        [[ -f "${INSTALL_DIR}/ralph-hybrid" ]] && action="Updated"
+        cp "$src" "${INSTALL_DIR}/ralph-hybrid"
+        chmod +x "${INSTALL_DIR}/ralph-hybrid"
+        print_info "${action} ralph-hybrid executable"
     else
-        # Create a placeholder if ralph doesn't exist yet
-        print_warn "ralph not found in source - skipping"
+        # Create a placeholder if ralph-hybrid doesn't exist yet
+        print_warn "ralph-hybrid not found in source - skipping"
     fi
 }
 
@@ -280,7 +280,7 @@ add_to_path_in_file() {
     {
         echo ""
         echo "$PATH_MARKER"
-        echo 'export PATH="$HOME/.ralph:$PATH"'
+        echo 'export PATH="$HOME/.ralph-hybrid:$PATH"'
     } >> "$rc_file"
 
     print_info "Updated $(basename "$rc_file")"
@@ -304,7 +304,7 @@ update_shell_config() {
     if [[ "$updated" -eq 0 ]]; then
         print_warn "No shell rc files found (.bashrc or .zshrc)"
         echo "       Add this to your shell config manually:"
-        echo '       export PATH="$HOME/.ralph:$PATH"'
+        echo '       export PATH="$HOME/.ralph-hybrid:$PATH"'
     fi
 }
 
@@ -317,16 +317,16 @@ print_success() {
     if [[ "${INSTALL_MODE:-fresh}" == "upgrade" ]]; then
         echo -e "${GREEN}Upgrade complete!${NC}"
         echo ""
-        echo "Ralph has been updated. Your config.yaml was preserved."
+        echo "Ralph Hybrid has been updated. Your config.yaml was preserved."
     else
         echo -e "${GREEN}Installation complete!${NC}"
         echo ""
-        echo "To use ralph in a project:"
+        echo "To use ralph-hybrid in a project:"
         echo "  1. Restart your shell or run: source ~/.zshrc"
         echo "  2. Navigate to your project"
-        echo "  3. Run: ralph setup  (installs /ralph-plan, /ralph-prd, etc.)"
-        echo "  4. In Claude Code, run: /ralph-plan <description>"
-        echo "  5. Run: ralph run"
+        echo "  3. Run: ralph-hybrid setup  (installs /ralph-hybrid-plan, /ralph-hybrid-prd, etc.)"
+        echo "  4. In Claude Code, run: /ralph-hybrid-plan <description>"
+        echo "  5. Run: ralph-hybrid run"
     fi
     echo ""
 }
