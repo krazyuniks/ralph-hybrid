@@ -50,11 +50,9 @@ readonly -a RALPH_HYBRID_HOOK_POINTS=(
     "on_error"
 )
 
-# Hooks directory name (under .ralph/)
-readonly RALPH_HYBRID_HOOKS_DIR_NAME="hooks"
-
 # Default hooks directory path (can be overridden)
-: "${RALPH_HYBRID_HOOKS_DIR:=${PWD}/.ralph/${RALPH_HYBRID_HOOKS_DIR_NAME}}"
+# Note: RALPH_HYBRID_HOOKS_DIR_NAME is defined in constants.sh
+: "${RALPH_HYBRID_HOOKS_DIR:=${PWD}/.ralph-hybrid/${RALPH_HYBRID_HOOKS_DIR_NAME}}"
 
 #=============================================================================
 # Hook Registry
