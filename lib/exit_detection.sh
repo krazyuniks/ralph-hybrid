@@ -621,6 +621,33 @@ ed_check() {
     # This triggers a fresh context for the next story
     # BUT we verify quality checks pass before accepting completion
     if ed_check_story_complete "$output"; then
+        # First, check if stories are being completed in sequential order
+        if declare -f prd_check_sequential_completion &>/dev/null; then
+            if ! prd_check_sequential_completion "$prd_file"; then
+                log_error "Story completion ORDER VIOLATION detected!"
+                log_error "Stories must be completed sequentially (no skipping)."
+                if declare -f prd_get_outoforder_stories &>/dev/null; then
+                    local outoforder_stories
+                    outoforder_stories=$(prd_get_outoforder_stories "$prd_file")
+                    if [[ -n "$outoforder_stories" ]]; then
+                        log_error "Out-of-order stories marked complete:"
+                        echo "$outoforder_stories" | while IFS= read -r line; do
+                            log_error "  - $line"
+                        done
+                    fi
+                fi
+                # Rollback the out-of-order completion
+                if [[ -n "$passes_before" ]] && [[ -n "$prd_file" ]]; then
+                    if declare -f prd_rollback_passes &>/dev/null; then
+                        log_error "Rolling back out-of-order story completion..."
+                        prd_rollback_passes "$prd_file" "$passes_before"
+                    fi
+                fi
+                echo "quality_check_failed"
+                return 0
+            fi
+        fi
+
         # Verify quality checks before accepting story completion
         if declare -f qc_run &>/dev/null && qc_is_configured; then
             if qc_run; then

@@ -143,8 +143,75 @@ prd_get_current_story_title() {
     deps_jq -r '[.userStories[] | select(.passes == false)][0].title // ""' "$file"
 }
 
+# Check if stories are completed in sequential order (no gaps)
+# Returns 0 if sequential, 1 if there are gaps
+# Usage: prd_check_sequential_completion "prd.json"
+prd_check_sequential_completion() {
+    local file="$1"
+
+    if [[ ! -f "$file" ]]; then
+        return 1
+    fi
+
+    # Get array of passes values as 0-indexed indices
+    # If stories 0,1,2 have passes=true and story 3 has passes=false, that's valid
+    # If stories 0,1 have passes=true, story 2 has passes=false, but story 3 has passes=true - that's INVALID (gap)
+    local first_incomplete_idx
+    first_incomplete_idx=$(deps_jq -r '
+        [.userStories | to_entries[] | select(.value.passes == false)][0].key // -1
+    ' "$file")
+
+    # If all complete or none started, it's sequential
+    if [[ "$first_incomplete_idx" == "-1" ]]; then
+        return 0
+    fi
+
+    # Check if any stories AFTER the first incomplete one are marked complete
+    local has_gap
+    has_gap=$(deps_jq -r --argjson idx "$first_incomplete_idx" '
+        [.userStories | to_entries[] | select(.key > $idx and .value.passes == true)] | length
+    ' "$file")
+
+    if [[ "$has_gap" -gt 0 ]]; then
+        return 1  # Gap detected
+    fi
+
+    return 0  # Sequential
+}
+
+# Get list of out-of-order stories (stories marked complete after an incomplete story)
+# Usage: prd_get_outoforder_stories "prd.json"
+# Returns: Newline-separated list of "STORY-ID: Title" for out-of-order stories
+prd_get_outoforder_stories() {
+    local file="$1"
+
+    if [[ ! -f "$file" ]]; then
+        return 0
+    fi
+
+    # Get index of first incomplete story
+    local first_incomplete_idx
+    first_incomplete_idx=$(deps_jq -r '
+        [.userStories | to_entries[] | select(.value.passes == false)][0].key // -1
+    ' "$file")
+
+    # If all complete, return empty
+    if [[ "$first_incomplete_idx" == "-1" ]]; then
+        return 0
+    fi
+
+    # Get stories after first incomplete that are marked complete
+    deps_jq -r --argjson idx "$first_incomplete_idx" '
+        [.userStories | to_entries[] | select(.key > $idx and .value.passes == true)] |
+        .[] | "\(.value.id): \(.value.title) (index \(.key))"
+    ' "$file"
+
+    return 0
+}
+
 # Rollback passes state to a previous state
 # Compares current state with before state and reverts any changes
+# Also atomically rolls back progress.txt to maintain sync
 # Usage: prd_rollback_passes "prd.json" "false,false,true"
 # Arguments:
 #   $1 - prd.json file path
@@ -180,11 +247,53 @@ prd_rollback_passes() {
         fi
     done
 
-    # Rollback each changed story
+    # Rollback each changed story in prd.json
     for idx in "${rollback_indices[@]}"; do
         deps_jq ".userStories[$idx].passes = false" "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
         log_warn "Rolled back passes for story at index $idx (0-indexed)"
     done
 
+    # Atomically rollback progress.txt if it exists
+    # Remove the last progress entry (between last --- and end of file)
+    local progress_file="${file%prd.json}progress.txt"
+    if [[ -f "$progress_file" ]] && [[ ${#rollback_indices[@]} -gt 0 ]]; then
+        prd_rollback_progress_txt "$progress_file"
+    fi
+
     return 0
+}
+
+# Rollback progress.txt by removing the last entry
+# Progress entries are separated by "---" markers
+# Usage: prd_rollback_progress_txt "path/to/progress.txt"
+# Arguments:
+#   $1 - progress.txt file path
+# Returns: 0 on success, 1 on error
+prd_rollback_progress_txt() {
+    local progress_file="$1"
+
+    if [[ ! -f "$progress_file" ]]; then
+        return 1
+    fi
+
+    # Create backup
+    cp "$progress_file" "${progress_file}.bak"
+
+    # Find the last occurrence of "---" and remove everything after it
+    # Use tac to reverse file, then find first --- (which is last in original), then reverse back
+    local last_separator_line
+    last_separator_line=$(grep -n "^---$" "$progress_file" | tail -1 | cut -d: -f1)
+
+    if [[ -n "$last_separator_line" ]] && [[ "$last_separator_line" -gt 0 ]]; then
+        # Keep only lines before the last separator
+        head -n "$((last_separator_line - 1))" "$progress_file" > "${progress_file}.tmp"
+        mv "${progress_file}.tmp" "$progress_file"
+        log_warn "Rolled back progress.txt - removed last entry"
+        return 0
+    else
+        # No separator found or file is too short - restore backup
+        mv "${progress_file}.bak" "$progress_file"
+        log_warn "Could not rollback progress.txt - no separator found"
+        return 1
+    fi
 }

@@ -913,7 +913,8 @@ _update_countdown_timer() {
     local timer_col=$((term_width - ${#timeout_display} - 3))
 
     # Save cursor, move to timer position, print timer, restore cursor
-    printf '\e7\e[%d;%dH%s\e8' "$timer_row" "$timer_col" "$timeout_display"
+    # Write directly to /dev/tty to bypass stdout piping (scrolling window and tee)
+    printf '\e7\e[%d;%dH%s\e8' "$timer_row" "$timer_col" "$timeout_display" > /dev/tty 2>&1
 }
 
 # Start the countdown timer updater in background
@@ -1664,15 +1665,31 @@ main() {
 # Cleanup function to kill child processes
 cleanup() {
     # Show cursor again (in case we were in scrolling window)
-    printf '\e[?25h'
-    echo ""
+    printf '\e[?25h' 2>/dev/null || true
+    echo "" 2>/dev/null || true
     log_warn "Interrupted by user"
+
+    # Stop countdown timer if running
+    _stop_countdown_timer 2>/dev/null || true
+
     # Release lockfile
-    lf_release
-    # Kill all child processes in our process group
-    pkill -P $$ 2>/dev/null
-    # Also kill any claude processes we spawned
-    pkill -f "claude -p --permission-mode" 2>/dev/null
+    lf_release 2>/dev/null || true
+
+    # Get our process group ID
+    local pgid
+    pgid=$(ps -o pgid= -p $$ | tr -d ' ')
+
+    # Kill entire process group (includes all subshells)
+    if [[ -n "$pgid" ]]; then
+        kill -TERM -"$pgid" 2>/dev/null || true
+        sleep 0.5
+        kill -KILL -"$pgid" 2>/dev/null || true
+    fi
+
+    # Also kill any claude processes we spawned (backup)
+    pkill -f "claude -p --permission-mode" 2>/dev/null || true
+    pkill -f "timeout.*claude" 2>/dev/null || true
+
     exit "$RALPH_EXIT_INTERRUPT"
 }
 
