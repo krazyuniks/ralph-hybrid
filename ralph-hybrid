@@ -1101,17 +1101,18 @@ _get_cursor_row() {
     local row=1
     # Request cursor position and read response
     # Response format: ESC[row;colR
-    if [[ -t 0 ]]; then
+    # Requires both stdin to be a terminal AND /dev/tty to be available
+    if [[ -t 0 ]] && [[ -r /dev/tty ]] && [[ -w /dev/tty ]]; then
         local oldstty
         oldstty=$(stty -g 2>/dev/null) || true
         stty raw -echo min 0 2>/dev/null || true
-        printf '\e[6n' > /dev/tty
+        printf '\e[6n' > /dev/tty 2>/dev/null
         local response=""
         # Read until 'R' character
         while IFS= read -rsn1 char; do
             response+="$char"
             [[ "$char" == "R" ]] && break
-        done < /dev/tty
+        done < /dev/tty 2>/dev/null
         stty "$oldstty" 2>/dev/null || true
         # Parse response: ESC[row;colR
         if [[ "$response" =~ \[([0-9]+)\;([0-9]+)R ]]; then
@@ -1146,7 +1147,8 @@ _update_countdown_timer() {
 
     # Save cursor, move to timer position, print timer, restore cursor
     # Write directly to /dev/tty to bypass stdout piping (scrolling window and tee)
-    printf '\e7\e[%d;%dH%s\e8' "$timer_row" "$timer_col" "$timeout_display" > /dev/tty 2>&1
+    # Use subshell to capture shell redirection errors (not just printf stderr)
+    ( printf '\e7\e[%d;%dH%s\e8' "$timer_row" "$timer_col" "$timeout_display" > /dev/tty ) 2>/dev/null || true
 }
 
 # Start the countdown timer updater in background
@@ -1157,6 +1159,12 @@ _start_countdown_timer() {
     local start_time="$2"
     local timeout_minutes="$3"
     local term_width="$4"
+
+    # Test if /dev/tty is actually usable (not just "writable" per -w check)
+    # This catches "Device not configured" errors in non-interactive contexts
+    if ! ( printf '' > /dev/tty ) 2>/dev/null; then
+        return 0  # Skip timer in non-TTY environments
+    fi
 
     # Run timer update loop in background
     (

@@ -33,23 +33,31 @@ You have been given:
 4. Run tests to confirm they pass
 5. Refactor if needed (tests must stay green)
 
-### 3. Quality Checks (YOU handle this - Ralph only verifies)
+### 4. Quality Checks (REQUIRED before committing)
 
-**IMPORTANT:** You are responsible for ensuring code quality.
+**You MUST run quality checks before committing.** Skipping this causes CI failures.
 
-**Before committing:**
-1. Run any linters/formatters the project uses (check pyproject.toml, package.json, etc.)
-2. Fix any issues they report
-3. Commit your code
+**Steps:**
+1. **Discover project tooling** (first iteration only):
+   - Check `package.json` for `scripts` (lint, typecheck, test)
+   - Check `pyproject.toml` for ruff, mypy, pytest config
+   - Check `Makefile` for lint/check targets
+   - Check `.pre-commit-config.yaml` for hooks
 
-**After you commit:**
-- Ralph runs read-only quality checks to verify
-- If checks fail, you'll see "⚠️ PREVIOUS ATTEMPT FAILED" with exact errors
-- Fix the issues and commit again
+2. **Run all quality checks:**
+   ```bash
+   # Examples (run what applies to this project):
+   npm run lint && npm run typecheck    # Node.js/TypeScript
+   ruff check . && mypy .               # Python
+   go vet ./... && go test ./...        # Go
+   cargo clippy && cargo test           # Rust
+   ```
 
-**Ralph never modifies your code** - you have full control.
+3. **Fix any issues** before proceeding to commit.
 
-### 4. Commit & Update (STREAMLINED - 3 commands)
+**If you skip this step:** Ralph runs read-only quality checks after you commit. If they fail, you'll see "⚠️ PREVIOUS ATTEMPT FAILED" with exact errors and must fix them. Save time by running checks yourself first.
+
+### 5. Commit & Update
 
 1. **Commit your code:**
    ```bash
@@ -69,13 +77,19 @@ You have been given:
    Status: complete
    ```
 
-4. **Commit tracking:**
+4. **Commit tracking files:**
    ```bash
    git add .ralph-hybrid/
    git commit -m "chore: Update progress for [STORY-ID]"
    ```
 
-### 5. Signal Completion and STOP
+5. **Verify clean working tree:**
+   ```bash
+   git status
+   ```
+   If any files remain uncommitted, add them with `git add -A` and amend or create another commit.
+
+### 6. Signal Completion and STOP
 
 **After completing the story, you MUST signal and stop immediately:**
 

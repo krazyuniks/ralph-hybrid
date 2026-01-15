@@ -1,6 +1,6 @@
 # Ralph Hybrid Roadmap
 
-> Last updated: 2026-01-11
+> Last updated: 2026-01-15
 
 This document tracks the development roadmap for Ralph Hybrid, organized by priority based on real-world usage feedback and architectural needs.
 
@@ -18,35 +18,39 @@ This document tracks the development roadmap for Ralph Hybrid, organized by prio
 
 ## Phase 1: Critical Fixes
 
-**Status:** Ready to start
+**Status:** ✅ Complete
 
 Issues from real-world usage that affect current user experience. These are quick wins - primarily template and library fixes.
 
-### #28 - /ralph-plan output must specify 'ralph run' command
+### #28 - /ralph-plan output must specify 'ralph run' command ✅
 - **Problem:** Claude substitutes project-specific commands (like `/execute`) for `ralph run`
 - **Fix:** Make output section more defensive with explicit "do not substitute" instruction
-- **Files:** `.claude/commands/ralph-plan.md`
+- **Files:** `.claude/commands/ralph-hybrid-plan.md`
+- **Resolution:** Already implemented - explicit "IMPORTANT: The command is exactly `ralph-hybrid run`" text with "do NOT substitute" warning
 
-### #22 - Use git add -A to commit all files
+### #22 - Use git add -A to commit all files ✅
 - **Problem:** Selective `git add` misses newly created files (e.g., migrations)
 - **Fix:** Use `git add -A` and verify clean working tree after commit
-- **Files:** `templates/prompt-tdd.md`
+- **Files:** `templates/prompt-tdd.md`, `templates/prompt.md`
+- **Resolution:** Already using `git add -A`; added verification step with `git status` check after commit
 
-### #23 - Run quality checks before committing
+### #23 - Run quality checks before committing ✅
 - **Problem:** Ralph commits without running linting/type checks, causing PR CI failures
 - **Fix:** Add required quality check step before commit in prompt template
 - **Files:** `templates/prompt-tdd.md`
+- **Resolution:** Fixed section numbering; enhanced quality checks section with explicit examples (npm, ruff, go, cargo)
 
-### #26 - False positive error detection
+### #26 - False positive error detection ✅
 - **Problem:** Error detection regex matches file content from tool results as "errors"
 - **Fix:** Make `ed_extract_error()` more specific, exclude tool_result content blocks
 - **Files:** `lib/exit_detection.sh`
+- **Resolution:** Already implemented - TOOL_OUTPUT_MARKERS, _ed_is_tool_output(), and pre-filtering in ed_extract_error()
 
 ---
 
 ## Phase 2: Core Refactors
 
-**Status:** Blocked by Phase 1
+**Status:** Ready to start
 
 Foundational improvements required before adding new features.
 
@@ -155,6 +159,10 @@ New capabilities to enhance the Ralph experience.
 - #8 - Refactor: Split utils.sh into focused modules
 - #12 - Feature: Add --continue flag for session continuity
 - #19 - Feature: Add /ralph-plan command
+- #22 - Use git add -A to commit all files (Phase 1)
+- #23 - Run quality checks before committing (Phase 1)
+- #26 - False positive error detection (Phase 1)
+- #28 - /ralph-plan output must specify 'ralph run' command (Phase 1)
 
 ### Superseded
 - #15 - Interactive visualization/flowchart (superseded by #20 tmux dashboard)
@@ -176,5 +184,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. When picking up work:
 
 | Date | Change |
 |------|--------|
+| 2026-01-15 | Completed Phase 1 (#28, #22, #23, #26) |
 | 2026-01-11 | Initial roadmap created from issue triage |
 | 2026-01-11 | Closed #15 as superseded by #20 |

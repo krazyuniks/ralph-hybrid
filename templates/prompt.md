@@ -58,6 +58,12 @@ If all checks pass:
      - [What you discovered]
    ```
 
+4. **Verify clean working tree:**
+   ```bash
+   git status
+   ```
+   If any files remain uncommitted, add them with `git add -A` and commit.
+
 ### 5. Check Completion
 
 After updating:
