@@ -288,9 +288,10 @@ print_success() {
         echo ""
         echo -e "${BLUE}To use ralph-hybrid in a project:${NC}"
         echo "  1. Navigate to your project"
-        echo "  2. Run: ralph-hybrid setup  (installs /ralph-hybrid-plan, /ralph-hybrid-amend)"
-        echo "  3. In Claude Code, run: /ralph-hybrid-plan <description>"
-        echo "  4. Run: ralph-hybrid run"
+        echo "  2. Run: ralph-hybrid setup"
+        echo "  3. In Claude Code, run: /ralph-hybrid  (shows usage guide)"
+        echo "     Or jump straight to: /ralph-hybrid-plan \"description\""
+        echo "  4. After planning, run: ralph-hybrid run"
     fi
     echo ""
 }

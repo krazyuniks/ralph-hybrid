@@ -504,6 +504,113 @@ cmd_restore() {
 # Setup Command - Install Claude Commands to Project
 #=============================================================================
 
+# Generate the Ralph Hybrid CLAUDE.md section
+_setup_generate_claude_md_section() {
+    cat << 'RALPH_SECTION'
+
+---
+
+## Ralph Hybrid (Autonomous Development)
+
+For complex features, use Ralph Hybrid to run autonomous development loops.
+
+### Workflow
+
+```
+1. Plan:  /ralph-hybrid-plan "description"   (in Claude Code)
+2. Run:   ralph-hybrid run                    (in terminal)
+```
+
+### When to Use Ralph
+
+- Multi-story features (3+ related tasks)
+- Features derived from GitHub issues
+- Work that benefits from TDD iteration
+- When you want autonomous implementation with human checkpoints
+
+### Commands
+
+| Command | Where | Purpose |
+|---------|-------|---------|
+| `/ralph-hybrid-plan` | Claude Code | Interactive planning, creates spec.md + prd.json |
+| `/ralph-hybrid-plan --regenerate` | Claude Code | Regenerate prd.json from updated spec.md |
+| `/ralph-hybrid-amend` | Claude Code | Modify requirements mid-implementation |
+| `ralph-hybrid run` | Terminal | Execute autonomous loop |
+| `ralph-hybrid run --monitor` | Terminal | Run with tmux dashboard |
+| `ralph-hybrid status` | Terminal | Show feature progress |
+
+### Example: GitHub Issue to Implementation
+
+```bash
+# 1. Create branch from issue number
+git checkout -b 42-user-authentication
+
+# 2. Plan (Claude auto-fetches issue #42 context)
+/ralph-hybrid-plan
+
+# 3. Run autonomous loop
+ralph-hybrid run --monitor
+```
+
+### Key Concepts
+
+- **Fresh context per iteration**: Each loop iteration starts Claude fresh
+- **Memory in files**: prd.json tracks story completion, progress.txt logs history
+- **Branch = feature folder**: `.ralph-hybrid/{branch-name}/` holds all state
+RALPH_SECTION
+}
+
+# Append Ralph section to CLAUDE.md if not already present
+_setup_update_claude_md() {
+    local project_dir="$1"
+    local claude_md="${project_dir}/CLAUDE.md"
+    local marker="## Ralph Hybrid"
+
+    # Check if CLAUDE.md exists
+    if [[ ! -f "$claude_md" ]]; then
+        # Create new CLAUDE.md with Ralph section
+        echo "# Project Instructions" > "$claude_md"
+        _setup_generate_claude_md_section >> "$claude_md"
+        log_info "Created CLAUDE.md with Ralph Hybrid section"
+        return 0
+    fi
+
+    # Check if CLAUDE.md is a reference file (starts with @)
+    local first_line
+    first_line=$(head -1 "$claude_md")
+    if [[ "$first_line" =~ ^@(.+\.md)$ ]]; then
+        local ref_file="${BASH_REMATCH[1]}"
+        local ref_path="${project_dir}/${ref_file}"
+
+        # Check the referenced file instead
+        if [[ -f "$ref_path" ]]; then
+            if grep -q "$marker" "$ref_path" 2>/dev/null; then
+                log_info "${ref_file} already has Ralph Hybrid section (skipped)"
+                return 0
+            fi
+            # Append to referenced file
+            _setup_generate_claude_md_section >> "$ref_path"
+            log_info "Added Ralph Hybrid section to ${ref_file}"
+            return 0
+        else
+            log_warn "Referenced file ${ref_file} not found"
+            log_info "Add Ralph Hybrid section manually to your project instructions"
+            return 0
+        fi
+    fi
+
+    # Check if Ralph section already exists
+    if grep -q "$marker" "$claude_md" 2>/dev/null; then
+        log_info "CLAUDE.md already has Ralph Hybrid section (skipped)"
+        return 0
+    fi
+
+    # Append Ralph section
+    _setup_generate_claude_md_section >> "$claude_md"
+    log_info "Added Ralph Hybrid section to CLAUDE.md"
+    return 0
+}
+
 cmd_setup() {
     local ralph_home="${HOME}/.ralph-hybrid"
     local commands_src="${ralph_home}/commands"
@@ -559,11 +666,15 @@ cmd_setup() {
     if [[ $updated -gt 0 ]]; then
         log_info "  Updated: ${updated} command(s)"
     fi
+
+    # Update CLAUDE.md with Ralph section
+    _setup_update_claude_md "$project_dir"
+
     echo ""
-    log_info "Available commands in Claude Code:"
-    log_info "  /ralph-hybrid-plan         - Interactive feature planning"
-    log_info "  /ralph-hybrid-plan --regen - Regenerate prd.json from spec.md"
-    log_info "  /ralph-hybrid-amend        - Amend requirements during implementation"
+    log_info "Quick start:"
+    log_info "  1. git checkout -b feature/your-feature"
+    log_info "  2. /ralph-hybrid-plan \"description\"    (in Claude Code)"
+    log_info "  3. ralph-hybrid run                     (in terminal)"
 
     return 0
 }
