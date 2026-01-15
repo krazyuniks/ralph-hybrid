@@ -102,12 +102,15 @@ When ralph-plan analyzes an epic, it should:
 |-------------|----------|-------------|
 | Per-feature config | `lib/config.sh`, `ralph-hybrid` | Feature config overrides project/global |
 | Skill template library | `ralph-hybrid/templates/skills/` | Base templates for common patterns |
+| Script template library | `ralph-hybrid/templates/scripts/` | Bulk operation scripts to reduce tool calls |
 | Dynamic skill generation | `ralph-plan` agent | Detect patterns, instantiate templates |
+| Dynamic script generation | `ralph-plan` agent | Generate scripts based on epic type |
 | Skills collaboration | `ralph-plan` agent | Human checkpoint for skill review |
 | Config generation | `ralph-plan` agent | Generate recommended config.yaml per feature |
 | Story dependency analysis | `ralph-plan` agent | Detect "enables testing" relationships |
 | Visual validation hook | `ralph-hybrid/templates/hooks/` | Playwright screenshot diff template |
 | Class comparison tool | `ralph-hybrid/templates/skills/` | DOM class extraction and comparison |
+| Retrospective analysis | `ralph-hybrid` command | Post-epic analysis of tool/token/task patterns |
 
 ### Phase E: Validation
 
@@ -264,6 +267,93 @@ visual_regression:
 
 ---
 
+## Local Scripts for Tool Call Reduction
+
+**Problem:** Heavy tool usage (80+ calls per iteration) hits rate limits and is inefficient.
+
+**Solution:** Local scripts that consolidate work, so Claude focuses on logic not tooling.
+
+**Current pattern (expensive):**
+```
+Claude: Read file A        → 1 API call
+Claude: Read file B        → 1 API call
+Claude: Grep for X         → 1 API call
+... 80 times per iteration
+```
+
+**Optimized pattern (cheap):**
+```
+Claude: Run audit-script.sh    → 1 API call
+Script: Does all file ops, returns consolidated report
+Claude: Analyze report, decide → Logic only
+```
+
+**Scripts to generate per-feature:**
+```
+.ralph-hybrid/{feature}/scripts/
+├── compare-components.sh    # Bulk React vs Jinja2 comparison
+├── extract-classes.sh       # DOM class extraction from both
+├── validate-all.sh          # Run all checks, return summary
+├── audit-report.sh          # Generate consolidated findings
+├── file-inventory.sh        # List all relevant files upfront
+└── test-runner.sh           # Run tests, parse results, return summary
+```
+
+**ralph-plan generates scripts** based on epic type:
+- Migration epic → comparison scripts
+- API epic → endpoint validation scripts
+- UI epic → visual diff scripts
+
+**Script output format:** Structured (JSON or markdown) so Claude can parse efficiently.
+
+---
+
+## Retrospective Analysis
+
+**After each epic completes, run a retrospective that analyzes:**
+
+### 1. Tool Usage Analysis
+- Total tool calls per iteration
+- Tool call breakdown by type (Read, Grep, Bash, etc.)
+- Identify repetitive patterns that could be scripted
+- Flag iterations with >50 tool calls for optimization
+
+### 2. Token Usage Analysis
+- Tokens per iteration (input/output)
+- Context window utilization over time
+- Identify context bloat (reading same files repeatedly)
+- Cost per story completed
+
+### 3. Task Sizing Analysis
+- Stories too small → overhead per invocation dominates
+- Stories too large → LLM processing quality degrades
+- Find optimal story size for the project type
+- Recommend story splitting or combining
+
+### 4. Rate Limit Analysis
+- When/why limits were hit
+- Requests per minute patterns
+- Cooling period effectiveness
+- Recommend rate limit settings for similar epics
+
+**Retrospective output:**
+```
+.ralph-hybrid/{feature}/retrospective.md
+├── Tool usage summary + optimization recommendations
+├── Token usage summary + cost analysis
+├── Task sizing analysis + recommendations
+├── Rate limit incidents + settings recommendations
+└── Scripts to generate for similar future epics
+```
+
+**Feed back into ralph-plan:** Retrospective findings inform:
+- Default script templates for epic types
+- Story sizing guidelines
+- Rate limit defaults
+- Model selection (heavy tool use → consider haiku for simple tasks)
+
+---
+
 ## Realistic Expectations
 
 **First-pass accuracy target:**
@@ -280,6 +370,19 @@ visual_regression:
 - Get automated validation closer to visual truth
 - Generate skills that enforce best practices
 - Catch more issues before human review
+
+---
+
+## Session Overview
+
+| Session | Focus | Dependency |
+|---------|-------|------------|
+| A | Story-by-story audit | After Ralph finishes 466 |
+| B | Phase 2 refactors (#21, #7) | Independent ✅ Complete |
+| C | Skills system + per-feature config + scripts | After A (benefits from audit) |
+| D | Retrospective analysis (tool/token/task) | After Ralph finishes 466 |
+
+**Recommended order:** A → D → C (audit and retrospective inform skills/scripts design)
 
 ---
 
@@ -379,5 +482,47 @@ Work items:
 3. Implement skills collaboration checkpoint (user approval, 3rd party evaluation)
 4. Generate skills to .ralph-hybrid/{feature}/skills/
 
+**Local Scripts System:**
+1. Design script template library for common operations
+2. ralph-plan generates scripts based on epic type
+3. Scripts output structured data (JSON/markdown) for Claude to parse
+4. Target: <10 tool calls per iteration for routine work
+
 Start by reviewing the protocol in PLANNING-epic-466-audit.md, then design the implementation.
+```
+
+### Session D: Retrospective Analysis
+
+```
+Epic 466 Retrospective Analysis
+
+Reference: /Users/ryanlauterbach/Work/ralph-hybrid/PLANNING-epic-466-audit.md
+
+Goal: Analyze the full ralph-hybrid run for epic 466 to extract optimization insights.
+
+Analyze:
+
+1. **Tool Usage**
+   - Parse iteration logs for tool call counts
+   - Identify repetitive patterns (same files read multiple times, etc.)
+   - Recommend scripts that would reduce calls
+
+2. **Token Usage**
+   - Extract token counts per iteration from logs
+   - Identify context bloat patterns
+   - Calculate cost per story
+
+3. **Task Sizing**
+   - Compare story complexity vs iteration count
+   - Identify stories that were too small (overhead) or too large (quality degradation)
+   - Recommend optimal sizing for migration epics
+
+4. **Rate Limits**
+   - When/why limits were hit
+   - What iteration patterns preceded the limit
+   - Recommend rate_limit settings
+
+Location: /Users/ryanlauterbach/Work/guitar-tone-shootout-worktrees/466-frontend-architecture-migrate-astro-ssg/.ralph-hybrid/
+
+Output: Create retrospective.md with findings and feed recommendations back into planning doc.
 ```
