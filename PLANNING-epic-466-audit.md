@@ -310,6 +310,66 @@ Claude: Analyze report, decide → Logic only
 
 ---
 
+## MCP/Browser Tool Call Optimization
+
+**Problem observed in epic 466:** Chrome DevTools and Playwright MCP calls caused browser to launch repeatedly—once per element check. Testing div 1, then div 2, then div 3 each launched a new browser instance, hitting API rate limits.
+
+**Current pattern (expensive):**
+```
+Claude: Check element A via Playwright  → Browser launch + API call
+Claude: Check element B via Playwright  → Browser launch + API call
+Claude: Check element C via Playwright  → Browser launch + API call
+... 50+ browser launches per iteration
+```
+
+**Optimized patterns:**
+
+### 1. Batch Browser Operations via Script
+```bash
+# visual-audit.sh - runs once, checks everything
+playwright test --reporter=json visual-audit.spec.ts > results.json
+# Returns consolidated results for all elements
+```
+
+### 2. Pre-launch Browser Session
+Hook that starts browser before iteration, script queries it:
+```yaml
+# hooks/pre_iteration.sh
+playwright open http://localhost:8010 --headed &
+export BROWSER_PID=$!
+
+# hooks/post_iteration.sh
+kill $BROWSER_PID
+```
+
+### 3. Bulk Element Extraction Script
+```bash
+# extract-all-elements.sh
+# Single browser launch, extract all elements at once
+playwright evaluate '
+  document.querySelectorAll("[data-testid]").forEach(el => {
+    console.log(JSON.stringify({
+      testid: el.dataset.testid,
+      classes: el.className,
+      text: el.textContent.slice(0,100)
+    }))
+  })
+'
+```
+
+**Scripts to generate for UI/visual epics:**
+```
+.ralph-hybrid/{feature}/scripts/
+├── visual-audit.sh          # Batch visual checks
+├── extract-all-elements.sh  # DOM extraction in one pass
+├── compare-screenshots.sh   # Batch screenshot comparison
+└── browser-session.sh       # Manage persistent browser
+```
+
+**Key insight:** MCP tools are powerful but expensive when used per-element. Scripts should batch operations so Claude makes one call to get all data, then reasons about results.
+
+---
+
 ## Iterative Asset Synthesis
 
 **Key insight:** We discover skill/hook/script requirements during feature work. These learnings must be synthesized back into project-level assets—not simply moved, but holistically evaluated and assimilated.
@@ -475,14 +535,18 @@ project/
 
 ## Session Overview
 
-| Session | Focus | Dependency |
-|---------|-------|------------|
-| A | Story-by-story audit | After Ralph finishes 466 |
-| B | Phase 2 refactors (#21, #7) | Independent ✅ Complete |
-| C | Skills system + per-feature config + scripts | After A (benefits from audit) |
-| D | Retrospective analysis (tool/token/task) | After Ralph finishes 466 |
+| Session | Focus | Status |
+|---------|-------|--------|
+| B | Phase 2 refactors (#21, #7) | ✅ **Complete** (commit 135377b) |
+| A | Story-by-story audit | Ready - epic 466 finished (17/17 stories) |
+| D | Retrospective analysis (tool/token/task) | Ready - epic 466 finished |
+| C | Skills system + per-feature config + scripts | After A & D |
 
-**Recommended order:** A → D → C (audit and retrospective inform skills/scripts design)
+**Execution order:** A → D → C
+
+- **A first:** Audit documents what went wrong (visual mismatches, class issues)
+- **D second:** Retrospective analyzes why (tool calls, MCP usage patterns, rate limits)
+- **C last:** Design skills/scripts system informed by A & D findings
 
 ---
 
@@ -607,19 +671,26 @@ Analyze:
    - Identify repetitive patterns (same files read multiple times, etc.)
    - Recommend scripts that would reduce calls
 
-2. **Token Usage**
+2. **MCP/Browser Tool Usage** (PRIORITY - known issue)
+   - Count Chrome DevTools and Playwright MCP calls
+   - Identify per-element browser launches (div 1, div 2, div 3 pattern)
+   - Quantify how many rate limit hits were caused by browser tools
+   - Recommend batch scripts to replace per-element MCP calls
+
+3. **Token Usage**
    - Extract token counts per iteration from logs
    - Identify context bloat patterns
    - Calculate cost per story
 
-3. **Task Sizing**
+4. **Task Sizing**
    - Compare story complexity vs iteration count
    - Identify stories that were too small (overhead) or too large (quality degradation)
    - Recommend optimal sizing for migration epics
 
-4. **Rate Limits**
+5. **Rate Limits**
    - When/why limits were hit
    - What iteration patterns preceded the limit
+   - Correlate with MCP/browser usage
    - Recommend rate_limit settings
 
 Location: /Users/ryanlauterbach/Work/guitar-tone-shootout-worktrees/466-frontend-architecture-migrate-astro-ssg/.ralph-hybrid/
