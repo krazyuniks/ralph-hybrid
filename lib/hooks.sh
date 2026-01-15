@@ -450,7 +450,7 @@ hk_load_completion_patterns_from_config() {
 # Returns:
 #   0 on success
 hk_init_hooks_dir() {
-    local base_dir="${1:-${PWD}/.ralph}"
+    local base_dir="${1:-${PWD}/.ralph-hybrid}"
     local hooks_dir="${base_dir}/${RALPH_HYBRID_HOOKS_DIR_NAME}"
 
     if [[ -d "$hooks_dir" ]]; then

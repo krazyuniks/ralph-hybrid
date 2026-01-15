@@ -1155,7 +1155,7 @@ ed_show_interrupted_context() {
 
     echo "" >&2
     echo "==========================================" >&2
-    echo "Resume with: ralph run" >&2
+    echo "Resume with: ralph-hybrid run" >&2
     echo "==========================================" >&2
     echo "" >&2
 

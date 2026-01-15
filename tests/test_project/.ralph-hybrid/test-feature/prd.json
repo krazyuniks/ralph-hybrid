@@ -1,0 +1,51 @@
+{
+  "description": "Test feature for ralph-hybrid e2e testing",
+  "createdAt": "2024-01-01T00:00:00Z",
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Create hello.txt",
+      "description": "Create a file named hello.txt with 'Hello World'",
+      "acceptanceCriteria": ["hello.txt exists", "Contains 'Hello World'"],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-002",
+      "title": "Create config.json",
+      "description": "Create config.json with name and version fields",
+      "acceptanceCriteria": ["config.json exists", "Has name field", "Has version field"],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-003",
+      "title": "Create src directory",
+      "description": "Create src/ directory with an index.js file",
+      "acceptanceCriteria": ["src/ directory exists", "src/index.js exists"],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-004",
+      "title": "Add README",
+      "description": "Create README.md with project title",
+      "acceptanceCriteria": ["README.md exists", "Has title heading"],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "STORY-005",
+      "title": "Create test file",
+      "description": "Create test/test.js with a simple test",
+      "acceptanceCriteria": ["test/ directory exists", "test/test.js exists"],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

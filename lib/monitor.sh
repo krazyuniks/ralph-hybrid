@@ -46,7 +46,7 @@ readonly _MON_REFRESH_INTERVAL="${_RALPH_HYBRID_MONITOR_REFRESH_INTERVAL:-2}"
 # Get the status file path
 # Output: full path to status.json
 _mon_get_status_file() {
-    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph-hybrid}"
     echo "${state_dir}/${_MON_STATUS_FILE}"
 }
 
@@ -266,7 +266,7 @@ mon_render_dashboard() {
     echo "------------------------------------------"
 
     # Show recent log entries
-    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph-hybrid}"
     local logs_dir="${state_dir}/logs"
     if [[ -d "$logs_dir" ]]; then
         # Get the most recent log file
@@ -455,7 +455,7 @@ mon_iteration_start() {
     # Note: -E enables extended regex, ^ anchors to line start
     local api_calls_count=0
     local rate_limit_remaining=0
-    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph-hybrid}"
     if [[ -f "${state_dir}/rate_limiter.state" ]]; then
         api_calls_count=$(grep -E '^CALL_COUNT=' "${state_dir}/rate_limiter.state" | cut -d= -f2 || echo 0)
     fi
@@ -489,7 +489,7 @@ mon_iteration_end() {
     # Get API usage from rate limiter state
     local api_calls_count=0
     local rate_limit_remaining=0
-    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph-hybrid}"
     if [[ -f "${state_dir}/rate_limiter.state" ]]; then
         api_calls_count=$(grep -E '^CALL_COUNT=' "${state_dir}/rate_limiter.state" | cut -d= -f2 || echo 0)
     fi
@@ -522,7 +522,7 @@ mon_mark_complete() {
 
     # Get API usage
     local api_calls_count=0
-    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph-hybrid}"
     if [[ -f "${state_dir}/rate_limiter.state" ]]; then
         api_calls_count=$(grep -E '^CALL_COUNT=' "${state_dir}/rate_limiter.state" | cut -d= -f2 || echo 0)
     fi
@@ -552,7 +552,7 @@ mon_mark_error() {
 
     # Get API usage
     local api_calls_count=0
-    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph-hybrid}"
     if [[ -f "${state_dir}/rate_limiter.state" ]]; then
         api_calls_count=$(grep -E '^CALL_COUNT=' "${state_dir}/rate_limiter.state" | cut -d= -f2 || echo 0)
     fi

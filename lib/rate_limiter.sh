@@ -56,7 +56,7 @@ _rl_hour_start=0
 # Get the state file path
 # Output: full path to state file
 _rl_get_state_file() {
-    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph}"
+    local state_dir="${RALPH_HYBRID_STATE_DIR:-${HOME}/.ralph-hybrid}"
     echo "${state_dir}/${_RL_STATE_FILE}"
 }
 

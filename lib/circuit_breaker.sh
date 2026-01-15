@@ -24,7 +24,7 @@ fi
 # Default thresholds (using constants from constants.sh)
 : "${RALPH_HYBRID_NO_PROGRESS_THRESHOLD:=${RALPH_HYBRID_DEFAULT_NO_PROGRESS_THRESHOLD:-3}}"
 : "${RALPH_HYBRID_SAME_ERROR_THRESHOLD:=${RALPH_HYBRID_DEFAULT_SAME_ERROR_THRESHOLD:-5}}"
-: "${RALPH_HYBRID_STATE_DIR:=${PWD}/.ralph}"
+: "${RALPH_HYBRID_STATE_DIR:=${PWD}/.ralph-hybrid}"
 
 # State file location (using constant from constants.sh)
 CB_STATE_FILE="${RALPH_HYBRID_STATE_DIR}/${RALPH_HYBRID_STATE_FILE_CIRCUIT_BREAKER:-circuit_breaker.state}"
