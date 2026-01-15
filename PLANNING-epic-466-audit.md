@@ -538,15 +538,243 @@ project/
 | Session | Focus | Status |
 |---------|-------|--------|
 | B | Phase 2 refactors (#21, #7) | ✅ **Complete** (commit 135377b) |
-| A | Story-by-story audit | Ready - epic 466 finished (17/17 stories) |
-| D | Retrospective analysis (tool/token/task) | Ready - epic 466 finished |
-| C | Skills system + per-feature config + scripts | After A & D |
+| A | Story-by-story audit | ✅ **Complete** - AUDIT-epic-466.md created |
+| D | Retrospective analysis (tool/token/task) | ✅ **Complete** - RETROSPECTIVE-epic-466.md created |
+| C | Skills system + per-feature config + scripts | ✅ **Complete** - Templates + ralph-plan ANALYZE phase |
 
 **Execution order:** A → D → C
+
+### Session C Results (2026-01-15)
+
+**Output:** Template library created with skills, scripts, and hooks.
+
+**Implemented:**
+
+1. **Skill Template:** `templates/skills/visual-parity-migration.md`
+   - CSS variable audit checklist
+   - Class verbatim copy rules
+   - Framework-specific exception handling
+   - Validation checklist for visual parity
+
+2. **Script Templates:**
+   - `templates/scripts/css-audit.sh` - Audits CSS variable usage vs definitions
+   - `templates/scripts/endpoint-validation.sh` - Batch validates all endpoints
+   - `templates/scripts/file-inventory.sh` - Pre-reads files by category
+   - `templates/scripts/template-comparison.sh` - Compares source vs target classes
+
+3. **Hook Template:** `templates/hooks/post-iteration-visual-diff.sh`
+   - Screenshot comparison using Playwright
+   - Configurable threshold and pages
+   - JSON output for Claude parsing
+
+4. **ralph-plan Enhancement:** Added `Phase 2.5: ANALYZE`
+   - Detects migration, visual parity, and API patterns
+   - Proposes skills/scripts/hooks based on epic type
+   - Checkpoint for user approval and third-party resource evaluation
+
+5. **Documentation:** SPEC.md updated with Template Library section
 
 - **A first:** Audit documents what went wrong (visual mismatches, class issues)
 - **D second:** Retrospective analyzes why (tool calls, MCP usage patterns, rate limits)
 - **C last:** Design skills/scripts system informed by A & D findings
+
+### Session D Results (2026-01-15)
+
+**Output:** `RETROSPECTIVE-epic-466.md` created with full analysis.
+
+**Key Findings:**
+
+1. **Tool Usage:** 662 total calls across 9 logged iterations (avg 74/iteration)
+   - Target: <50 calls/iteration
+   - Biggest inefficiency: Same files read multiple times (html.py read 19× in one iteration)
+
+2. **MCP/Browser Tools:** Not used directly
+   - curl commands used for validation instead
+   - No per-element browser launch issue occurred
+   - Playwright tests run via bash, not MCP
+
+3. **Rate Limits:** Multiple hits observed over 24-hour epic duration
+   - Not captured in iteration logs or state files
+   - Likely caused by high tool call count (avg 74/iteration)
+   - Circuit breaker caught 1 no-progress iteration
+
+4. **Task Sizing:** Stories well-sized (5-7 ACs ideal)
+   - All 17 stories completed
+   - High-AC stories (10+) had more tool calls but still succeeded
+
+**Scripts Recommended:**
+- `endpoint-validation.sh` - Batch validate all routes
+- `file-inventory.sh` - Pre-read relevant files
+- `template-comparison.sh` - Compare Jinja2 vs React classes
+- `css-audit.sh` - Audit CSS variable usage vs definitions
+
+---
+
+## Audit Results & Remediation Tracking
+
+### Session A Results (2026-01-15)
+
+**Output:** `AUDIT-epic-466.md` created with full findings.
+
+**Critical Finding:** Jinja2 templates reference 15+ CSS variables not defined in base.html.
+
+---
+
+### Track 1: Epic 466 Branch Fixes (guitar-tone-shootout)
+
+Immediate fixes needed on the `466-frontend-architecture-migrate-astro-ssg` branch:
+
+| Fix | Priority | Status | Notes |
+|-----|----------|--------|-------|
+| Add CSS variables to base.html | **P0** | ✅ **Complete** | Added all 15 CSS variables to `:root` |
+| React cleanup (components/cards/CSS/imports) | **P0** | ✅ **Not Needed** | See findings below |
+| Visual regression test | P1 | Pending | Verify fix works |
+| Update STORY-001 acceptance | P2 | Pending | Add "CSS vars defined" criterion |
+
+**Prompt 1 Execution Results (2026-01-15):**
+
+1. **CSS Variables Added** - All 15 CSS variables now defined in `base.html`:
+   - Background: `--color-bg-base`, `--color-bg-surface`, `--color-bg-elevated`, `--color-bg-secondary`
+   - Text: `--color-text-primary`, `--color-text-secondary`, `--color-text-muted`
+   - Accent: `--color-accent-primary`, `--color-accent-primary-hover`, `--color-accent-secondary`, `--color-accent-success`, `--color-accent-warning`, `--color-accent-error`
+   - Block: `--color-block-di`, `--color-block-amp`, `--color-block-cab`, `--color-block-effect`
+   - Border: `--border`, `--border-hover`
+   - Also updated `body` styles to use CSS variables for consistency
+
+2. **React Cleanup Not Needed:**
+   - `library/*.astro`, `browse.astro`, `shootout/*.astro` **do not exist** - already cleaned or never created
+   - `AuthNav.tsx` and `Header.astro` are still used by static Astro pages (index, about, 404, 500, login)
+   - All SignalChain/* components are still used by SignalChainBuilder
+
+3. **npm Dependencies All In Use:**
+   - All Radix UI packages used by UI components
+   - lucide-react used by SignalChain components
+   - @dnd-kit/* used by SignalChainBuilder
+   - @tanstack/react-query used by SignalChainBuilder
+   - class-variance-authority, clsx, tailwind-merge used by UI components
+
+4. **Verification:**
+   - ✅ `just check-frontend` passed (0 errors, 0 warnings)
+   - ✅ Backend lint/type checks passed
+   - ⚠️ 8 pre-existing test failures in `test_transaction_handling.py` (unrelated to CSS changes)
+
+**React Cleanup Scope:** *(Original - no longer applicable)*
+- ~~Delete migrated React components (AuthNav, library pages, browse components)~~
+- ~~Delete unused Astro pages that are now Jinja2 (`library/*.astro`, `browse.astro`, etc.)~~
+- ~~Prune unused npm dependencies (keep: @dnd-kit, @tanstack/react-query for SignalChainBuilder)~~
+- ~~Remove unused CSS/imports~~
+- ~~Verify SignalChainBuilder still works after cleanup~~
+
+**CSS Variables to Add** (copy to `base.html` `:root`):
+```css
+/* Background layers */
+--color-bg-base: #0a0a0a;
+--color-bg-surface: #141414;
+--color-bg-elevated: #1f1f1f;
+--color-bg-secondary: #1a1a1a;
+
+/* Text colors */
+--color-text-primary: #ffffff;
+--color-text-secondary: #a1a1a1;
+--color-text-muted: #666666;
+
+/* Accent colors */
+--color-accent-primary: #3b82f6;
+--color-accent-primary-hover: #2563eb;
+--color-accent-secondary: #60a5fa;
+--color-accent-success: #22c55e;
+--color-accent-warning: #f59e0b;
+--color-accent-error: #ef4444;
+
+/* Block type colors */
+--color-block-di: #3b82f6;
+--color-block-amp: #f59e0b;
+--color-block-cab: #22c55e;
+--color-block-effect: #a855f7;
+
+/* Borders */
+--border-hover: #444444;
+```
+
+---
+
+### Track 2: Ralph-Hybrid Improvements
+
+Enhancements to prevent similar issues in future epics:
+
+| Enhancement | Priority | Status | Target |
+|-------------|----------|--------|--------|
+| Visual parity skill template | P1 | **Complete** | `templates/skills/visual-parity-migration.md` |
+| CSS variable validation script | P1 | **Complete** | `templates/scripts/css-audit.sh` |
+| Pre-iteration visual diff hook | P2 | **Complete** | `templates/hooks/post-iteration-visual-diff.sh` |
+| Migration epic skill detection | P2 | **Complete** | `ralph-plan` ANALYZE phase added |
+| Story sequencing analysis | P3 | Deprioritized | Not an issue in epic 466 |
+| Dual-frontend architecture skill | P2 | Pending | When Astro + Jinja2 coexist |
+| Batch endpoint validation script | P1 | **Complete** | `templates/scripts/endpoint-validation.sh` |
+| File inventory script | P1 | **Complete** | `templates/scripts/file-inventory.sh` |
+| Template comparison script | P2 | **Complete** | `templates/scripts/template-comparison.sh` |
+| File read deduplication | P1 | **Addressed** | Via file-inventory.sh script |
+
+**Script Template Architecture:**
+```
+ralph-hybrid/templates/scripts/     ← Generic templates (this repo)
+├── endpoint-validation.sh
+├── file-inventory.sh
+├── css-audit.sh
+└── template-comparison.sh
+
+.ralph-hybrid/{feature}/scripts/    ← Generated per-epic (target project)
+├── endpoint-validation.sh          ← Customized for project's routes
+├── file-inventory.sh               ← Customized for project's structure
+└── ...
+```
+
+ralph-plan detects epic type → copies relevant templates → customizes for project.
+
+**Retrospective-Informed Priorities:**
+- **P1 (Critical):** Scripts to reduce tool calls from avg 74 to <50 per iteration
+- **P1 (Critical):** Rate limit mitigation (multiple hits observed over 24hr epic)
+- **P2:** Pattern detection for migration epics
+- **Deprioritized:** MCP browser hooks (curl + Playwright tests sufficient)
+
+**Additional Findings from Prompt 1:**
+
+This project has a **dual-frontend architecture**:
+- **Astro SSG** serves static pages (index, about, 404, 500, login, report-error, dev/showcase, jobs)
+- **Flask/Jinja2** serves dynamic pages (browse, library/*, shootout/*)
+- **React islands** (SignalChainBuilder) are used in both via Astro's island architecture
+
+This is a valid pattern but requires clear documentation. Ralph-hybrid should detect this pattern and:
+1. Not assume "migrate from X to Y" means "delete all X"
+2. Generate a skill explaining the architecture boundaries
+3. Validate that shared dependencies (htmx, alpine) are loaded correctly in both
+
+**Skill: Visual Parity Migration** (draft):
+```markdown
+# Visual Parity Migration Skill
+
+When migrating UI from one framework to another:
+
+1. **CSS Variable Audit**
+   - Before starting: grep all `var(--` in source
+   - Verify each variable is defined in target
+   - Run: `scripts/css-audit.sh`
+
+2. **Class Verbatim Copy**
+   - Copy Tailwind classes exactly, don't translate
+   - Exception: framework-specific classes (e.g., Astro's class:list)
+
+3. **Visual Regression**
+   - Take baseline screenshots before changes
+   - Compare after each component migration
+   - Threshold: 0.05 pixel difference
+
+4. **Validation Checklist**
+   - [ ] All CSS variables defined
+   - [ ] No browser console errors
+   - [ ] Dark theme backgrounds correct
+   - [ ] Text readable on all backgrounds
+```
 
 ---
 
@@ -696,4 +924,251 @@ Analyze:
 Location: /Users/ryanlauterbach/Work/guitar-tone-shootout-worktrees/466-frontend-architecture-migrate-astro-ssg/.ralph-hybrid/
 
 Output: Create retrospective.md with findings and feed recommendations back into planning doc.
+```
+
+---
+
+## Standalone Execution Prompts
+
+### Prompt 1: Fix Epic 466 Branch
+
+```
+Fix Epic 466 Branch - CSS Variables & React Cleanup
+
+Reference: /Users/ryanlauterbach/Work/ralph-hybrid/PLANNING-epic-466-audit.md
+Audit: /Users/ryanlauterbach/Work/ralph-hybrid/AUDIT-epic-466.md
+
+Project: /Users/ryanlauterbach/Work/guitar-tone-shootout-worktrees/466-frontend-architecture-migrate-astro-ssg
+
+## Context
+
+The audit found that Jinja2 templates reference CSS variables not defined in base.html.
+Additionally, React components that were migrated to Jinja2 need cleanup.
+
+## Tasks
+
+### 1. Add CSS Variables to base.html (P0)
+
+File: backend/app/templates/layouts/base.html
+
+Add to the <style> block (`:root` or `html` selector):
+
+```css
+/* Background layers */
+--color-bg-base: #0a0a0a;
+--color-bg-surface: #141414;
+--color-bg-elevated: #1f1f1f;
+--color-bg-secondary: #1a1a1a;
+
+/* Text colors */
+--color-text-primary: #ffffff;
+--color-text-secondary: #a1a1a1;
+--color-text-muted: #666666;
+
+/* Accent colors */
+--color-accent-primary: #3b82f6;
+--color-accent-primary-hover: #2563eb;
+--color-accent-secondary: #60a5fa;
+--color-accent-success: #22c55e;
+--color-accent-warning: #f59e0b;
+--color-accent-error: #ef4444;
+
+/* Block type colors */
+--color-block-di: #3b82f6;
+--color-block-amp: #f59e0b;
+--color-block-cab: #22c55e;
+--color-block-effect: #a855f7;
+
+/* Borders */
+--border-hover: #444444;
+```
+
+### 2. React Cleanup (P0)
+
+**Delete migrated components:**
+- frontend/src/components/AuthNav.tsx (replaced by header.html)
+- Any other React components for library/browse pages
+
+**Delete migrated Astro pages:**
+- frontend/src/pages/library/*.astro (now Jinja2)
+- frontend/src/pages/browse.astro (now Jinja2)
+- frontend/src/pages/shootout/*.astro (now Jinja2)
+
+**Keep for SignalChainBuilder:**
+- frontend/src/components/SignalChain/* (entire directory)
+- frontend/src/islands/SignalChainBuilder.tsx
+- Dependencies: @dnd-kit/*, @tanstack/react-query
+
+**Prune npm dependencies:**
+- Review package.json for unused React-related deps
+- Run `pnpm prune` after removal
+
+### 3. Verify
+
+- Run `just check` (or equivalent)
+- Verify SignalChainBuilder still works at /library/chains/build
+- Verify all Jinja2 pages render with correct colors
+- Check browser console for CSS variable errors
+
+### 4. Document Findings
+
+If you find additional issues during cleanup, document them for ralph-hybrid improvements:
+- Add to PLANNING-epic-466-audit.md Track 2 section
+- Note any patterns that should be caught by future validation
+
+Do NOT commit - just make the changes and report what was done.
+```
+
+---
+
+### Prompt 2: Session D - Retrospective Analysis
+
+```
+Epic 466 Retrospective Analysis
+
+Reference: /Users/ryanlauterbach/Work/ralph-hybrid/PLANNING-epic-466-audit.md
+
+Goal: Analyze the full ralph-hybrid run for epic 466 to extract optimization insights.
+
+## Location
+
+Project: /Users/ryanlauterbach/Work/guitar-tone-shootout-worktrees/466-frontend-architecture-migrate-astro-ssg
+Ralph data: .ralph-hybrid/466-frontend-architecture-migrate-astro-ssg/
+
+## Analysis Tasks
+
+### 1. Tool Usage Analysis
+- Parse iteration logs (progress.txt) for tool call patterns
+- Count tool calls per iteration
+- Identify repetitive patterns (same files read multiple times)
+- Flag iterations with >50 tool calls
+- Recommend scripts that would reduce calls
+
+### 2. MCP/Browser Tool Usage (PRIORITY - known issue)
+- Count Chrome DevTools and Playwright MCP calls
+- Identify per-element browser launches (the "check div 1, div 2, div 3" pattern)
+- Quantify rate limit hits caused by browser tools
+- Recommend batch scripts to replace per-element MCP calls
+
+### 3. Token Usage Analysis
+- Extract token counts per iteration from logs (if available)
+- Identify context bloat patterns
+- Calculate approximate cost per story
+
+### 4. Task Sizing Analysis
+- Compare story complexity vs iteration count
+- Identify stories that were too small (overhead dominates)
+- Identify stories that were too large (quality degradation)
+- Recommend optimal sizing for migration epics
+
+### 5. Rate Limit Analysis
+- When/why limits were hit
+- What iteration patterns preceded the limit
+- Correlate with MCP/browser usage
+- Recommend rate_limit settings for similar epics
+
+## Output
+
+Create: /Users/ryanlauterbach/Work/ralph-hybrid/RETROSPECTIVE-epic-466.md
+
+Include:
+- Tool usage summary + optimization recommendations
+- Token usage summary + cost analysis
+- Task sizing analysis + recommendations
+- Rate limit incidents + settings recommendations
+- Scripts to generate for similar future epics
+- Feed findings back into PLANNING-epic-466-audit.md Track 2
+
+## Feed Forward
+
+Any findings should be added to PLANNING-epic-466-audit.md:
+- Track 2 for ralph-hybrid improvements
+- New skill/script ideas
+- Validation gaps to address
+```
+
+---
+
+### Prompt 3: Ralph-Hybrid Enhancements
+
+```
+Ralph-Hybrid Enhancements - Visual Parity & Migration Skills
+
+Reference: /Users/ryanlauterbach/Work/ralph-hybrid/PLANNING-epic-466-audit.md
+Audit: /Users/ryanlauterbach/Work/ralph-hybrid/AUDIT-epic-466.md
+
+Goal: Implement ralph-hybrid improvements identified from epic 466 audit.
+
+## Context
+
+Epic 466 audit revealed:
+- CSS variables used but not defined (15+ missing)
+- No visual regression testing
+- No CSS variable validation
+- Migration epics need specialized skills
+
+## Implementation Tasks
+
+### 1. Visual Parity Skill Template (P1)
+
+Create: templates/skills/visual-parity-migration.md
+
+Content should include:
+- CSS variable audit checklist
+- Class verbatim copy rules
+- Visual regression requirements
+- Framework-specific exceptions
+- Validation checklist
+
+### 2. CSS Audit Script (P1)
+
+Create: templates/scripts/css-audit.sh
+
+Functionality:
+- Grep all `var(--` references in target files
+- Check each variable is defined in base template
+- Output report of undefined variables
+- Exit non-zero if any undefined
+
+### 3. Visual Diff Hook Template (P2)
+
+Create: templates/hooks/post-iteration-visual-diff.sh
+
+Functionality:
+- Take screenshot of configured URLs
+- Compare against baseline
+- Report pixel difference percentage
+- Fail if threshold exceeded
+
+### 4. Update ralph-plan for Migration Detection (P2)
+
+Enhance ralph-plan to detect migration patterns:
+- React → Jinja2
+- Vue → Svelte
+- Any "X to Y" in epic description
+
+When detected, propose:
+- visual-parity-migration skill
+- css-audit script
+- visual-diff hook
+
+### 5. Documentation
+
+Update SPEC.md and/or README.md:
+- Document new skill templates
+- Document script templates
+- Document hook templates
+- Add migration epic best practices
+
+## Validation
+
+- Run existing tests: `bats tests/`
+- Test css-audit.sh against epic 466 templates
+- Verify skill template renders correctly
+
+## Output
+
+After implementation, update PLANNING-epic-466-audit.md:
+- Mark Track 2 items as complete
+- Note any additional improvements discovered
 ```

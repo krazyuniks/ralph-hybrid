@@ -9,8 +9,10 @@ Plan a new feature for Ralph Hybrid development. Guide the user through requirem
 ## Workflow States
 
 ```
-DISCOVER → SUMMARIZE → CLARIFY → DRAFT → DECOMPOSE → GENERATE
+DISCOVER → SUMMARIZE → CLARIFY → ANALYZE → DRAFT → DECOMPOSE → GENERATE
 ```
+
+> **Note:** The ANALYZE phase detects migration/visual parity patterns and proposes skills/scripts/hooks.
 
 ---
 
@@ -145,6 +147,123 @@ Using provided description: "$ARGUMENTS"
 - 5 questions asked
 - User says "that's enough" or similar
 - All critical gaps filled
+
+---
+
+## Phase 2.5: ANALYZE
+
+**Goal:** Detect patterns in the epic that require specialized skills, scripts, or hooks.
+
+### Pattern Detection
+
+Analyze the epic description, GitHub issue, and user responses for these patterns:
+
+| Pattern | Indicators | Assets to Propose |
+|---------|------------|-------------------|
+| **Framework Migration** | "React → Jinja2", "Vue → Svelte", "migrate from X to Y" | visual-parity-migration skill, css-audit.sh, template-comparison.sh |
+| **Visual Parity** | "match existing", "same styling", "visual regression" | visual-parity-migration skill, post-iteration-visual-diff.sh hook |
+| **API Changes** | "endpoint", "REST", "GraphQL", "routes" | endpoint-validation.sh script |
+| **Large Codebase** | >50 files affected, multiple subsystems | file-inventory.sh script |
+| **CSS/Styling** | "Tailwind", "CSS variables", "dark mode" | css-audit.sh script |
+
+### Actions:
+
+#### Step 1: Scan for Patterns
+
+Look for migration keywords in epic:
+```
+migrate, migration, convert, port, rewrite, replace, from X to Y
+React, Vue, Angular, Svelte, Astro, Jinja2, HTMX
+visual parity, match styling, same look, pixel perfect
+```
+
+#### Step 2: Check Project Assets
+
+Scan for existing project-level assets:
+```bash
+# Check for existing skills/scripts/hooks in project
+ls -la .claude/skills/ 2>/dev/null || true
+ls -la .claude/scripts/ 2>/dev/null || true
+ls -la .claude/hooks/ 2>/dev/null || true
+```
+
+If project already has relevant assets, propose reusing/extending them.
+
+#### Step 3: Propose Assets
+
+If patterns detected, present recommendations:
+
+```
+Based on my analysis, I detected these patterns:
+  ✓ Framework Migration (React → Jinja2)
+  ✓ Visual Parity requirements
+
+I recommend generating these assets for this feature:
+
+SKILLS:
+  1. visual-parity-migration
+     - Enforces verbatim Tailwind class copying
+     - CSS variable audit checklist
+     - Visual regression validation steps
+
+SCRIPTS:
+  1. css-audit.sh
+     - Validates all CSS variables are defined
+     - Reports undefined variables
+
+  2. template-comparison.sh
+     - Compares source vs target classes
+
+HOOKS:
+  1. post-iteration-visual-diff.sh (optional)
+     - Screenshot comparison after each iteration
+     - Requires baseline URL
+
+Questions:
+  1. Generate these assets? [Y/n]
+  2. Additional skills needed? [describe]
+  3. Third-party resources to evaluate? [URL/repo]
+```
+
+#### Step 4: Evaluate Third-Party Suggestions
+
+If user provides URLs or repos:
+1. Fetch and analyze the resource
+2. Extract relevant patterns or configurations
+3. Recommend incorporation or explain why not
+4. Adapt patterns for this project
+
+#### Step 5: Generate Assets
+
+Create assets in the feature folder:
+```
+.ralph-hybrid/{feature}/
+├── skills/
+│   └── visual-parity-migration.md   ← Customized from template
+├── scripts/
+│   ├── css-audit.sh                  ← Customized for project
+│   └── template-comparison.sh        ← Customized for project
+└── hooks/
+    └── post-iteration-visual-diff.sh ← If visual parity enabled
+```
+
+Also generate recommended config:
+```yaml
+# .ralph-hybrid/{feature}/config.yaml
+visual_regression:
+  enabled: true
+  baseline_url: "http://localhost:4321"
+  comparison_url: "http://localhost:8010"
+  threshold: 0.05
+  pages:
+    - "/"
+    - "/library/gear"
+```
+
+### Skip Conditions:
+- No patterns detected
+- User declines all suggestions
+- Simple feature with no special requirements
 
 ---
 

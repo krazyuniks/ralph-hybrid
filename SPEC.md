@@ -142,7 +142,18 @@ ralph-hybrid/
 ├── templates/
 │   ├── prompt.md
 │   ├── prompt-tdd.md
-│   └── prd.json.example
+│   ├── prd.json.example
+│   ├── config.yaml.example
+│   ├── spec.md.example
+│   ├── skills/                 # Skill templates for pattern-based generation
+│   │   └── visual-parity-migration.md
+│   ├── scripts/                # Script templates for tool call reduction
+│   │   ├── css-audit.sh
+│   │   ├── endpoint-validation.sh
+│   │   ├── file-inventory.sh
+│   │   └── template-comparison.sh
+│   └── hooks/                  # Hook templates for automation
+│       └── post-iteration-visual-diff.sh
 ├── install.sh
 ├── uninstall.sh
 └── config.yaml.example
@@ -1702,6 +1713,104 @@ export RALPH_HOOKS_ENABLED=false
 | Deployment triggers | `on_completion` | Trigger CI/CD pipeline |
 | Error alerting | `on_error` | Page on-call engineer |
 | Custom cleanup | `post_run` | Clean up temp files |
+
+---
+
+## Template Library
+
+Ralph Hybrid includes a template library for skills, scripts, and hooks that can be customized per-feature. These templates are designed to reduce tool calls during execution and enforce best practices.
+
+### Template Types
+
+| Type | Purpose | Location |
+|------|---------|----------|
+| **Skills** | Claude instructions for specific patterns (migration, visual parity) | `templates/skills/` |
+| **Scripts** | Bash scripts that batch operations (reduce tool calls) | `templates/scripts/` |
+| **Hooks** | Pre/post iteration automation (visual regression, notifications) | `templates/hooks/` |
+
+### Available Templates
+
+#### Skills
+
+| Template | Use When | Description |
+|----------|----------|-------------|
+| `visual-parity-migration.md` | Migrating UI frameworks | Enforces verbatim class copying, CSS variable auditing, visual regression validation |
+
+#### Scripts
+
+| Template | Use When | Description |
+|----------|----------|-------------|
+| `css-audit.sh` | CSS/styling work | Audits CSS variable usage vs definitions, reports undefined variables |
+| `endpoint-validation.sh` | API/route work | Batch validates all endpoints at once, returns JSON report |
+| `file-inventory.sh` | Large features | Pre-reads relevant files by category, reduces repeated file reads |
+| `template-comparison.sh` | Framework migration | Compares source vs target class usage, reports missing classes |
+
+#### Hooks
+
+| Template | Use When | Description |
+|----------|----------|-------------|
+| `post-iteration-visual-diff.sh` | Visual parity requirements | Screenshots pages and compares against baseline, reports pixel differences |
+
+### Template Flow
+
+Templates are copied and customized per-feature during planning:
+
+```
+ralph-hybrid/templates/           ← Generic templates (this repo)
+├── skills/visual-parity-migration.md
+├── scripts/css-audit.sh
+└── hooks/post-iteration-visual-diff.sh
+
+                    │ ralph-plan detects patterns
+                    ▼
+
+.ralph-hybrid/{feature}/          ← Customized per-feature
+├── skills/visual-parity-migration.md   ← Customized for project
+├── scripts/css-audit.sh                ← Configured with project paths
+└── hooks/post-iteration-visual-diff.sh ← Configured with URLs
+```
+
+### Pattern Detection
+
+The `/ralph-hybrid-plan` command detects patterns in the epic description and proposes relevant templates:
+
+| Pattern | Detection Keywords | Proposed Assets |
+|---------|-------------------|-----------------|
+| Framework Migration | migrate, convert, port, React, Jinja2 | visual-parity skill, css-audit, template-comparison |
+| Visual Parity | match styling, same look, pixel perfect | visual-parity skill, visual-diff hook |
+| API Changes | endpoint, REST, routes | endpoint-validation script |
+| Large Codebase | many files, multiple subsystems | file-inventory script |
+
+### Script Output Format
+
+All scripts output JSON for easy parsing by Claude:
+
+```json
+{
+  "audit": "css-variables",
+  "summary": {
+    "variables_used": 15,
+    "variables_defined": 12,
+    "variables_undefined": 3,
+    "status": "fail"
+  },
+  "undefined": ["--color-bg-surface", "--color-text-primary", "--border-hover"]
+}
+```
+
+Human-readable summaries are written to stderr so Claude sees the JSON on stdout.
+
+### Tool Call Reduction
+
+The template scripts are designed to reduce tool calls:
+
+| Without Script | With Script |
+|----------------|-------------|
+| 50 curl calls (one per endpoint) | 1 endpoint-validation.sh call |
+| 19 file reads (same file repeatedly) | 1 file-inventory.sh call |
+| 30 grep commands (CSS variables) | 1 css-audit.sh call |
+
+Target: Reduce average tool calls from 74 per iteration to <50.
 
 ---
 
