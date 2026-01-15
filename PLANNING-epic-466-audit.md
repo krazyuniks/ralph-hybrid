@@ -111,6 +111,8 @@ When ralph-plan analyzes an epic, it should:
 | Visual validation hook | `ralph-hybrid/templates/hooks/` | Playwright screenshot diff template |
 | Class comparison tool | `ralph-hybrid/templates/skills/` | DOM class extraction and comparison |
 | Retrospective analysis | `ralph-hybrid` command | Post-epic analysis of tool/token/task patterns |
+| Asset promotion | `ralph-hybrid promote` | Move feature assets to project `.claude/` |
+| Project asset inheritance | `ralph-plan` agent | Scan `.claude/` and propose reuse of existing assets |
 
 ### Phase E: Validation
 
@@ -308,6 +310,84 @@ Claude: Analyze report, decide → Logic only
 
 ---
 
+## Iterative Asset Maturation
+
+**Key insight:** We don't know we need a script/hook/skill until we're working on a feature. But these assets should benefit the whole project, not just one feature.
+
+**The learning flow:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Feature work discovers need                                │
+│  "We need a script to compare React vs Jinja2 classes"      │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Asset created at feature level                             │
+│  .ralph-hybrid/{feature}/scripts/compare-classes.sh         │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Feature completes → Retrospective                          │
+│  "This script was useful, promote to project level"         │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Asset promoted to project level                            │
+│  .claude/scripts/compare-classes.sh                         │
+│  .claude/skills/visual-migration.md                         │
+│  .claude/hooks/post-iteration-validate.sh                   │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Future features inherit project assets automatically       │
+│  ralph-plan sees existing scripts, builds on them           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Directory structure:**
+```
+project/
+├── .claude/                          # Project-level (mature, reusable)
+│   ├── scripts/                      # Promoted from features
+│   ├── skills/                       # Promoted from features
+│   ├── hooks/                        # Promoted from features
+│   └── rules/                        # Promoted from features
+│
+└── .ralph-hybrid/
+    ├── config.yaml                   # Project-level config
+    └── {feature}/                    # Feature-specific (work in progress)
+        ├── config.yaml               # Feature overrides
+        ├── scripts/                  # New scripts for this feature
+        ├── skills/                   # New skills for this feature
+        ├── hooks/                    # New hooks for this feature
+        └── retrospective.md          # What to promote
+```
+
+**Self-healing process:**
+1. **During feature:** Create assets as needed in `.ralph-hybrid/{feature}/`
+2. **Retrospective:** Identify which assets were valuable
+3. **Promotion:** Move valuable assets to `.claude/` (project level)
+4. **Refinement:** Improve promoted assets based on multiple feature experiences
+5. **Inheritance:** New features automatically get project assets + can extend
+
+**ralph-plan behavior:**
+- Scans `.claude/` for existing project assets
+- Proposes: "Project has compare-classes.sh, should we use it?"
+- If new asset needed, creates in feature directory
+- Retrospective recommends promotion
+
+**This is iterative:**
+- First feature: Creates scripts from scratch
+- Second feature: Inherits scripts, maybe improves them
+- Third feature: Mature scripts, minimal new creation
+- Project gets smarter over time
+
+---
+
 ## Retrospective Analysis
 
 **After each epic completes, run a retrospective that analyzes:**
@@ -343,8 +423,15 @@ Claude: Analyze report, decide → Logic only
 ├── Token usage summary + cost analysis
 ├── Task sizing analysis + recommendations
 ├── Rate limit incidents + settings recommendations
-└── Scripts to generate for similar future epics
+├── Scripts to generate for similar future epics
+└── Assets to promote to project level (.claude/)
 ```
+
+### 5. Asset Promotion Analysis
+- Which scripts/skills/hooks were created this feature?
+- Which were used multiple times (valuable)?
+- Which should be promoted to `.claude/` for project-wide use?
+- Which existing project assets should be improved based on learnings?
 
 **Feed back into ralph-plan:** Retrospective findings inform:
 - Default script templates for epic types
