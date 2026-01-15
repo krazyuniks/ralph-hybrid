@@ -111,8 +111,8 @@ When ralph-plan analyzes an epic, it should:
 | Visual validation hook | `ralph-hybrid/templates/hooks/` | Playwright screenshot diff template |
 | Class comparison tool | `ralph-hybrid/templates/skills/` | DOM class extraction and comparison |
 | Retrospective analysis | `ralph-hybrid` command | Post-epic analysis of tool/token/task patterns |
-| Asset promotion | `ralph-hybrid promote` | Move feature assets to project `.claude/` |
-| Project asset inheritance | `ralph-plan` agent | Scan `.claude/` and propose reuse of existing assets |
+| Asset synthesis | `ralph-hybrid synthesize` | Evaluate feature assets, refactor into project `.claude/` |
+| Project asset inheritance | `ralph-plan` agent | Scan `.claude/`, propose reuse/extension of existing assets |
 
 ### Phase E: Validation
 
@@ -310,81 +310,89 @@ Claude: Analyze report, decide → Logic only
 
 ---
 
-## Iterative Asset Maturation
+## Iterative Asset Synthesis
 
-**Key insight:** We don't know we need a script/hook/skill until we're working on a feature. But these assets should benefit the whole project, not just one feature.
+**Key insight:** We discover skill/hook/script requirements during feature work. These learnings must be synthesized back into project-level assets—not simply moved, but holistically evaluated and assimilated.
 
-**The learning flow:**
+**Why synthesis, not moving:**
+- A feature learning might slightly update an existing skill
+- One feature asset might split across two project skills
+- Multiple feature learnings might merge into one improved asset
+- Only truly novel patterns become new project assets
+
+**The synthesis flow:**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Feature work discovers need                                │
-│  "We need a script to compare React vs Jinja2 classes"      │
+│  1. DISCOVERY                                               │
+│  Feature work reveals requirement                           │
+│  → Asset created in .ralph-hybrid/{feature}/                │
 └─────────────────────────────────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Asset created at feature level                             │
-│  .ralph-hybrid/{feature}/scripts/compare-classes.sh         │
+│  2. RETROSPECTIVE                                           │
+│  Evaluate feature assets against project assets             │
+│  → What's new? What overlaps? What improves existing?       │
 └─────────────────────────────────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Feature completes → Retrospective                          │
-│  "This script was useful, promote to project level"         │
+│  3. SYNTHESIS                                               │
+│  Holistic refactor of project .claude/ configuration:       │
+│                                                             │
+│  Outcomes (not mutually exclusive):                         │
+│  • UPDATE: Enhance existing skill with new learning         │
+│  • MERGE: Combine feature asset with existing asset         │
+│  • SPLIT: Distribute learning across multiple assets        │
+│  • CREATE: Add new asset if truly novel                     │
+│  • DEPRECATE: Remove redundant assets                       │
 └─────────────────────────────────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Asset promoted to project level                            │
-│  .claude/scripts/compare-classes.sh                         │
-│  .claude/skills/visual-migration.md                         │
-│  .claude/hooks/post-iteration-validate.sh                   │
-└─────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Future features inherit project assets automatically       │
-│  ralph-plan sees existing scripts, builds on them           │
+│  4. INHERITANCE                                             │
+│  Future features receive synthesized project assets         │
+│  → Richer starting point, fewer discoveries needed          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **Directory structure:**
 ```
 project/
-├── .claude/                          # Project-level (mature, reusable)
-│   ├── scripts/                      # Promoted from features
-│   ├── skills/                       # Promoted from features
-│   ├── hooks/                        # Promoted from features
-│   └── rules/                        # Promoted from features
+├── .claude/                          # Project-level (synthesized, mature)
+│   ├── scripts/                      # Consolidated from feature learnings
+│   ├── skills/                       # Refined through multiple features
+│   ├── hooks/                        # Battle-tested automation
+│   └── rules/                        # Accumulated best practices
 │
 └── .ralph-hybrid/
-    ├── config.yaml                   # Project-level config
-    └── {feature}/                    # Feature-specific (work in progress)
-        ├── config.yaml               # Feature overrides
-        ├── scripts/                  # New scripts for this feature
-        ├── skills/                   # New skills for this feature
-        ├── hooks/                    # New hooks for this feature
-        └── retrospective.md          # What to promote
+    ├── config.yaml                   # Project-level defaults
+    └── {feature}/                    # Feature workspace (temporary)
+        ├── config.yaml               # Feature-specific overrides
+        ├── scripts/                  # Discovered during this feature
+        ├── skills/                   # Discovered during this feature
+        ├── hooks/                    # Discovered during this feature
+        └── retrospective.md          # Synthesis recommendations
 ```
 
-**Self-healing process:**
-1. **During feature:** Create assets as needed in `.ralph-hybrid/{feature}/`
-2. **Retrospective:** Identify which assets were valuable
-3. **Promotion:** Move valuable assets to `.claude/` (project level)
-4. **Refinement:** Improve promoted assets based on multiple feature experiences
-5. **Inheritance:** New features automatically get project assets + can extend
+**Synthesis evaluation criteria:**
+1. **Overlap analysis:** Does this duplicate existing project assets?
+2. **Enhancement potential:** Does this improve an existing asset?
+3. **Generalization:** Can this be made more generic for reuse?
+4. **Decomposition:** Should this be split into focused components?
+5. **Consolidation:** Should this merge with related assets?
 
 **ralph-plan behavior:**
-- Scans `.claude/` for existing project assets
-- Proposes: "Project has compare-classes.sh, should we use it?"
-- If new asset needed, creates in feature directory
-- Retrospective recommends promotion
+- Scans `.claude/` for existing project assets before planning
+- Proposes reuse: "Project has `visual-comparison.sh`—extend it?"
+- Creates feature-level assets only when project assets insufficient
+- Retrospective outputs synthesis recommendations, not move instructions
 
-**This is iterative:**
-- First feature: Creates scripts from scratch
-- Second feature: Inherits scripts, maybe improves them
-- Third feature: Mature scripts, minimal new creation
-- Project gets smarter over time
+**Maturation over time:**
+- Feature 1: Discovers patterns, creates rough assets
+- Feature 2: Refines assets, identifies overlaps
+- Feature 3: Mature synthesized assets, minimal new discovery
+- Project accumulates institutional knowledge
 
 ---
 
@@ -424,14 +432,19 @@ project/
 ├── Task sizing analysis + recommendations
 ├── Rate limit incidents + settings recommendations
 ├── Scripts to generate for similar future epics
-└── Assets to promote to project level (.claude/)
+└── Asset synthesis recommendations (update/merge/split/create/deprecate)
 ```
 
-### 5. Asset Promotion Analysis
+### 5. Asset Synthesis Analysis
 - Which scripts/skills/hooks were created this feature?
-- Which were used multiple times (valuable)?
-- Which should be promoted to `.claude/` for project-wide use?
-- Which existing project assets should be improved based on learnings?
+- Which were used multiple times (high value)?
+- How do these relate to existing project assets in `.claude/`?
+- Synthesis recommendations:
+  - UPDATE: Which project assets should be enhanced?
+  - MERGE: Which feature assets overlap with existing?
+  - SPLIT: Which assets should be decomposed?
+  - CREATE: Which are truly novel and warrant new project assets?
+  - DEPRECATE: Which project assets are now redundant?
 
 **Feed back into ralph-plan:** Retrospective findings inform:
 - Default script templates for epic types
