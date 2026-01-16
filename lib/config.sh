@@ -223,6 +223,10 @@ cfg_load() {
     export RALPH_HYBRID_THEME="${RALPH_HYBRID_THEME:-$(cfg_get_value "display.theme")}"
     export RALPH_HYBRID_THEME="${RALPH_HYBRID_THEME:-$RALPH_HYBRID_DEFAULT_THEME}"
 
+    # Logging settings
+    export RALPH_HYBRID_LOG_VERBOSITY="${RALPH_HYBRID_LOG_VERBOSITY:-$(cfg_get_value "logging.verbosity")}"
+    export RALPH_HYBRID_LOG_VERBOSITY="${RALPH_HYBRID_LOG_VERBOSITY:-$RALPH_HYBRID_DEFAULT_LOG_VERBOSITY}"
+
     log_debug "Configuration loaded"
 }
 

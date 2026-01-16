@@ -69,12 +69,19 @@ You have been given:
    - Set `passes: true` for the completed story
    - Add brief notes if relevant
 
-3. **Update progress.txt:**
+3. **Update progress.txt** (use iteration/timestamp from context above):
    ```
    ---
-   Iteration: [N]
+   Iteration: [use iteration number from context]
+   Started: [use timestamp from context]
    Story: [ID] - [Title]
    Status: complete
+
+   Changes made:
+   - [brief list of key changes]
+
+   Verification:
+   - [what was tested/verified]
    ```
 
 4. **Commit tracking files:**

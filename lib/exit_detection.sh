@@ -413,6 +413,45 @@ ed_check_api_limit() {
 }
 
 #=============================================================================
+# MCP Server Detection
+#=============================================================================
+
+# Check for MCP server failures in Claude CLI init message
+# Arguments:
+#   $1 - JSON line to check (should be init message with mcp_servers)
+# Returns:
+#   0 if MCP failures detected, 1 otherwise
+# Outputs:
+#   Names of failed MCP servers to stdout (one per line)
+ed_check_mcp_failures() {
+    local line="${1:-}"
+
+    if [[ -z "$line" ]]; then
+        return 1
+    fi
+
+    # Check if this is a JSON object with mcp_servers field
+    if ! echo "$line" | jq -e '.mcp_servers' &>/dev/null; then
+        return 1
+    fi
+
+    # Extract names of failed servers
+    local failed_servers
+    failed_servers=$(echo "$line" | jq -r '
+        .mcp_servers[]? |
+        select(.status == "failed") |
+        .name
+    ' 2>/dev/null)
+
+    if [[ -n "$failed_servers" ]]; then
+        echo "$failed_servers"
+        return 0
+    fi
+
+    return 1
+}
+
+#=============================================================================
 # Error Extraction Functions
 #=============================================================================
 

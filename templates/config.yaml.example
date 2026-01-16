@@ -79,6 +79,16 @@ display:
   theme: "default"
 
 #=============================================================================
+# Logging Settings
+#=============================================================================
+logging:
+  # Log verbosity level for iteration log files
+  # - full: Log everything (default, useful for debugging)
+  # - compact: Filter large tool results (>500 chars truncated)
+  # - minimal: Only errors, tool names, completion signals
+  verbosity: "full"
+
+#=============================================================================
 # Project-Specific Quality Checks (override in project config)
 #=============================================================================
 # IMPORTANT: Quality checks should be READ-ONLY verification commands.

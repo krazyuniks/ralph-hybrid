@@ -31,6 +31,7 @@ source "${SCRIPT_DIR}/lib/monitor.sh"
 source "${SCRIPT_DIR}/lib/hooks.sh"
 source "${SCRIPT_DIR}/lib/import.sh"
 source "${SCRIPT_DIR}/lib/lockfile.sh"
+source "${SCRIPT_DIR}/lib/log_filter.sh"
 
 #=============================================================================
 # Global Variables (set by parse_args or load_config)
@@ -965,6 +966,11 @@ _run_validate_args() {
 build_prompt() {
     local feature_dir="$1"
     local prompt_file="${2:-}"
+    local iteration_number="${3:-1}"
+
+    # Get current timestamp for progress.txt entries
+    local current_timestamp
+    current_timestamp=$(get_timestamp)
 
     local prd_file="${feature_dir}/prd.json"
     local progress_file="${feature_dir}/progress.txt"
@@ -988,6 +994,8 @@ build_prompt() {
 # CONTEXT - READ THIS FIRST
 
 **Working Directory:** \`$(pwd)\`
+**Iteration:** ${iteration_number}
+**Timestamp:** ${current_timestamp}
 
 **What's Already Done:**
 - Project structure exists (check with \`ls\` if needed, but only once)
@@ -1476,7 +1484,28 @@ _run_invoke_claude() {
             # Print empty lines to create window space
             for ((i=0; i<window_size; i++)); do echo ""; done
 
+            # Track if we've checked MCP status (only check once on init message)
+            local mcp_checked=false
+
             while IFS= read -r line; do
+                # Check for MCP server failures (only on first init message)
+                if [[ "$mcp_checked" == false ]]; then
+                    local failed_mcps
+                    if failed_mcps=$(ed_check_mcp_failures "$line"); then
+                        # Show warning outside the scrolling window
+                        printf '\e[?25h'  # Show cursor temporarily
+                        log_warn "MCP server(s) failed to start:"
+                        echo "$failed_mcps" | while IFS= read -r server; do
+                            log_warn "  - $server"
+                        done
+                        printf '\e[?25l'  # Hide cursor again
+                    fi
+                    # Mark as checked if this was an init message (has mcp_servers field)
+                    if echo "$line" | jq -e '.mcp_servers' &>/dev/null 2>&1; then
+                        mcp_checked=true
+                    fi
+                fi
+
                 # Parse JSON and extract display text
                 local display=""
                 local line_color=""
@@ -1542,6 +1571,16 @@ _run_invoke_claude() {
     set -e
 
     echo "Exit code: ${INVOKE_EXIT_CODE}" >> "$log_file"
+
+    # Apply log filtering if verbosity is not full
+    local log_verbosity="${RALPH_HYBRID_LOG_VERBOSITY:-full}"
+    if [[ "$log_verbosity" != "full" ]]; then
+        local temp_log="${log_file}.tmp"
+        lf_filter_stream "$log_verbosity" < "$log_file" > "$temp_log"
+        mv "$temp_log" "$log_file"
+        log_debug "Log filtered with verbosity: $log_verbosity"
+    fi
+
     log_info "Output saved to: ${log_file}"
 
     # Record API call
@@ -1733,9 +1772,9 @@ _run_iteration() {
     local passes_before
     passes_before=$(get_passes_state "$prd_file")
 
-    # Build prompt
+    # Build prompt (pass iteration number for timestamp context)
     local prompt_content
-    prompt_content=$(build_prompt "$feature_dir" "$RALPH_HYBRID_PROMPT_FILE")
+    prompt_content=$(build_prompt "$feature_dir" "$RALPH_HYBRID_PROMPT_FILE" "$iteration")
 
     # Ensure logs directory exists
     mkdir -p "${feature_dir}/logs"

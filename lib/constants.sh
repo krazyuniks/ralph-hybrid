@@ -234,6 +234,24 @@ readonly RALPH_HYBRID_DEFERRED_KEYWORDS="DEFERRED|SCOPE CLARIFICATION|scope chan
 readonly RALPH_HYBRID_DEFAULT_THEME="default"
 
 #=============================================================================
+# Log Verbosity Settings
+#=============================================================================
+
+# Log verbosity levels
+# - full: Log everything (default, current behavior)
+# - compact: Filter large tool results (>500 chars truncated)
+# - minimal: Only errors, tool names, completion signals
+readonly RALPH_HYBRID_LOG_LEVEL_FULL="full"
+readonly RALPH_HYBRID_LOG_LEVEL_COMPACT="compact"
+readonly RALPH_HYBRID_LOG_LEVEL_MINIMAL="minimal"
+
+# Default log verbosity
+readonly RALPH_HYBRID_DEFAULT_LOG_VERBOSITY="full"
+
+# Threshold for truncating tool results in compact mode (characters)
+readonly _RALPH_HYBRID_COMPACT_TRUNCATE_THRESHOLD=500
+
+#=============================================================================
 # Claude CLI Settings
 #=============================================================================
 
