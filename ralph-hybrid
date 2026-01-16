@@ -562,6 +562,43 @@ RALPH_SECTION
 }
 
 # Append Ralph section to CLAUDE.md if not already present
+#-----------------------------------------------------------------------------
+# Setup: Update .gitignore with ralph-hybrid ephemeral files
+#-----------------------------------------------------------------------------
+
+_setup_update_gitignore() {
+    local project_dir="$1"
+    local gitignore="${project_dir}/.gitignore"
+    local patterns=(
+        ".ralph-hybrid/**/rate_limiter.state"
+        ".ralph-hybrid/**/status.json"
+    )
+    local added=0
+
+    # Create .gitignore if it doesn't exist
+    if [[ ! -f "$gitignore" ]]; then
+        touch "$gitignore"
+    fi
+
+    # Add each pattern if not already present
+    for pattern in "${patterns[@]}"; do
+        if ! grep -qF "$pattern" "$gitignore" 2>/dev/null; then
+            echo "$pattern" >> "$gitignore"
+            added=$((added + 1))
+        fi
+    done
+
+    if [[ $added -gt 0 ]]; then
+        log_info "Added ${added} pattern(s) to .gitignore for ephemeral state files"
+    fi
+
+    return 0
+}
+
+#-----------------------------------------------------------------------------
+# Setup: Update CLAUDE.md with Ralph section
+#-----------------------------------------------------------------------------
+
 _setup_update_claude_md() {
     local project_dir="$1"
     local claude_md="${project_dir}/CLAUDE.md"
@@ -670,6 +707,9 @@ cmd_setup() {
 
     # Update CLAUDE.md with Ralph section
     _setup_update_claude_md "$project_dir"
+
+    # Update .gitignore with ephemeral state files
+    _setup_update_gitignore "$project_dir"
 
     echo ""
     log_info "Quick start:"
