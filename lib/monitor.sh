@@ -357,7 +357,8 @@ mon_start_dashboard() {
     tmux new-session -d -s "$session_name" -x "${_RALPH_HYBRID_TMUX_WINDOW_WIDTH:-160}" -y "${_RALPH_HYBRID_TMUX_WINDOW_HEIGHT:-40}"
 
     # Split window vertically (left/right)
-    tmux split-window -h -t "$session_name"
+    # Explicitly target window 0 to avoid "can't find window" errors
+    tmux split-window -h -t "${session_name}:0"
 
     # Left pane (0): Run ralph command (or placeholder)
     if [[ -n "$ralph_command" ]]; then
