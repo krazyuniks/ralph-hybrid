@@ -1837,7 +1837,44 @@ _run_iteration() {
         # Show interrupted work context
         ed_show_interrupted_context "$prd_file" "$timeout_output"
 
-        cb_record_no_progress
+        # IMPORTANT: Check prd.json even on timeout - Claude may have updated it
+        # before the timeout hit. This prevents infinite loops where work is done
+        # but progress is not detected.
+        local passes_after_timeout
+        passes_after_timeout=$(get_passes_state "$prd_file")
+
+        if cb_detect_progress "$passes_before" "$passes_after_timeout"; then
+            log_success "Progress detected despite timeout (prd.json was updated)"
+            cb_record_progress
+
+            # Also check if all stories are now complete
+            if all_stories_complete "$prd_file"; then
+                log_success "All stories complete (detected after timeout)!"
+                cb_save_state
+
+                # Execute on_completion hooks
+                if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
+                    hk_on_completion || log_warn "Some on_completion hooks failed"
+                fi
+
+                if [[ "$RALPH_HYBRID_NO_ARCHIVE" != true ]]; then
+                    echo ""
+                    read -r -p "Archive now? [y/N] " response
+                    case "$response" in
+                        [yY][eE][sS]|[yY])
+                            log_info "Archiving feature..."
+                            _run_archive_with_deferred_check "$prd_file"
+                            ;;
+                        *)
+                            log_info "Skipping archive. You can run 'ralph-hybrid archive' later."
+                            ;;
+                    esac
+                fi
+                return $RALPH_HYBRID_EXIT_COMPLETE
+            fi
+        else
+            cb_record_no_progress
+        fi
         cb_save_state
         return 0  # Continue to next iteration
     fi
