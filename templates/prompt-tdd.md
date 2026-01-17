@@ -156,6 +156,57 @@ added or modified after initial planning via `/ralph-hybrid-amend`.
 discovered new requirements or clarified existing ones. Treat amended stories
 with the same rigor as original stories.
 
+## Cleanup & Removal Stories
+
+When a story involves removing code, templates, endpoints, or features:
+
+**BEFORE removing anything:**
+1. **Trace ALL references** - grep/search for every usage of the file/function/endpoint
+2. **List dependencies explicitly** - document every file that imports, references, or uses the target
+3. **Check templates** - templates may reference routes, other templates, or static assets
+4. **Check tests** - tests may reference the code being removed
+5. **Check frontend** - Astro/React components may call backend endpoints
+
+**Removal checklist (must complete ALL):**
+```bash
+# Find all references before removing anything
+grep -r "pattern_to_remove" --include="*.py" --include="*.html" --include="*.ts" --include="*.tsx"
+
+# Example: Before removing /library/gear endpoint
+grep -r "library/gear" backend/ frontend/ tests/
+```
+
+**Remove in order:**
+1. Remove all references/usages first
+2. Remove the actual code/files last
+3. Run full test suite to verify nothing broke
+
+**Common mistakes to avoid:**
+- Removing templates but leaving endpoints that render them
+- Removing endpoints but leaving templates that link to them
+- Removing code but leaving tests that import it
+- Removing backend routes but leaving frontend calls to them
+
+## Pre-existing Test Requirement
+
+**Before implementing changes to existing features:**
+1. Run the existing test suite for the affected area FIRST
+2. Note which tests pass before your changes
+3. After changes, ALL pre-existing tests must still pass
+4. Only then add new tests for new functionality
+
+```bash
+# Run existing tests BEFORE making changes
+pytest tests/integration/backend/api/test_affected_module.py -v
+
+# Make your changes...
+
+# Run same tests AFTER - they must still pass
+pytest tests/integration/backend/api/test_affected_module.py -v
+```
+
+**Why?** Tests written in the same session test what was built, not what was needed. Pre-existing tests catch regressions.
+
 ## Rules
 
 1. **ONE story, then STOP** - Complete exactly one story, output the signal, and stop. Do NOT start the next story.
@@ -166,6 +217,8 @@ with the same rigor as original stories.
 6. **Document learnings** - Help future iterations
 7. **Read before edit** - Always read files before modifying
 8. **Treat amendments equally** - Amended stories are just as important as original stories
+9. **Trace before removing** - For cleanup stories, find ALL references before removing anything
+10. **Run existing tests first** - When modifying existing features, run pre-existing tests before and after
 
 ## Parallel Execution
 

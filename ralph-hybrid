@@ -66,7 +66,7 @@ Commands:
   kill                   Kill the Ralph process running in this project
   archive                Archive a completed feature
   restore                Restore a feature from archive
-  validate               Run preflight checks without starting loop
+  validate [--smoke]     Run preflight checks (--smoke adds HTTP health checks)
   setup                  Install Claude commands (/ralph-hybrid-plan, etc.) to project
   import <file>          Import PRD from Markdown or JSON file
   help                   Show this help message
@@ -99,7 +99,8 @@ Examples:
   ralph-hybrid run -n 30 -t 20
   ralph-hybrid status
   ralph-hybrid archive
-  ralph-hybrid validate
+  ralph-hybrid validate              # Preflight checks only
+  ralph-hybrid validate --smoke      # Preflight + HTTP health checks
   ralph-hybrid import spec.md
   ralph-hybrid import requirements.json --output ./prd.json
 
@@ -393,11 +394,22 @@ cmd_kill() {
 #=============================================================================
 
 cmd_validate() {
-    # No arguments expected - feature auto-detected from branch
-    if [[ $# -gt 0 ]]; then
-        log_error "Unknown option: $1"
-        return 1
-    fi
+    local run_smoke=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --smoke)
+                run_smoke=true
+                shift
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                echo "Usage: ralph-hybrid validate [--smoke]"
+                return 1
+                ;;
+        esac
+    done
 
     # Check git repo first
     if ! check_git_repo; then
@@ -405,8 +417,112 @@ cmd_validate() {
     fi
 
     # Run all preflight checks (feature_dir auto-detected from branch)
-    pf_run_all_checks
-    return $?
+    pf_run_all_checks || return $?
+
+    # Run smoke tests if requested
+    if [[ "$run_smoke" == true ]]; then
+        _validate_run_smoke_tests
+        return $?
+    fi
+
+    return 0
+}
+
+# Run smoke tests to verify the application is accessible
+# Detects port from docker-compose.override.yml or worktree.py
+_validate_run_smoke_tests() {
+    log_info "Running smoke tests..."
+
+    # Try to detect the backend port
+    local backend_port=""
+
+    # Method 1: docker-compose.override.yml
+    if [[ -f "docker-compose.override.yml" ]]; then
+        backend_port=$(grep -E '^\s*-\s*"?[0-9]+:8' docker-compose.override.yml 2>/dev/null | head -1 | sed -E 's/.*"?([0-9]+):.*/\1/')
+    fi
+
+    # Method 2: worktree.py output (look for backend port in output)
+    if [[ -z "$backend_port" ]] && [[ -f "./worktree.py" ]]; then
+        backend_port=$(./worktree.py 2>/dev/null | grep -i backend | grep -oE '[0-9]{4,5}' | head -1)
+    fi
+
+    # Method 3: .worktree/config or similar
+    if [[ -z "$backend_port" ]] && [[ -f ".worktree/config" ]]; then
+        backend_port=$(grep -i backend_port .worktree/config 2>/dev/null | grep -oE '[0-9]+' | head -1)
+    fi
+
+    # Fallback to common defaults
+    if [[ -z "$backend_port" ]]; then
+        log_warn "Could not detect backend port. Trying common ports..."
+        for port in 8020 8000 8080 3000; do
+            if curl -sf "http://localhost:${port}/health" >/dev/null 2>&1; then
+                backend_port=$port
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "$backend_port" ]]; then
+        log_error "Could not detect or find active backend port"
+        log_info "Ensure your application is running and port is configured"
+        return 1
+    fi
+
+    local base_url="http://localhost:${backend_port}"
+    log_info "Using backend URL: $base_url"
+
+    local failed=0
+    local passed=0
+
+    # Health check
+    echo -n "  Health check ($base_url/health)... "
+    if curl -sf "${base_url}/health" >/dev/null 2>&1; then
+        echo "✓"
+        ((passed++))
+    else
+        echo "✗"
+        ((failed++))
+    fi
+
+    # Homepage check
+    echo -n "  Homepage ($base_url/)... "
+    local http_code
+    http_code=$(curl -sf -o /dev/null -w "%{http_code}" "${base_url}/" 2>/dev/null)
+    if [[ "$http_code" == "200" ]] || [[ "$http_code" == "302" ]]; then
+        echo "✓ ($http_code)"
+        ((passed++))
+    else
+        echo "✗ ($http_code)"
+        ((failed++))
+    fi
+
+    # Check key pages if they exist (configurable via .ralph-hybrid/smoke-pages.txt)
+    local feature_dir
+    feature_dir=$(get_feature_dir 2>/dev/null) || true
+
+    if [[ -n "$feature_dir" ]] && [[ -f "${feature_dir}/smoke-pages.txt" ]]; then
+        while IFS= read -r page || [[ -n "$page" ]]; do
+            [[ -z "$page" || "$page" == \#* ]] && continue
+            echo -n "  Page ${page}... "
+            http_code=$(curl -sf -o /dev/null -w "%{http_code}" "${base_url}${page}" 2>/dev/null)
+            if [[ "$http_code" == "200" ]] || [[ "$http_code" == "302" ]] || [[ "$http_code" == "301" ]]; then
+                echo "✓ ($http_code)"
+                ((passed++))
+            else
+                echo "✗ ($http_code)"
+                ((failed++))
+            fi
+        done < "${feature_dir}/smoke-pages.txt"
+    fi
+
+    echo ""
+    if [[ $failed -eq 0 ]]; then
+        log_success "Smoke tests passed: $passed checks"
+        return 0
+    else
+        log_error "Smoke tests failed: $failed failures, $passed passed"
+        return 1
+    fi
 }
 
 #=============================================================================

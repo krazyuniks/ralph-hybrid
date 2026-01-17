@@ -137,6 +137,16 @@ Using provided description: "$ARGUMENTS"
    - "Does this depend on other features?"
    - "What external systems does it interact with?"
 
+6. **UX Decisions (REQUIRED for any UI work)**
+   - "Navigation: flat visible links or dropdown menus?"
+   - "Forms: inline validation or submit-time validation?"
+   - "Confirmations: modal dialogs or inline prompts?"
+   - "Loading states: skeleton screens, spinners, or progressive loading?"
+   - "Error display: toast notifications, inline errors, or error pages?"
+   - "Mobile: responsive design or separate mobile view?"
+
+> **IMPORTANT:** Never assume UX patterns. If the feature involves UI, you MUST ask explicit questions about navigation structure, interaction patterns, and visual feedback. Users want immediate visibility, not hidden menus, unless they specifically say otherwise.
+
 ### Question Format:
 - Ask ONE question at a time
 - Wait for response before next question
