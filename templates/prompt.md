@@ -93,6 +93,25 @@ added or modified after initial planning via `/ralph-hybrid-amend`.
 5. **Read before edit** - Always read files before modifying
 6. **Treat amendments equally** - Amended stories are just as important as original stories
 
+## Error Ownership
+
+**CRITICAL: You own ALL errors in the codebase, regardless of which story introduced them.**
+
+When quality checks fail (mypy, ruff, tests, etc.):
+- You MUST investigate and fix the errors before marking ANY story complete
+- Do NOT skip fixes because "this error was from a previous story"
+- Do NOT document errors as "Known issues" to be "fixed in subsequent stories"
+- In fresh context iterations, "previous story" is meaningless - the bug exists NOW
+
+**There is no "not my bug" in this system.** If the codebase doesn't pass quality checks, it's YOUR responsibility to fix it THIS iteration, regardless of when the bug was introduced.
+
+**If quality checks reveal errors:**
+1. Fix ALL errors before committing
+2. If the errors are outside your story's scope, still fix them
+3. Only proceed to commit when ALL quality checks pass
+
+**The rule "Never commit broken code" means exactly that** - if there are ANY errors (type errors, lint errors, test failures), you must fix them before committing, even if you didn't introduce them.
+
 ## If Blocked
 
 If you cannot complete a story:
