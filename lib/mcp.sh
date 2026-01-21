@@ -29,6 +29,132 @@ fi
 # MCP Configuration Functions
 #=============================================================================
 
+# Find .mcp.json file in current directory or parent directories
+# Arguments:
+#   $1 - starting directory (optional, defaults to pwd)
+# Returns:
+#   Path to .mcp.json if found, empty string otherwise
+# Usage:
+#   mcp_file=$(mcp_find_config_file)
+mcp_find_config_file() {
+    local start_dir="${1:-$(pwd)}"
+    local dir="$start_dir"
+
+    while [[ "$dir" != "/" ]]; do
+        if [[ -f "$dir/.mcp.json" ]]; then
+            echo "$dir/.mcp.json"
+            return 0
+        fi
+        dir=$(dirname "$dir")
+    done
+
+    return 1
+}
+
+# Get server config from .mcp.json file
+# Arguments:
+#   $1 - server name
+#   $2 - path to .mcp.json file
+# Returns:
+#   JSON object for the server config
+# Usage:
+#   server_json=$(mcp_get_server_from_file "playwright" "/path/to/.mcp.json")
+mcp_get_server_from_file() {
+    local server_name="$1"
+    local mcp_file="$2"
+
+    if [[ ! -f "$mcp_file" ]]; then
+        return 1
+    fi
+
+    local server_config
+    server_config=$(deps_jq -c ".mcpServers.\"$server_name\"" "$mcp_file" 2>/dev/null)
+
+    if [[ -z "$server_config" ]] || [[ "$server_config" == "null" ]]; then
+        return 1
+    fi
+
+    echo "$server_config"
+    return 0
+}
+
+# Parse output from 'claude mcp get <server>' into JSON config
+# Only used for globally installed servers (not .mcp.json based)
+# Arguments:
+#   $1 - server name
+# Returns:
+#   JSON object for the server config, or empty string if not found
+# Usage:
+#   server_json=$(mcp_parse_server_config "playwright")
+mcp_parse_server_config() {
+    local server_name="$1"
+    local get_output
+
+    # Get server details
+    if ! get_output=$(claude mcp get "$server_name" 2>/dev/null); then
+        return 1
+    fi
+
+    # Check if server exists (output should start with server name)
+    if ! echo "$get_output" | grep -q "^${server_name}:"; then
+        return 1
+    fi
+
+    # Parse the output - extract Type, Command, Args, Environment
+    local server_type command args env_vars
+    server_type=$(echo "$get_output" | grep -E "^\s+Type:" | sed 's/.*Type:\s*//' | tr -d '[:space:]')
+    command=$(echo "$get_output" | grep -E "^\s+Command:" | sed 's/.*Command:\s*//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    args=$(echo "$get_output" | grep -E "^\s+Args:" | sed 's/.*Args:\s*//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+    # Handle HTTP/SSE servers (they have URL instead of Command/Args)
+    local url
+    url=$(echo "$get_output" | grep -E "^\s+URL:" | sed 's/.*URL:\s*//')
+
+    # Build JSON based on server type
+    local json_config
+    if [[ "$server_type" == "stdio" ]]; then
+        # stdio server: command + args
+        if [[ -z "$command" ]]; then
+            # No command found - likely a .mcp.json based server
+            return 1
+        fi
+        json_config="{\"command\":\"$command\""
+        if [[ -n "$args" ]]; then
+            # Convert space-separated args to JSON array
+            local args_array="["
+            local first_arg=true
+            for arg in $args; do
+                if [[ "$first_arg" == "true" ]]; then
+                    first_arg=false
+                else
+                    args_array+=","
+                fi
+                # Escape quotes in arg
+                arg="${arg//\"/\\\"}"
+                args_array+="\"$arg\""
+            done
+            args_array+="]"
+            json_config+=",\"args\":$args_array"
+        fi
+        json_config+="}"
+    elif [[ "$server_type" == "sse" ]] || [[ "$server_type" == "http" ]]; then
+        # SSE/HTTP server: url
+        json_config="{\"url\":\"$url\"}"
+    else
+        # Unknown type, try to build basic config
+        if [[ -n "$command" ]]; then
+            json_config="{\"command\":\"$command\"}"
+        elif [[ -n "$url" ]]; then
+            json_config="{\"url\":\"$url\"}"
+        else
+            return 1
+        fi
+    fi
+
+    echo "$json_config"
+    return 0
+}
+
 # Build --mcp-config JSON for specified servers
 # Arguments:
 #   $1 - JSON array of server names (e.g., ["playwright", "chrome-devtools"])
@@ -46,12 +172,9 @@ mcp_build_config() {
         return 0
     fi
 
-    # Get list of configured MCP servers from claude CLI
-    local mcp_list_output
-    if ! mcp_list_output=$(claude mcp list --json 2>/dev/null); then
-        log_error "Failed to get MCP server list from 'claude mcp list --json'"
-        return 1
-    fi
+    # Try to find .mcp.json file first
+    local mcp_file=""
+    mcp_file=$(mcp_find_config_file 2>/dev/null) || true
 
     # Build the mcpServers object
     local mcp_config='{"mcpServers":{'
@@ -62,13 +185,21 @@ mcp_build_config() {
     while IFS= read -r server; do
         [[ -z "$server" ]] && continue
 
-        # Get server config from the mcp list output
-        local server_info
-        server_info=$(echo "$mcp_list_output" | deps_jq -c ".\"$server\"" 2>/dev/null)
+        local server_info=""
 
-        if [[ -z "$server_info" ]] || [[ "$server_info" == "null" ]]; then
-            log_error "MCP server '$server' not found in 'claude mcp list'"
-            log_error "Available servers: $(echo "$mcp_list_output" | deps_jq -r 'keys | join(", ")' 2>/dev/null || echo "(none)")"
+        # First try to get from .mcp.json file
+        if [[ -n "$mcp_file" ]]; then
+            server_info=$(mcp_get_server_from_file "$server" "$mcp_file" 2>/dev/null) || true
+        fi
+
+        # Fall back to parsing 'claude mcp get' output for global servers
+        if [[ -z "$server_info" ]]; then
+            server_info=$(mcp_parse_server_config "$server" 2>/dev/null) || true
+        fi
+
+        if [[ -z "$server_info" ]]; then
+            log_error "MCP server '$server' not found or not configured"
+            log_error "Available servers: $(mcp_list_available | tr '\n' ', ' | sed 's/,$//')"
             log_error "Add with: claude mcp add $server <command>"
             has_error=true
             continue
