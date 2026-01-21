@@ -1630,8 +1630,9 @@ _run_invoke_claude() {
     if [[ -n "$story_mcp_servers" ]] && [[ "$story_mcp_servers" != "null" ]]; then
         local mcp_config
         if mcp_config=$(mcp_build_config "$story_mcp_servers"); then
-            # Use shell-safe escaping for the JSON config
-            claude_args+=" --strict-mcp-config --mcp-config '${mcp_config}'"
+            # Note: mcp_config is compact JSON (no spaces), so no quoting needed
+            # when word-splitting $claude_args - quotes would be literal characters
+            claude_args+=" --strict-mcp-config --mcp-config ${mcp_config}"
             if [[ "$story_mcp_servers" != "[]" ]]; then
                 log_debug "Using story-level MCP servers: $story_mcp_servers"
             else
