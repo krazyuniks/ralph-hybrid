@@ -1658,10 +1658,14 @@ _run_invoke_claude() {
     # Use stream-json for real-time visibility, tee to log file
     # Parse JSON stream to show activity while also saving raw output
     # Run in background to allow proper signal handling
+    # NOTE: set -f disables glob expansion to prevent {} and [] in MCP JSON
+    # from being interpreted as brace/glob patterns
     (
+        set -f  # Disable glob expansion for MCP JSON
         echo "$prompt_content" | $timeout_cmd "${RALPH_HYBRID_TIMEOUT_MINUTES}m" \
             claude -p $claude_args --output-format stream-json --verbose 2>&1 | \
             tee -a "$log_file"
+        set +f  # Re-enable glob expansion
     ) | \
         {
             # Scrolling window - keep last N lines visible
