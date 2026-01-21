@@ -152,11 +152,12 @@ prd_get_current_story_model() {
 }
 
 # Get MCP servers for current story (first incomplete story)
-# Returns JSON array (e.g., ["playwright"]) or empty array
+# Returns JSON value: null if not specified, [] if explicitly empty, or array of servers
 # Usage: prd_get_current_story_mcp_servers "prd.json"
 prd_get_current_story_mcp_servers() {
     local file="$1"
-    deps_jq -c '[.userStories[] | select(.passes == false)][0].mcpServers // []' "$file"
+    # Don't use // default - we need to distinguish null (use global) from [] (no MCP)
+    deps_jq -c '[.userStories[] | select(.passes == false)][0].mcpServers' "$file"
 }
 
 # Check if stories are completed in sequential order (no gaps)
