@@ -108,3 +108,53 @@ Use BATS (Bash Automated Testing System). Test cases defined in SPEC.md section 
 bats tests/unit/
 bats tests/integration/
 ```
+
+---
+
+## Ralph Hybrid (Autonomous Development)
+
+For complex features, use Ralph Hybrid to run autonomous development loops.
+
+### Workflow
+
+```
+1. Plan:  /ralph-hybrid-plan "description"   (in Claude Code)
+2. Run:   ralph-hybrid run                    (in terminal)
+```
+
+### When to Use Ralph
+
+- Multi-story features (3+ related tasks)
+- Features derived from GitHub issues
+- Work that benefits from TDD iteration
+- When you want autonomous implementation with human checkpoints
+
+### Commands
+
+| Command | Where | Purpose |
+|---------|-------|---------|
+| `/ralph-hybrid-plan` | Claude Code | Interactive planning, creates spec.md + prd.json |
+| `/ralph-hybrid-plan --regenerate` | Claude Code | Regenerate prd.json from updated spec.md |
+| `/ralph-hybrid-amend` | Claude Code | Modify requirements mid-implementation |
+| `ralph-hybrid run` | Terminal | Execute autonomous loop |
+| `ralph-hybrid run --monitor` | Terminal | Run with tmux dashboard |
+| `ralph-hybrid status` | Terminal | Show feature progress |
+
+### Example: GitHub Issue to Implementation
+
+```bash
+# 1. Create branch from issue number
+git checkout -b 42-user-authentication
+
+# 2. Plan (Claude auto-fetches issue #42 context)
+/ralph-hybrid-plan
+
+# 3. Run autonomous loop
+ralph-hybrid run --monitor
+```
+
+### Key Concepts
+
+- **Fresh context per iteration**: Each loop iteration starts Claude fresh
+- **Memory in files**: prd.json tracks story completion, progress.txt logs history
+- **Branch = feature folder**: `.ralph-hybrid/{branch-name}/` holds all state
