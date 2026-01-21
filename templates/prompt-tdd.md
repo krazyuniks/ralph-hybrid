@@ -230,6 +230,23 @@ When you have multiple independent tasks (e.g., searching for patterns, explorin
 
 This keeps your main context focused and speeds up execution.
 
+## Infrastructure Bug Policy
+
+If you encounter infrastructure issues (missing dependencies, unavailable services, configuration errors), you MUST fix them. Any bug from prior iterations is still our bug.
+
+**Fixable infrastructure issues:**
+- Missing npm/pip packages → install them
+- Misconfigured environment → fix the config
+- Broken build/test setup → repair it
+- MCP server not responding → troubleshoot connection
+
+**If an infrastructure issue CANNOT be fixed** (requires external action, missing credentials, service unavailable):
+1. Document the blocker clearly in progress.txt
+2. Output: `<promise>BLOCKED: [specific reason]</promise>`
+3. Do NOT attempt workarounds that produce sub-par results
+
+**Fail fast. Fail hard.** Don't waste context on doomed attempts.
+
 ## If Blocked
 
 If you cannot complete a story:

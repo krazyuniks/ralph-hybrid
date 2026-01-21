@@ -143,6 +143,22 @@ prd_get_current_story_title() {
     deps_jq -r '[.userStories[] | select(.passes == false)][0].title // ""' "$file"
 }
 
+# Get model for current story (first incomplete story)
+# Returns empty string if not specified
+# Usage: prd_get_current_story_model "prd.json"
+prd_get_current_story_model() {
+    local file="$1"
+    deps_jq -r '[.userStories[] | select(.passes == false)][0].model // ""' "$file"
+}
+
+# Get MCP servers for current story (first incomplete story)
+# Returns JSON array (e.g., ["playwright"]) or empty array
+# Usage: prd_get_current_story_mcp_servers "prd.json"
+prd_get_current_story_mcp_servers() {
+    local file="$1"
+    deps_jq -c '[.userStories[] | select(.passes == false)][0].mcpServers // []' "$file"
+}
+
 # Check if stories are completed in sequential order (no gaps)
 # Returns 0 if sequential, 1 if there are gaps
 # Usage: prd_check_sequential_completion "prd.json"

@@ -32,6 +32,7 @@ source "${SCRIPT_DIR}/lib/hooks.sh"
 source "${SCRIPT_DIR}/lib/import.sh"
 source "${SCRIPT_DIR}/lib/lockfile.sh"
 source "${SCRIPT_DIR}/lib/log_filter.sh"
+source "${SCRIPT_DIR}/lib/mcp.sh"
 
 #=============================================================================
 # Global Variables (set by parse_args or load_config)
@@ -1603,9 +1604,44 @@ _run_invoke_claude() {
     # while --dangerously-skip-permissions causes hangs
     local claude_args="--permission-mode bypassPermissions"
 
-    # Add model if specified
-    if [[ -n "${RALPH_HYBRID_MODEL:-}" ]]; then
-        claude_args+=" --model ${RALPH_HYBRID_MODEL}"
+    # Get per-story configuration from prd.json (if available)
+    local story_model=""
+    local story_mcp_servers=""
+
+    if [[ -f "$RUN_PRD_FILE" ]]; then
+        story_model=$(prd_get_current_story_model "$RUN_PRD_FILE")
+        story_mcp_servers=$(prd_get_current_story_mcp_servers "$RUN_PRD_FILE")
+    fi
+
+    # Model: story-level overrides CLI arg
+    local effective_model="${story_model:-${RALPH_HYBRID_MODEL:-}}"
+    if [[ -n "$effective_model" ]]; then
+        claude_args+=" --model ${effective_model}"
+        if [[ -n "$story_model" ]]; then
+            log_debug "Using story-level model: $story_model"
+        fi
+    fi
+
+    # MCP: if story specifies servers, use strict mode with only those servers
+    # Three modes:
+    #   - No mcpServers field: use global MCP config (no --strict-mcp-config)
+    #   - mcpServers: []: explicitly no MCP (--strict-mcp-config with empty config)
+    #   - mcpServers: ["x"]: only specified servers (--strict-mcp-config with config)
+    if [[ -n "$story_mcp_servers" ]] && [[ "$story_mcp_servers" != "null" ]]; then
+        local mcp_config
+        if mcp_config=$(mcp_build_config "$story_mcp_servers"); then
+            # Use shell-safe escaping for the JSON config
+            claude_args+=" --strict-mcp-config --mcp-config '${mcp_config}'"
+            if [[ "$story_mcp_servers" != "[]" ]]; then
+                log_debug "Using story-level MCP servers: $story_mcp_servers"
+            else
+                log_debug "Story explicitly disables MCP servers"
+            fi
+        else
+            log_error "Failed to build MCP config for story - check that servers are configured"
+            INVOKE_EXIT_CODE=1
+            return 1
+        fi
     fi
 
     # Run Claude with timeout and real-time output

@@ -387,6 +387,64 @@ pf_check_spec_structure() {
     return 0
 }
 
+# Check: Story-level infrastructure (models and MCP servers)
+# Args: feature_dir
+# Returns: 0 if valid, 1 if invalid (hard fail for missing infrastructure)
+pf_check_story_infrastructure() {
+    local feature_dir="$1"
+    local prd_file="${feature_dir}/prd.json"
+    local errors=0
+
+    # File existence should already be checked
+    if [[ ! -f "$prd_file" ]]; then
+        return 0
+    fi
+
+    # Check models - validate any specified model names
+    local models
+    models=$(jq -r '.userStories[].model // empty' "$prd_file" 2>/dev/null | sort -u) || true
+
+    for model in $models; do
+        [[ -z "$model" ]] && continue
+        case "$model" in
+            opus|sonnet|haiku|claude-*)
+                # Valid model names
+                ;;
+            *)
+                pf_error "Story config error: Unknown model '$model'"
+                pf_error "  Valid models: opus, sonnet, haiku, or full claude-* name"
+                errors=$((errors + 1))
+                ;;
+        esac
+    done
+
+    # Check MCP servers - must be in 'claude mcp list'
+    local available_mcps
+    available_mcps=$(claude mcp list 2>/dev/null | grep -oE '^[a-zA-Z0-9_-]+:' | sed 's/:$//' || true)
+
+    local story_mcps
+    story_mcps=$(jq -r '.userStories[].mcpServers[]? // empty' "$prd_file" 2>/dev/null | sort -u) || true
+
+    for mcp in $story_mcps; do
+        [[ -z "$mcp" ]] && continue
+        if ! echo "$available_mcps" | grep -qx "$mcp"; then
+            pf_error "Story config error: MCP server '$mcp' not configured"
+            if [[ -n "$available_mcps" ]]; then
+                pf_error "  Available servers: $(echo "$available_mcps" | tr '\n' ' ')"
+            else
+                pf_error "  No MCP servers configured"
+            fi
+            pf_error "  Add with: claude mcp add $mcp <command>"
+            errors=$((errors + 1))
+        fi
+    done
+
+    if [[ $errors -gt 0 ]]; then
+        return 1
+    fi
+    return 0
+}
+
 #=============================================================================
 # Main Preflight Function
 #=============================================================================
@@ -465,6 +523,23 @@ pf_run_all_checks() {
             echo "✓ prd.json schema valid"
         else
             echo "✗ prd.json schema invalid"
+        fi
+
+        # Check story-level infrastructure (models and MCP servers)
+        local errors_before_infra=${#_PREFLIGHT_ERRORS[@]}
+        if pf_check_story_infrastructure "$feature_dir"; then
+            # Check if any stories have model/mcp config
+            local has_story_config
+            has_story_config=$(jq -r '[.userStories[] | select(.model != null or .mcpServers != null)] | length' "${feature_dir}/prd.json" 2>/dev/null || echo "0")
+            if [[ "$has_story_config" -gt 0 ]]; then
+                echo "✓ Story infrastructure valid ($has_story_config stories with custom config)"
+            fi
+        else
+            echo "✗ Story infrastructure check failed"
+            # Show infrastructure errors
+            for ((i=errors_before_infra; i<${#_PREFLIGHT_ERRORS[@]}; i++)); do
+                echo "    ${_PREFLIGHT_ERRORS[$i]}"
+            done
         fi
     fi
 

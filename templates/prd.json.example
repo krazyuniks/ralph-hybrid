@@ -4,43 +4,61 @@
   "userStories": [
     {
       "id": "STORY-001",
-      "title": "First user story title",
-      "description": "As a [user type], I want [goal] so that [benefit]",
+      "title": "Create data model and API",
+      "description": "As a developer, I want a user data model so that I can persist user information",
       "acceptanceCriteria": [
-        "First testable criterion",
-        "Second testable criterion",
-        "Third testable criterion"
+        "User model validates required fields",
+        "Unit tests pass for all CRUD operations",
+        "Integration test confirms database persistence"
       ],
       "priority": 1,
       "passes": false,
-      "notes": ""
+      "notes": "Backend story - no MCP needed",
+      "mcpServers": []
     },
     {
       "id": "STORY-002",
-      "title": "Second user story title",
-      "description": "As a [user type], I want [goal] so that [benefit]",
+      "title": "Build user profile UI component",
+      "description": "As a user, I want to view my profile so that I can see my account information",
       "acceptanceCriteria": [
-        "First testable criterion",
-        "Second testable criterion"
+        "Component renders without console errors",
+        "Network requests to /api/user return 200",
+        "No JavaScript exceptions in console"
       ],
       "priority": 2,
       "passes": false,
-      "notes": "",
-      "spec_ref": "specs/api-design.spec.md"
+      "notes": "UI Development - use Chrome DevTools for debugging",
+      "model": "sonnet",
+      "mcpServers": ["chrome-devtools"]
     },
     {
       "id": "STORY-003",
-      "title": "Write tests for feature",
-      "description": "Ensure the feature is properly tested",
+      "title": "Write E2E tests for user profile flow",
+      "description": "As a QA engineer, I want automated tests so that user flows are validated",
       "acceptanceCriteria": [
-        "Unit tests cover core logic",
-        "Integration tests verify API behavior",
-        "Edge cases are tested"
+        "E2E test: user can view profile",
+        "E2E test: user can edit and save profile",
+        "All Playwright tests pass"
       ],
       "priority": 3,
       "passes": false,
-      "notes": "",
-      "spec_ref": "specs/validation.spec.md"
+      "notes": "UI Testing - use Playwright MCP server",
+      "mcpServers": ["playwright"],
+      "spec_ref": "specs/e2e-tests.spec.md"
+    },
+    {
+      "id": "STORY-004",
+      "title": "Complex algorithm implementation",
+      "description": "As a developer, I want optimized data processing so that performance is improved",
+      "acceptanceCriteria": [
+        "Algorithm passes all test cases",
+        "Performance benchmarks meet targets",
+        "Code review approved"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Complex story - use opus model for better reasoning",
+      "model": "opus"
     }
   ]
 }

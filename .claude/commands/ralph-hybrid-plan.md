@@ -419,7 +419,7 @@ github_issue: {number or null}
 
 ## Phase 4: DECOMPOSE
 
-**Goal:** Break spec into properly-sized stories.
+**Goal:** Break spec into properly-sized stories with appropriate infrastructure config.
 
 ### Story Sizing Rule:
 > Each story must be completable in ONE Ralph iteration (one context window).
@@ -439,12 +439,68 @@ STORY-003: Write tests for user login
 STORY-004: Implement user login (blocked by STORY-003)
 ```
 
+### Per-Story Model and MCP Configuration
+
+Stories can specify custom model and MCP server configurations. This allows different stories to use different resources based on their needs.
+
+#### Story Categories and MCP Mapping
+
+| Category | MCP Servers | Validation Methods |
+|----------|-------------|-------------------|
+| **Backend/Data** (models, APIs, business logic) | `[]` (none) | Unit tests, integration tests, shell commands |
+| **Documentation** (docs, specs, configs) | `[]` (none) | File existence, linting, format validation |
+| **UI Development** (components, styling, layouts) | `["chrome-devtools"]` | Console checks, network inspection, visual review |
+| **UI Testing** (E2E tests, user flows) | `["playwright"]` | Playwright test execution |
+| **UI Debugging** (fixing UI bugs, performance) | `["chrome-devtools"]` | Console logs, network tab, performance traces |
+
+#### MCP Modes
+
+Three modes for MCP configuration per story:
+
+1. **No `mcpServers` field**: Uses global MCP config (all enabled servers available)
+2. **`mcpServers: []`**: Explicitly disables all MCP (--strict-mcp-config with empty config)
+3. **`mcpServers: ["playwright"]`**: Only specified servers available (--strict-mcp-config)
+
+#### Planning Flow
+
+For each story during decomposition:
+
+1. **Classify the story type** based on description and acceptance criteria
+2. **Auto-suggest MCP servers** based on category
+3. **Optionally set model** (opus for complex, sonnet for simpler work)
+4. **Ensure acceptance criteria match MCP capabilities**:
+   - If AC mentions "console errors" → needs `chrome-devtools`
+   - If AC mentions "network requests" → needs `chrome-devtools`
+   - If AC mentions "E2E test" or "Playwright" → needs `playwright`
+   - If AC is pure code/tests → no MCP needed
+
+#### Acceptance Criteria Guidelines by MCP
+
+**No MCP (`mcpServers: []`):**
+- "Unit tests pass"
+- "Integration tests pass"
+- "API returns correct response"
+- "Data model validates"
+- "File exists and is valid"
+
+**Chrome DevTools (`mcpServers: ["chrome-devtools"]`):**
+- "No console errors"
+- "Network requests return 200"
+- "Performance trace shows no blocking calls"
+- "DOM element renders correctly"
+
+**Playwright (`mcpServers: ["playwright"]`):**
+- "E2E test passes"
+- "User can complete flow X"
+- "UI interaction test validates"
+
 ### Actions:
 1. Review each story for size
 2. Split oversized stories
 3. Add explicit test stories if needed
 4. Verify dependencies are clear
-5. Update spec.md with final stories
+5. **Classify each story and assign model/mcpServers as needed**
+6. Update spec.md with final stories
 
 ---
 
@@ -475,13 +531,17 @@ STORY-004: Implement user login (blocked by STORY-003)
       ],
       "priority": 1,
       "passes": false,
-      "notes": ""
+      "notes": "",
+      "model": "opus",                    // OPTIONAL: Override model (opus, sonnet, haiku)
+      "mcpServers": ["playwright"]        // OPTIONAL: MCP servers for this story
     }
   ]
 }
 ```
 
 > **Note:** No `feature` or `branchName` fields - the feature is identified by the folder path, which is derived from the git branch.
+
+> **Per-story config fields are optional.** Only include `model` if overriding the default. Only include `mcpServers` if the story needs specific MCP tools (or `[]` to explicitly disable MCP).
 
 4. Initialize empty `progress.txt`:
 

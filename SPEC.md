@@ -1030,7 +1030,9 @@ The prd.json file is a **derived artifact** generated from spec.md by `/ralph-hy
       "priority": "number (1=highest)",
       "passes": "boolean",
       "notes": "string",
-      "spec_ref": "string (optional, path to detailed spec)"
+      "spec_ref": "string (optional, path to detailed spec)",
+      "model": "string (optional, e.g., opus, sonnet, haiku)",
+      "mcpServers": ["string"] // optional, MCP server names
     }
   ]
 }
@@ -1051,6 +1053,8 @@ The prd.json file is a **derived artifact** generated from spec.md by `/ralph-hy
 | `userStories[].passes` | boolean | Yes | Completion status (updated by Claude) |
 | `userStories[].notes` | string | No | Agent notes, blockers |
 | `userStories[].spec_ref` | string | No | Path to detailed spec file (e.g., "specs/validation.spec.md") |
+| `userStories[].model` | string | No | Claude model for this story (opus, sonnet, haiku, or full claude-* name). Overrides CLI `--model` flag. |
+| `userStories[].mcpServers` | array | No | MCP server names for this story. Empty array `[]` = no MCP. Omitted = use global config. |
 | `userStories[].amendment` | object | No | Amendment metadata (if added/modified via /ralph-hybrid-amend) |
 | `userStories[].amendment.id` | string | Yes* | Amendment ID (e.g., AMD-001) |
 | `userStories[].amendment.type` | string | Yes* | "add", "correct", or "remove" |
@@ -1059,6 +1063,66 @@ The prd.json file is a **derived artifact** generated from spec.md by `/ralph-hy
 | `userStories[].amendment.changes` | object | No | For corrections: before/after values |
 
 *Required if `amendment` object is present
+
+### Per-Story Model and MCP Configuration
+
+Stories can optionally specify custom Claude model and MCP server configurations, allowing different stories to use different resources based on their complexity and requirements.
+
+#### Model Configuration
+
+The `model` field overrides the CLI `--model` flag for a specific story:
+
+```json
+{
+  "id": "STORY-001",
+  "title": "Complex algorithm",
+  "model": "opus",  // Use opus for complex reasoning
+  ...
+}
+```
+
+**Precedence:** story-level `model` > CLI `--model` flag > default
+
+**Valid values:** `opus`, `sonnet`, `haiku`, or full model names like `claude-opus-4-5-20251101`
+
+#### MCP Server Configuration
+
+The `mcpServers` field controls which MCP servers are available during story execution:
+
+| Configuration | Behavior |
+|--------------|----------|
+| Field omitted | Uses global MCP config (all enabled servers) |
+| `"mcpServers": []` | Explicitly disables all MCP servers |
+| `"mcpServers": ["playwright"]` | Only specified servers available |
+
+When `mcpServers` is specified (including empty array), Ralph uses `--strict-mcp-config` to restrict available servers.
+
+**Example configurations:**
+
+```json
+// Backend story - no MCP needed
+{
+  "id": "STORY-001",
+  "title": "Create data model",
+  "mcpServers": []
+}
+
+// UI testing story - only Playwright
+{
+  "id": "STORY-002",
+  "title": "Write E2E tests",
+  "mcpServers": ["playwright"]
+}
+
+// UI debugging - Chrome DevTools
+{
+  "id": "STORY-003",
+  "title": "Fix console errors",
+  "mcpServers": ["chrome-devtools"]
+}
+```
+
+**MCP server names** must match servers registered with `claude mcp add`. Preflight validation ensures all specified servers are configured.
 
 ---
 
