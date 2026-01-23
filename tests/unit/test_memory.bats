@@ -431,3 +431,351 @@ EOF
 @test "RALPH_HYBRID_MEMORY_FILE constant is memories.md" {
     [[ "$RALPH_HYBRID_MEMORY_FILE" == "memories.md" ]]
 }
+
+#=============================================================================
+# write_memory Tests
+#=============================================================================
+
+@test "write_memory creates file if not exists" {
+    local new_dir="$TEST_TEMP_DIR/new_feature"
+    mkdir -p "$new_dir"
+    write_memory "$new_dir" "Patterns" "Test pattern entry"
+    [[ -f "$new_dir/memories.md" ]]
+}
+
+@test "write_memory adds entry to correct category" {
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "Use dependency injection"
+    local content
+    content=$(cat "$TEST_FEATURE_DIR/memories.md")
+    [[ "$content" == *"Use dependency injection"* ]]
+}
+
+@test "write_memory adds timestamp to entry" {
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Fixes" "Fixed null pointer"
+    local content
+    content=$(cat "$TEST_FEATURE_DIR/memories.md")
+    # Check for timestamp format [YYYY-MM-DDTHH:MM:SSZ]
+    [[ "$content" =~ \[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\] ]]
+}
+
+@test "write_memory adds tags when provided" {
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "API pattern" "api,rest,http"
+    local content
+    content=$(cat "$TEST_FEATURE_DIR/memories.md")
+    [[ "$content" == *"[tags: api,rest,http]"* ]]
+}
+
+@test "write_memory rejects empty directory" {
+    run write_memory "" "Patterns" "Content"
+    [[ "$status" -ne 0 ]]
+}
+
+@test "write_memory rejects empty category" {
+    run write_memory "$TEST_FEATURE_DIR" "" "Content"
+    [[ "$status" -ne 0 ]]
+}
+
+@test "write_memory rejects empty content" {
+    run write_memory "$TEST_FEATURE_DIR" "Patterns" ""
+    [[ "$status" -ne 0 ]]
+}
+
+@test "write_memory rejects invalid category" {
+    run write_memory "$TEST_FEATURE_DIR" "InvalidCategory" "Content"
+    [[ "$status" -ne 0 ]]
+}
+
+@test "write_memory works with all valid categories" {
+    for category in Patterns Decisions Fixes Context; do
+        memory_create_template "$TEST_FEATURE_DIR/memories.md"
+        run write_memory "$TEST_FEATURE_DIR" "$category" "Entry for $category"
+        [[ "$status" -eq 0 ]]
+        rm -f "$TEST_FEATURE_DIR/memories.md"
+    done
+}
+
+@test "write_memory to project-wide memory file" {
+    mkdir -p "$TEST_PROJECT_ROOT/.ralph-hybrid"
+    write_memory "$TEST_PROJECT_ROOT" "Patterns" "Project-wide pattern"
+    [[ -f "$TEST_PROJECT_ROOT/.ralph-hybrid/memories.md" ]]
+    local content
+    content=$(cat "$TEST_PROJECT_ROOT/.ralph-hybrid/memories.md")
+    [[ "$content" == *"Project-wide pattern"* ]]
+}
+
+@test "write_memory multiple entries to same category" {
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "First pattern"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "Second pattern"
+    local content
+    content=$(cat "$TEST_FEATURE_DIR/memories.md")
+    [[ "$content" == *"First pattern"* ]]
+    [[ "$content" == *"Second pattern"* ]]
+}
+
+#=============================================================================
+# Tag-based Filtering Tests
+#=============================================================================
+
+@test "memory_filter_by_tags returns all when no tags specified" {
+    local content="Some memory content"
+    local result
+    result=$(memory_filter_by_tags "$content" "")
+    [[ "$result" == *"Some memory content"* ]]
+}
+
+@test "memory_filter_by_tags filters by single tag" {
+    local content='## Patterns
+
+- [2024-01-01T00:00:00Z] [tags: api,rest] API pattern
+- [2024-01-01T00:00:00Z] [tags: database] DB pattern'
+
+    local result
+    result=$(memory_filter_by_tags "$content" "api")
+    [[ "$result" == *"API pattern"* ]]
+    [[ "$result" != *"DB pattern"* ]]
+}
+
+@test "memory_filter_by_tags filters by multiple tags" {
+    local content='## Patterns
+
+- [2024-01-01T00:00:00Z] [tags: api] API pattern
+- [2024-01-01T00:00:00Z] [tags: database] DB pattern
+- [2024-01-01T00:00:00Z] [tags: security] Security pattern'
+
+    local result
+    result=$(memory_filter_by_tags "$content" "api,database")
+    [[ "$result" == *"API pattern"* ]]
+    [[ "$result" == *"DB pattern"* ]]
+    [[ "$result" != *"Security pattern"* ]]
+}
+
+@test "memory_filter_by_tags returns empty for no matches" {
+    local content='## Patterns
+
+- [2024-01-01T00:00:00Z] [tags: api] API pattern'
+
+    local result
+    result=$(memory_filter_by_tags "$content" "nonexistent")
+    [[ -z "$(echo "$result" | tr -d '[:space:]')" ]] || [[ "$result" != *"API pattern"* ]]
+}
+
+@test "memory_get_all_tags extracts unique tags" {
+    local content='## Patterns
+
+- [2024-01-01T00:00:00Z] [tags: api,rest] API pattern
+- [2024-01-01T00:00:00Z] [tags: api,database] DB pattern'
+
+    local result
+    result=$(memory_get_all_tags "$content")
+    [[ "$result" == *"api"* ]]
+    [[ "$result" == *"rest"* ]]
+    [[ "$result" == *"database"* ]]
+}
+
+@test "memory_get_all_tags returns empty for no tags" {
+    local content='## Patterns
+
+- Simple entry without tags'
+
+    local result
+    result=$(memory_get_all_tags "$content")
+    [[ -z "$result" ]]
+}
+
+@test "memory_load_with_tags loads and filters" {
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "API pattern" "api"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "DB pattern" "database"
+
+    local result
+    result=$(memory_load_with_tags "$TEST_FEATURE_DIR" "api")
+    [[ "$result" == *"API pattern"* ]]
+}
+
+@test "memory_load_with_tags returns all when no tags" {
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "API pattern" "api"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "DB pattern" "database"
+
+    local result
+    result=$(memory_load_with_tags "$TEST_FEATURE_DIR" "")
+    [[ "$result" == *"API pattern"* ]]
+    [[ "$result" == *"DB pattern"* ]]
+}
+
+#=============================================================================
+# Injection Mode Tests
+#=============================================================================
+
+@test "memory_get_injection_mode returns default 'auto'" {
+    unset RALPH_HYBRID_MEMORY_INJECTION
+    local result
+    result=$(memory_get_injection_mode)
+    [[ "$result" == "auto" ]]
+}
+
+@test "memory_get_injection_mode respects environment variable" {
+    export RALPH_HYBRID_MEMORY_INJECTION="none"
+    local result
+    result=$(memory_get_injection_mode)
+    [[ "$result" == "none" ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_get_injection_mode accepts 'manual'" {
+    export RALPH_HYBRID_MEMORY_INJECTION="manual"
+    local result
+    result=$(memory_get_injection_mode)
+    [[ "$result" == "manual" ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_get_injection_mode defaults to 'auto' for invalid value" {
+    export RALPH_HYBRID_MEMORY_INJECTION="invalid"
+    local result
+    result=$(memory_get_injection_mode)
+    [[ "$result" == "auto" ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_injection_enabled returns true for 'auto'" {
+    export RALPH_HYBRID_MEMORY_INJECTION="auto"
+    run memory_injection_enabled
+    [[ "$status" -eq 0 ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_injection_enabled returns true for 'manual'" {
+    export RALPH_HYBRID_MEMORY_INJECTION="manual"
+    run memory_injection_enabled
+    [[ "$status" -eq 0 ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_injection_enabled returns false for 'none'" {
+    export RALPH_HYBRID_MEMORY_INJECTION="none"
+    run memory_injection_enabled
+    [[ "$status" -ne 0 ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_injection_auto returns true for 'auto'" {
+    export RALPH_HYBRID_MEMORY_INJECTION="auto"
+    run memory_injection_auto
+    [[ "$status" -eq 0 ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_injection_auto returns false for 'manual'" {
+    export RALPH_HYBRID_MEMORY_INJECTION="manual"
+    run memory_injection_auto
+    [[ "$status" -ne 0 ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_injection_auto returns false for 'none'" {
+    export RALPH_HYBRID_MEMORY_INJECTION="none"
+    run memory_injection_auto
+    [[ "$status" -ne 0 ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+#=============================================================================
+# Prompt Integration Tests
+#=============================================================================
+
+@test "memory_format_for_prompt returns empty when injection disabled" {
+    export RALPH_HYBRID_MEMORY_INJECTION="none"
+    local result
+    result=$(memory_format_for_prompt "$TEST_FEATURE_DIR")
+    [[ -z "$result" ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_format_for_prompt returns empty when no memories" {
+    export RALPH_HYBRID_MEMORY_INJECTION="auto"
+    local result
+    result=$(memory_format_for_prompt "$TEST_FEATURE_DIR")
+    [[ -z "$result" ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_format_for_prompt returns formatted content" {
+    export RALPH_HYBRID_MEMORY_INJECTION="auto"
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "Test pattern"
+
+    local result
+    result=$(memory_format_for_prompt "$TEST_FEATURE_DIR")
+    [[ "$result" == *"Memories from Previous Sessions"* ]]
+    [[ "$result" == *"Test pattern"* ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_format_for_prompt filters by tags" {
+    export RALPH_HYBRID_MEMORY_INJECTION="auto"
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "API pattern" "api"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "DB pattern" "database"
+
+    local result
+    result=$(memory_format_for_prompt "$TEST_FEATURE_DIR" "api")
+    [[ "$result" == *"API pattern"* ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_get_for_iteration returns empty for manual mode" {
+    export RALPH_HYBRID_MEMORY_INJECTION="manual"
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "Test pattern"
+
+    local result
+    result=$(memory_get_for_iteration "$TEST_FEATURE_DIR")
+    [[ -z "$result" ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+@test "memory_get_for_iteration returns content for auto mode" {
+    export RALPH_HYBRID_MEMORY_INJECTION="auto"
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" "Test pattern"
+
+    local result
+    result=$(memory_get_for_iteration "$TEST_FEATURE_DIR")
+    [[ "$result" == *"Memories from Previous Sessions"* ]]
+    unset RALPH_HYBRID_MEMORY_INJECTION
+}
+
+#=============================================================================
+# Edge Cases and Error Handling
+#=============================================================================
+
+@test "write_memory handles special characters in content" {
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    write_memory "$TEST_FEATURE_DIR" "Patterns" 'Use "quotes" and $variables safely'
+    local content
+    content=$(cat "$TEST_FEATURE_DIR/memories.md")
+    [[ "$content" == *'"quotes"'* ]]
+}
+
+@test "memory_filter_by_tags handles whitespace in tags" {
+    local content='## Patterns
+
+- [2024-01-01T00:00:00Z] [tags: api, rest] API pattern'
+
+    local result
+    result=$(memory_filter_by_tags "$content" "api")
+    [[ "$result" == *"API pattern"* ]]
+}
+
+@test "_memory_append_to_category appends to end of section" {
+    memory_create_template "$TEST_FEATURE_DIR/memories.md"
+    _memory_append_to_category "$TEST_FEATURE_DIR/memories.md" "Patterns" "- Test entry"
+    local content
+    content=$(cat "$TEST_FEATURE_DIR/memories.md")
+    [[ "$content" == *"Test entry"* ]]
+}

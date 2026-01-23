@@ -447,3 +447,401 @@ memory_init_feature() {
         memory_create_template "$memory_file"
     fi
 }
+
+#=============================================================================
+# Memory Writing
+#=============================================================================
+
+# Write a memory entry to a memory file
+# Arguments:
+#   $1 - Feature directory path (or project root for project-wide)
+#   $2 - Category (Patterns, Decisions, Fixes, Context)
+#   $3 - Memory content
+#   $4 - Tags (optional, comma-separated, e.g., "api,auth,security")
+# Returns: 0 on success, 1 on failure
+write_memory() {
+    local target_dir="${1:-}"
+    local category="${2:-}"
+    local content="${3:-}"
+    local tags="${4:-}"
+
+    # Validate arguments
+    if [[ -z "$target_dir" ]]; then
+        log_error "write_memory: target directory required"
+        return 1
+    fi
+
+    if [[ -z "$category" ]]; then
+        log_error "write_memory: category required"
+        return 1
+    fi
+
+    if [[ -z "$content" ]]; then
+        log_error "write_memory: content required"
+        return 1
+    fi
+
+    # Validate category
+    if ! memory_validate_category "$category"; then
+        log_error "write_memory: invalid category '$category'. Valid: ${RALPH_HYBRID_MEMORY_CATEGORIES[*]}"
+        return 1
+    fi
+
+    # Determine memory file path
+    local memory_file
+    if [[ -d "${target_dir}/.ralph-hybrid" ]]; then
+        # This is a project root - use project-wide memory
+        memory_file=$(memory_get_project_file "$target_dir")
+    else
+        # This is a feature directory
+        memory_file=$(memory_get_feature_file "$target_dir")
+    fi
+
+    # Create memory file if it doesn't exist
+    if [[ ! -f "$memory_file" ]]; then
+        memory_create_template "$memory_file" || return 1
+    fi
+
+    # Format the memory entry
+    local entry
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    if [[ -n "$tags" ]]; then
+        entry="- [${timestamp}] [tags: ${tags}] ${content}"
+    else
+        entry="- [${timestamp}] ${content}"
+    fi
+
+    # Find the category section and append the entry
+    # Using awk to insert after the category header
+    local temp_file
+    temp_file=$(mktemp)
+
+    awk -v category="## ${category}" -v entry="$entry" '
+        BEGIN { found = 0; inserted = 0 }
+        {
+            print
+            if ($0 == category && !inserted) {
+                found = 1
+            } else if (found && /^$/ && !inserted) {
+                print entry
+                inserted = 1
+                found = 0
+            } else if (found && /^## / && !inserted) {
+                # Next section found, insert before it
+                print entry
+                print ""
+                inserted = 1
+                found = 0
+            }
+        }
+        END {
+            if (!inserted && found) {
+                print entry
+            }
+        }
+    ' "$memory_file" > "$temp_file"
+
+    # Check if entry was inserted
+    if grep -qF "$entry" "$temp_file"; then
+        mv "$temp_file" "$memory_file"
+        log_debug "Memory written to $memory_file under $category"
+        return 0
+    else
+        # Fallback: append to the end of the category section
+        rm -f "$temp_file"
+        _memory_append_to_category "$memory_file" "$category" "$entry"
+        return $?
+    fi
+}
+
+# Helper function to append entry to a category section
+# Arguments:
+#   $1 - Memory file path
+#   $2 - Category name
+#   $3 - Entry to append
+_memory_append_to_category() {
+    local memory_file="${1:-}"
+    local category="${2:-}"
+    local entry="${3:-}"
+
+    local temp_file
+    temp_file=$(mktemp)
+
+    local in_category=0
+    local inserted=0
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        echo "$line" >> "$temp_file"
+
+        if [[ "$line" == "## ${category}" ]]; then
+            in_category=1
+        elif [[ "$in_category" -eq 1 ]] && [[ "$line" =~ ^## ]]; then
+            # Reached next section, insert before it
+            if [[ "$inserted" -eq 0 ]]; then
+                # Remove the last line (the new section header) and insert entry
+                head -n -1 "$temp_file" > "${temp_file}.tmp"
+                echo "$entry" >> "${temp_file}.tmp"
+                echo "" >> "${temp_file}.tmp"
+                echo "$line" >> "${temp_file}.tmp"
+                mv "${temp_file}.tmp" "$temp_file"
+                inserted=1
+            fi
+            in_category=0
+        elif [[ "$in_category" -eq 1 ]] && [[ -z "$line" ]] && [[ "$inserted" -eq 0 ]]; then
+            # Empty line in category section - good place to insert
+            # Insert before the empty line
+            head -n -1 "$temp_file" > "${temp_file}.tmp"
+            echo "$entry" >> "${temp_file}.tmp"
+            echo "" >> "${temp_file}.tmp"
+            mv "${temp_file}.tmp" "$temp_file"
+            inserted=1
+            in_category=0
+        fi
+    done < "$memory_file"
+
+    # If still not inserted (category at end of file)
+    if [[ "$inserted" -eq 0 ]]; then
+        echo "$entry" >> "$temp_file"
+    fi
+
+    mv "$temp_file" "$memory_file"
+    return 0
+}
+
+#=============================================================================
+# Tag-based Filtering
+#=============================================================================
+
+# Extract entries with specific tags from memory content
+# Arguments:
+#   $1 - Memory content
+#   $2 - Tags to filter (comma-separated)
+# Returns: Filtered memory entries
+memory_filter_by_tags() {
+    local content="${1:-}"
+    local filter_tags="${2:-}"
+
+    if [[ -z "$content" ]] || [[ -z "$filter_tags" ]]; then
+        echo "$content"
+        return 0
+    fi
+
+    # Convert filter tags to array
+    local -a tag_array
+    IFS=',' read -ra tag_array <<< "$filter_tags"
+
+    # Filter entries that match any of the tags
+    local result=""
+    local current_section=""
+
+    while IFS= read -r line; do
+        # Track current section
+        if [[ "$line" =~ ^##[[:space:]]+(.*) ]]; then
+            current_section="${BASH_REMATCH[1]}"
+            # Include section header if we have matching entries
+            continue
+        fi
+
+        # Check if line contains any of the filter tags
+        if [[ "$line" =~ \[tags:[[:space:]]*([^\]]+)\] ]]; then
+            local entry_tags="${BASH_REMATCH[1]}"
+            local matched=0
+
+            for tag in "${tag_array[@]}"; do
+                tag=$(echo "$tag" | tr -d '[:space:]')  # Trim whitespace
+                if [[ "$entry_tags" == *"$tag"* ]]; then
+                    matched=1
+                    break
+                fi
+            done
+
+            if [[ "$matched" -eq 1 ]]; then
+                if [[ -n "$current_section" ]]; then
+                    result+="## ${current_section}"$'\n'
+                    current_section=""  # Only add section header once
+                fi
+                result+="${line}"$'\n'
+            fi
+        fi
+    done <<< "$content"
+
+    echo "$result"
+}
+
+# Extract all unique tags from memory content
+# Arguments:
+#   $1 - Memory content
+# Returns: Comma-separated list of unique tags
+memory_get_all_tags() {
+    local content="${1:-}"
+
+    if [[ -z "$content" ]]; then
+        echo ""
+        return 0
+    fi
+
+    # Extract all tags from [tags: ...] patterns
+    local tags=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ \[tags:[[:space:]]*([^\]]+)\] ]]; then
+            local entry_tags="${BASH_REMATCH[1]}"
+            # Split by comma and accumulate
+            IFS=',' read -ra tag_array <<< "$entry_tags"
+            for tag in "${tag_array[@]}"; do
+                tag=$(echo "$tag" | tr -d '[:space:]')
+                if [[ -n "$tag" ]]; then
+                    if [[ -z "$tags" ]]; then
+                        tags="$tag"
+                    elif [[ ! "$tags" == *"$tag"* ]]; then
+                        tags="${tags},${tag}"
+                    fi
+                fi
+            done
+        fi
+    done <<< "$content"
+
+    echo "$tags"
+}
+
+# Load memories filtered by tags
+# Arguments:
+#   $1 - Feature directory path
+#   $2 - Tags to filter (comma-separated)
+#   $3 - Token budget (optional)
+# Returns: Filtered memory content
+memory_load_with_tags() {
+    local feature_dir="${1:-}"
+    local tags="${2:-}"
+    local token_budget="${3:-}"
+
+    # Load all memories first
+    local all_memories
+    all_memories=$(load_memories "$feature_dir" "$token_budget")
+
+    # If no tags specified, return all
+    if [[ -z "$tags" ]]; then
+        echo "$all_memories"
+        return 0
+    fi
+
+    # Filter by tags
+    memory_filter_by_tags "$all_memories" "$tags"
+}
+
+#=============================================================================
+# Memory Injection Configuration
+#=============================================================================
+
+# Get memory injection mode from config
+# Returns: "auto", "manual", or "none"
+memory_get_injection_mode() {
+    local mode
+
+    # Try config
+    if declare -f cfg_get_value &>/dev/null; then
+        mode=$(cfg_get_value "memory.injection" 2>/dev/null || true)
+    fi
+
+    # Fall back to environment variable
+    if [[ -z "$mode" ]]; then
+        mode="${RALPH_HYBRID_MEMORY_INJECTION:-auto}"
+    fi
+
+    # Validate mode
+    case "$mode" in
+        auto|manual|none)
+            echo "$mode"
+            ;;
+        *)
+            log_warn "Invalid memory injection mode '$mode', defaulting to 'auto'"
+            echo "auto"
+            ;;
+    esac
+}
+
+# Check if memory injection is enabled
+# Returns: 0 if enabled (auto or manual), 1 if disabled (none)
+memory_injection_enabled() {
+    local mode
+    mode=$(memory_get_injection_mode)
+    [[ "$mode" != "none" ]]
+}
+
+# Check if memory injection should be automatic
+# Returns: 0 if auto, 1 otherwise
+memory_injection_auto() {
+    local mode
+    mode=$(memory_get_injection_mode)
+    [[ "$mode" == "auto" ]]
+}
+
+#=============================================================================
+# Memory Prompt Integration
+#=============================================================================
+
+# Format memories for injection into iteration prompt
+# Arguments:
+#   $1 - Feature directory path
+#   $2 - Tags to filter (optional)
+#   $3 - Token budget (optional)
+# Returns: Formatted memory section for prompt
+memory_format_for_prompt() {
+    local feature_dir="${1:-}"
+    local tags="${2:-}"
+    local token_budget="${3:-}"
+
+    # Check if injection is enabled
+    if ! memory_injection_enabled; then
+        echo ""
+        return 0
+    fi
+
+    # Load memories (with optional tag filter)
+    local memories
+    if [[ -n "$tags" ]]; then
+        memories=$(memory_load_with_tags "$feature_dir" "$tags" "$token_budget")
+    else
+        memories=$(load_memories "$feature_dir" "$token_budget")
+    fi
+
+    # If no memories, return empty
+    if [[ -z "$memories" ]]; then
+        echo ""
+        return 0
+    fi
+
+    # Format for prompt injection
+    cat << EOF
+## Memories from Previous Sessions
+
+The following learnings and context have been accumulated from previous iterations.
+Use these to avoid repeating mistakes and to maintain consistency.
+
+---
+
+${memories}
+
+---
+
+EOF
+}
+
+# Get memories for iteration prompt (main entry point)
+# Arguments:
+#   $1 - Feature directory path
+#   $2 - Current story tags (optional, from prd.json story)
+# Returns: Memory section for prompt (empty if disabled or no memories)
+memory_get_for_iteration() {
+    local feature_dir="${1:-}"
+    local story_tags="${2:-}"
+
+    # Only auto-inject if mode is 'auto'
+    if ! memory_injection_auto; then
+        echo ""
+        return 0
+    fi
+
+    memory_format_for_prompt "$feature_dir" "$story_tags"
+}

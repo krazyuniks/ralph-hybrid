@@ -142,6 +142,23 @@ hooks:
     enabled: true
 
 #=============================================================================
+# Memory Settings
+#=============================================================================
+# Memory files persist learnings across context resets.
+# - Project-wide: .ralph-hybrid/memories.md
+# - Feature-specific: .ralph-hybrid/{branch}/memories.md
+memory:
+  # Token budget for memory injection (default: 2000)
+  # Memories are truncated to fit within this budget.
+  token_budget: 2000
+
+  # Injection mode controls when memories are included in prompts:
+  # - auto: Automatically inject memories into iteration prompts (default)
+  # - manual: Only inject when explicitly requested with --memories flag
+  # - none: Never inject memories
+  injection: auto
+
+#=============================================================================
 # Project-Specific Quality Checks (override in project config)
 #=============================================================================
 # IMPORTANT: Quality checks should be READ-ONLY verification commands.

@@ -34,6 +34,7 @@ source "${SCRIPT_DIR}/lib/lockfile.sh"
 source "${SCRIPT_DIR}/lib/log_filter.sh"
 source "${SCRIPT_DIR}/lib/mcp.sh"
 source "${SCRIPT_DIR}/lib/debug.sh"
+source "${SCRIPT_DIR}/lib/memory.sh"
 
 #=============================================================================
 # Global Variables (set by parse_args or load_config)
@@ -2079,6 +2080,11 @@ $(
 )
 
 ---
+
+$(
+    # Include memories from previous sessions (if auto injection is enabled)
+    memory_get_for_iteration "$feature_dir" ""
+)
 
 $(
     # Include last error feedback if it exists

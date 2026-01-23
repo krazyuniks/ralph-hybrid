@@ -1832,7 +1832,141 @@ Ralph enforces **one story per iteration** to ensure fresh context:
 **Why fresh context matters:**
 - Prevents context pollution from accumulated state
 - Ensures reliable, predictable execution
-- Memory persists via files (prd.json, progress.txt, git commits)
+- Memory persists via files (prd.json, progress.txt, git commits, memories.md)
+
+---
+
+## Memory System
+
+Ralph Hybrid includes a memory system for persisting learnings across context resets. Unlike progress.txt (which logs what happened), memories capture reusable knowledge.
+
+### Memory File Format
+
+Memory files use markdown with four standard categories:
+
+```markdown
+# Memories
+
+Accumulated learnings and context for this project/feature.
+
+## Patterns
+
+<!-- Code patterns, architectural decisions, project conventions -->
+- [2024-01-15T10:30:00Z] [tags: api,rest] Use dependency injection for all service classes
+- [2024-01-16T14:00:00Z] [tags: testing] Always mock external APIs in unit tests
+
+## Decisions
+
+<!-- Why certain approaches were chosen -->
+- [2024-01-15T11:00:00Z] [tags: architecture] Chose Redux over Context for state management due to devtools support
+
+## Fixes
+
+<!-- Common issues and their solutions -->
+- [2024-01-15T16:00:00Z] [tags: auth,bug] Fixed race condition in auth flow by adding mutex lock
+
+## Context
+
+<!-- Project-specific context and domain knowledge -->
+- [2024-01-15T09:00:00Z] [tags: domain] User accounts must be verified before placing orders
+```
+
+### Memory Inheritance
+
+Memories are loaded from two levels:
+
+| Level | File Location | Purpose |
+|-------|---------------|---------|
+| Project | `.ralph-hybrid/memories.md` | Cross-feature learnings |
+| Feature | `.ralph-hybrid/{branch}/memories.md` | Feature-specific context |
+
+When both exist, they are combined with feature memories taking priority if token budget is limited.
+
+### Memory Functions
+
+| Function | Purpose |
+|----------|---------|
+| `load_memories(feature_dir, token_budget)` | Load combined memories within budget |
+| `write_memory(dir, category, content, tags)` | Append entry to memory file |
+| `memory_filter_by_tags(content, tags)` | Filter memories by tag |
+| `memory_load_with_tags(dir, tags, budget)` | Load and filter in one call |
+| `memory_get_for_iteration(dir, tags)` | Get formatted memories for prompt |
+
+### Tag-based Filtering
+
+Memory entries can include tags for filtering:
+
+```markdown
+- [2024-01-15T10:30:00Z] [tags: api,auth,security] Always validate JWT tokens server-side
+```
+
+Filter by tags to include only relevant memories:
+
+```bash
+# Load only auth-related memories
+memories=$(memory_load_with_tags "$feature_dir" "auth,security" 2000)
+```
+
+### Token Budget
+
+Memories are automatically truncated to fit within the token budget:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `memory.token_budget` | 2000 | Max tokens (~8000 chars) for memory injection |
+
+Token calculation uses ~4 characters per token (conservative estimate).
+
+### Injection Modes
+
+Configure how memories are injected into iteration prompts:
+
+| Mode | Description |
+|------|-------------|
+| `auto` | Automatically inject memories (default) |
+| `manual` | Only inject when explicitly requested |
+| `none` | Never inject memories |
+
+Configuration in `config.yaml`:
+
+```yaml
+memory:
+  token_budget: 2000
+  injection: auto  # auto, manual, or none
+```
+
+Or via environment variable:
+
+```bash
+export RALPH_HYBRID_MEMORY_INJECTION=manual
+export RALPH_HYBRID_MEMORY_TOKEN_BUDGET=3000
+```
+
+### Memory vs Progress
+
+| Aspect | progress.txt | memories.md |
+|--------|--------------|-------------|
+| Purpose | Log what happened | Store reusable knowledge |
+| Format | Chronological log | Categorized entries |
+| Growth | Grows each iteration | Curated, may be pruned |
+| Injection | Always included | Configurable (auto/manual/none) |
+| Tags | No | Yes |
+| Budget | No limit | Token budget enforced |
+
+### Example Usage
+
+**Writing a memory after fixing a bug:**
+
+```bash
+write_memory "$FEATURE_DIR" "Fixes" "Fixed null pointer in auth by checking token existence first" "auth,bug"
+```
+
+**Loading memories for a story with specific tags:**
+
+```bash
+# In iteration prompt, filtered to story-relevant tags
+memories=$(memory_load_with_tags "$FEATURE_DIR" "auth,api" 2000)
+```
 
 ---
 
