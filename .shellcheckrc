@@ -17,3 +17,15 @@ disable=SC2120
 # SC2178: Ignore "Variable was used as an array but is now assigned a string"
 # This is a false positive for bash nameref (local -n) patterns
 disable=SC2178
+
+# SC2115: Ignore "Use ${var:?} to ensure this never expands to /* path"
+# The code handles empty variables appropriately
+disable=SC2115
+
+# SC2128: Ignore "Expanding an array without an index only gives first element"
+# Some scripts intentionally use this behavior
+disable=SC2128
+
+# SC2064: Ignore "Use single quotes for trap" warnings
+# These traps intentionally expand at definition time
+disable=SC2064

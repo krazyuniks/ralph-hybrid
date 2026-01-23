@@ -59,13 +59,13 @@ readonly RALPH_HYBRID_RESEARCH_TEMPLATE="templates/research-agent.md"
 #=============================================================================
 
 # Array to track spawned research agent PIDs
-declare -ga _RALPH_HYBRID_RESEARCH_PIDS=()
+declare -a _RALPH_HYBRID_RESEARCH_PIDS=()
 
 # Array to track research agent topics (for output file mapping)
-declare -ga _RALPH_HYBRID_RESEARCH_TOPICS=()
+declare -a _RALPH_HYBRID_RESEARCH_TOPICS=()
 
 # Array to track research agent output directories
-declare -ga _RALPH_HYBRID_RESEARCH_OUTPUT_DIRS=()
+declare -a _RALPH_HYBRID_RESEARCH_OUTPUT_DIRS=()
 
 # Current count of active research agents
 _RALPH_HYBRID_ACTIVE_RESEARCH_AGENTS=0

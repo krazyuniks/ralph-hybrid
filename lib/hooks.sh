@@ -60,7 +60,7 @@ readonly -a RALPH_HYBRID_HOOK_POINTS=(
 
 # Associative arrays for registered hooks (function names)
 # Each key is a hook point, value is a colon-separated list of function names
-declare -gA _RALPH_HYBRID_HOOKS_REGISTRY=()
+declare -A _RALPH_HYBRID_HOOKS_REGISTRY=()
 
 # Initialize registry if not already done
 _hk_init_registry() {
@@ -324,7 +324,7 @@ _hk_execute_directory_hooks() {
 #=============================================================================
 
 # Array for custom completion patterns (in addition to built-in)
-declare -ga _RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS=()
+declare -a _RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS=()
 
 # Built-in completion patterns
 readonly -a _RALPH_HYBRID_BUILTIN_COMPLETION_PATTERNS=(

@@ -45,10 +45,18 @@ teardown() {
 EOF
 
     # Modify hook to echo parsed values instead of running tests
-    sed -i 's/run_tests || failed=1/echo "STORY_ID=$STORY_ID ITERATION=$ITERATION"/' ./post_iteration.sh
-    sed -i 's/run_lint || failed=1/true/' ./post_iteration.sh
-    sed -i 's/run_typecheck || failed=1/true/' ./post_iteration.sh
-    sed -i 's/run_build || failed=1/true/' ./post_iteration.sh
+    # Use portable sed -i that works on both macOS and Linux
+    if [[ "$OSTYPE" == darwin* ]]; then
+        sed -i '' 's/run_tests || failed=1/echo "STORY_ID=$STORY_ID ITERATION=$ITERATION"/' ./post_iteration.sh
+        sed -i '' 's/run_lint || failed=1/true/' ./post_iteration.sh
+        sed -i '' 's/run_typecheck || failed=1/true/' ./post_iteration.sh
+        sed -i '' 's/run_build || failed=1/true/' ./post_iteration.sh
+    else
+        sed -i 's/run_tests || failed=1/echo "STORY_ID=$STORY_ID ITERATION=$ITERATION"/' ./post_iteration.sh
+        sed -i 's/run_lint || failed=1/true/' ./post_iteration.sh
+        sed -i 's/run_typecheck || failed=1/true/' ./post_iteration.sh
+        sed -i 's/run_build || failed=1/true/' ./post_iteration.sh
+    fi
 
     run ./post_iteration.sh context.json
     echo "$output" | grep -q "STORY_ID=STORY-042"
