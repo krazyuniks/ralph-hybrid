@@ -359,3 +359,34 @@ Verification:
 - 37 integration tests pass
 - 7 e2e tests pass
 - Bash syntax checks pass for all scripts
+
+---
+Iteration: 18
+Started: 2026-01-23T03:50:21Z
+Story: STORY-014 - Debug State Persistence
+Status: complete
+
+Changes made:
+- Created lib/debug.sh with debug state management functions:
+  - debug_get_state_file(), debug_state_exists(), debug_load_state(), debug_save_state()
+  - debug_extract_state_from_output(), debug_extract_status()
+  - debug_extract_hypotheses(), debug_count_tested_hypotheses(), debug_count_untested_hypotheses()
+  - debug_extract_root_cause(), debug_extract_current_focus()
+  - debug_get_next_session(), debug_needs_continuation()
+  - debug_prompt_user_action(), debug_build_fix_prompt(), debug_build_plan_prompt()
+- Added cmd_debug() to ralph-hybrid CLI with:
+  - --profile, --model/-m, --continue, --reset, --verbose/-v options
+  - Problem description as positional argument for new sessions
+  - Interactive session continuation when existing state found
+  - User choice after ROOT_CAUSE_FOUND: fix now, plan solution, handle manually
+  - Exit codes: 0=ROOT_CAUSE_FOUND/DEBUG_COMPLETE, 1=ERROR, 10=CHECKPOINT_REACHED
+- Added _debug_show_help(), _debug_build_prompt(), _debug_display_summary() helpers
+- State persists in .ralph-hybrid/{branch}/debug-state.md
+- Updated show_help() with Debug Options section
+- Added debug command to main() case statement
+- Updated SPEC.md with Debug Options, Exit Codes, Return States, Process, Examples
+
+Verification:
+- 50+ unit tests in tests/unit/test_debug.bats
+- Bash syntax checks pass for ralph-hybrid and lib/debug.sh
+- Debug command --help displays correctly

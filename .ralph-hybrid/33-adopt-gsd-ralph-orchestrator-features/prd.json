@@ -213,8 +213,8 @@
         "Documentation updated"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": "Persistence enables multi-session debugging."
+      "passes": true,
+      "notes": "lib/debug.sh with state management functions. cmd_debug() CLI command with --continue, --reset, --profile, --model options. State persists in debug-state.md. User choice after ROOT_CAUSE_FOUND: fix now, plan solution, handle manually. SPEC.md updated. 50+ unit tests in test_debug.bats."
     },
     {
       "id": "STORY-015",
