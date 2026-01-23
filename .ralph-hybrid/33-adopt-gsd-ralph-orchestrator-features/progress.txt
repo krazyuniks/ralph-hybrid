@@ -24,3 +24,25 @@ Verification:
 - All 12 unit tests pass
 - e2e tests pass (7 tests, no regressions)
 
+---
+Iteration: 3
+Started: 2026-01-23T02:07:09Z
+Story: STORY-002 - Backpressure Hook Template
+Status: complete
+
+Changes made:
+- Created templates/hooks/post_iteration.sh backpressure verification hook template
+- Template parses JSON context with jq (with grep/sed fallback for systems without jq)
+- Template demonstrates test command execution via configurable TEST_COMMAND
+- Supports npm test, pytest, just test, go test, cargo test, make test patterns
+- Returns exit code 0 on pass, 75 (VERIFICATION_FAILED) on test failure
+- Added _setup_copy_hook_templates() function to ralph-hybrid for setup command
+- Converted unit tests from custom bash scripts to BATS format for CI compatibility
+- Created tests/integration/ directory for CI
+
+Verification:
+- 27 BATS unit tests pass (12 for hooks.sh, 15 for hook template)
+- e2e tests pass (7 tests, no regressions)
+- Tested ralph-hybrid setup copies hooks to project directory
+- Bash syntax checks pass for all scripts
+

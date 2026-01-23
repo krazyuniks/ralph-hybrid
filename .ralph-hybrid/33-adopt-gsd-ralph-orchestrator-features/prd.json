@@ -31,8 +31,8 @@
         "Unit tests pass"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Template should be working example. Include patterns for just test, npm test, pytest."
+      "passes": true,
+      "notes": "Template parses JSON context (jq with grep/sed fallback), demonstrates TEST_COMMAND execution with patterns for npm test, pytest, just test, go test. Returns 0 on pass, 75 on VERIFICATION_FAILED. Includes _setup_copy_hook_templates() function. Unit tests converted to BATS format (27 tests)."
     },
     {
       "id": "STORY-003",
