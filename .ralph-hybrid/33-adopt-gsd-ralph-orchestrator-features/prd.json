@@ -77,8 +77,8 @@
         "Documentation updated"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "Default profile: balanced. Per-story override: model field in story object."
+      "passes": true,
+      "notes": "Default profile: balanced. Per-story override: model field in story object. Implemented --profile flag in parse_run_args(). Model selection priority: story > CLI > profile > default. 17 unit tests in test_profile_cli.bats."
     },
     {
       "id": "STORY-006",

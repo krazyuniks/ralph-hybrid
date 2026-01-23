@@ -91,3 +91,28 @@ Verification:
 - Bash syntax checks pass for lib/constants.sh, lib/config.sh
 - e2e tests pass (7 tests, no regressions)
 
+---
+Iteration: 8
+Started: 2026-01-23T02:43:09Z
+Story: STORY-005 - Profile CLI Flag and Per-Story Override
+Status: complete
+
+Changes made:
+- Added --profile flag to parse_run_args() with validation via cfg_validate_profile()
+- Updated help text to document --profile flag (ralph-hybrid help)
+- Implemented model selection priority in _run_invoke_claude():
+  1. Story-level model (prd.json story.model field)
+  2. CLI --model flag
+  3. Profile's execution model (cfg_get_profile_model)
+  4. Claude CLI default
+- Updated _run_build_monitor_cmd() to pass --profile to monitor subprocess
+- Updated SPEC.md with Model Selection Priority documentation
+- Created tests/unit/test_profile_cli.bats with 17 unit tests
+
+Verification:
+- Manual function tests pass (prd_get_current_story_model, cfg_validate_profile, cfg_get_profile_model)
+- e2e tests pass (7 tests, no regressions)
+- Bash syntax checks pass for ralph-hybrid
+- --profile quality validated and accepted
+- --profile invalid rejected with appropriate error
+
