@@ -197,8 +197,8 @@
         "Unit tests pass"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "Scientific method prevents random guessing."
+      "passes": true,
+      "notes": "templates/debug-agent.md with 5-phase scientific method: Gather Symptoms, Form Hypotheses, Test One Variable, Collect Evidence, Iterate. Return states: ROOT_CAUSE_FOUND (cause found), DEBUG_COMPLETE (issue fixed), CHECKPOINT_REACHED (handoff for context continuation). Output format DEBUG-STATE.md with Problem Statement, Hypotheses (H1/H2/H3 with status tracking), Evidence Log, Current Focus, Root Cause, Fix, Session Summary. Includes debugging best practices and anti-patterns. 66 unit tests in test_debug_agent.bats."
     },
     {
       "id": "STORY-014",

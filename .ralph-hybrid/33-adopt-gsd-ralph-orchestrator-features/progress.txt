@@ -334,3 +334,28 @@ Verification:
 - All 7 e2e tests pass
 - Bash syntax checks pass
 - SPEC.md updated with Verify Options section and exit codes
+
+---
+Iteration: 17
+Started: 2026-01-23T03:45:23Z
+Story: STORY-013 - Debug Agent Template
+Status: complete
+
+Changes made:
+- Created templates/debug-agent.md with scientific method for debugging
+- Five debugging phases: Gather Symptoms, Form Hypotheses, Test One Variable, Collect Evidence, Iterate
+- Return states: ROOT_CAUSE_FOUND (cause identified), DEBUG_COMPLETE (issue fixed), CHECKPOINT_REACHED (context handoff)
+- Hypothesis format with H1/H2/H3 structure and status tracking (UNTESTED, TESTING, CONFIRMED, RULED_OUT, PARTIAL)
+- Evidence categories: CONFIRMED, RULED_OUT, INCONCLUSIVE, PARTIAL
+- Output format: DEBUG-STATE.md with Problem Statement, Reproduction Steps, Environment, Symptoms, Hypotheses, Evidence Log, Current Focus, Root Cause, Fix, Session Summary
+- Debug state tags for machine parsing: <debug-state>STATE</debug-state>
+- Confidence levels for root cause (HIGH/MEDIUM/LOW)
+- Debugging best practices (DO/DON'T) and anti-patterns (shotgun debugging, blame game, printf frenzy, the rewrite)
+- Handoff protocol for multi-session debugging
+- Created tests/unit/test_debug_agent.bats with 66 unit tests
+
+Verification:
+- 350 unit tests pass (284 existing + 66 new)
+- 37 integration tests pass
+- 7 e2e tests pass
+- Bash syntax checks pass for all scripts
