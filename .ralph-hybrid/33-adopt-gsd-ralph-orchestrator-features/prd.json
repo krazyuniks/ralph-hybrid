@@ -122,8 +122,8 @@
         "Documentation updated"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Integrates with existing /ralph-hybrid-plan workflow."
+      "passes": true,
+      "notes": "--research flag added to /ralph-hybrid-plan. Topic extraction via research_extract_topics() with stopword filtering. research_for_planning() spawns agents and synthesizes results. research_load_findings() and research_format_context() inject into spec generation. SPEC.md and command docs updated. 17 new unit tests."
     },
     {
       "id": "STORY-009",

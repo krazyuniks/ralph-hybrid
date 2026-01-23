@@ -165,3 +165,32 @@ Verification:
 - e2e tests pass (7 tests, no regressions)
 - Bash syntax checks pass for lib/research.sh
 
+---
+Iteration: 11
+Started: 2026-01-23T02:59:47Z
+Story: STORY-008 - Research Flag in Planning Workflow
+Status: complete
+
+Changes made:
+- Added --research flag documentation to /ralph-hybrid-plan command
+- Added Phase 2.5: RESEARCH to planning workflow (optional phase)
+- Added topic extraction functions:
+  - research_extract_topics() - extracts technical terms from description
+  - research_filter_topics() - filters and limits topics
+  - RALPH_HYBRID_DEFAULT_MAX_RESEARCH_TOPICS constant (default: 5)
+  - _RESEARCH_STOPWORDS constant for filtering common words
+- Added research loading functions:
+  - research_load_findings() - loads RESEARCH-*.md files into context
+  - research_format_context() - formats findings for spec generation
+- Added research_for_planning() - integrated planning workflow function
+- Added research_get_default_max_topics() - configurable max topics
+- Updated SPEC.md with research phase documentation
+- Updated workflow states diagram with RESEARCH and ANALYZE phases
+
+Verification:
+- 17 new unit tests in tests/unit/test_research_planning.bats
+- All 129 unit tests pass
+- All 10 integration tests pass
+- All 7 e2e tests pass
+- Bash syntax checks pass for lib/research.sh
+
