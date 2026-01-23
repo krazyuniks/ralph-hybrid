@@ -638,9 +638,9 @@ run_hook() {
 
     log_info "Running hook: $hook_name"
 
-    # Create temporary JSON context file
+    # Create temporary JSON context file (portable across BSD and GNU mktemp)
     local context_file
-    context_file=$(mktemp --suffix=".json")
+    context_file=$(mktemp "${TMPDIR:-/tmp}/ralph-context.XXXXXX") && mv "$context_file" "${context_file}.json" && context_file="${context_file}.json"
 
     # Generate JSON context
     local timestamp
