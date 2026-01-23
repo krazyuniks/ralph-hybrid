@@ -605,6 +605,7 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 | Command | Purpose |
 |---------|---------|
 | `/ralph-hybrid-plan <description>` | Interactive planning workflow |
+| `/ralph-hybrid-plan --research` | Planning with research agent investigation |
 | `/ralph-hybrid-plan --regenerate` | Generate prd.json from existing spec.md |
 
 ### Workflow States
@@ -624,9 +625,19 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 │   CLARIFY   │ ← Ask 3-5 targeted questions (fewer if issue has details)
 └──────┬──────┘
        │
+       ▼ (if --research flag)
+┌─────────────┐
+│  RESEARCH   │ ← [Optional] Spawn research agents for topics
+└──────┬──────┘
+       │
        ▼
 ┌─────────────┐
-│    DRAFT    │ ← Generate spec.md
+│   ANALYZE   │ ← Detect patterns requiring skills/scripts/hooks
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│    DRAFT    │ ← Generate spec.md (with research context if available)
 └──────┬──────┘
        │
        ▼
@@ -638,6 +649,46 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 ┌─────────────┐
 │  GENERATE   │ ← Create prd.json + progress.txt
 └─────────────┘
+```
+
+### Research Phase (Optional)
+
+When the `--research` flag is provided, research agents are spawned to investigate topics extracted from the description:
+
+**Topic Extraction:**
+1. Parse description, GitHub issue, and clarifying question answers
+2. Extract technical/domain terms (filtering common words)
+3. Deduplicate and limit to configurable max (default: 5 topics)
+
+**Research Agent Workflow:**
+1. Spawn parallel agents for each topic (max 3 concurrent by default)
+2. Each agent produces `RESEARCH-{topic}.md` with structured output:
+   - Summary (2-3 sentences)
+   - Key Findings (with evidence and impact)
+   - Confidence Level (HIGH/MEDIUM/LOW with criteria)
+   - Sources consulted
+   - Recommendations
+3. Synthesize findings into `RESEARCH-SUMMARY.md`
+4. Inject research context into spec generation
+
+**Research Output Location:**
+```
+.ralph-hybrid/{branch}/
+├── research/
+│   ├── RESEARCH-{topic1}.md
+│   ├── RESEARCH-{topic2}.md
+│   └── RESEARCH-SUMMARY.md
+├── spec.md          ← Uses research context
+├── prd.json
+└── progress.txt
+```
+
+**Configuration:**
+```yaml
+research:
+  max_topics: 5          # Max topics to research per planning session
+  max_agents: 3          # Max concurrent research agents
+  timeout: 600           # Per-agent timeout in seconds
 ```
 
 ### GitHub Issue Integration

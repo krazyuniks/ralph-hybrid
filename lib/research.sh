@@ -689,3 +689,193 @@ research_has_summary() {
 
     [[ -f "$summary_file" ]] && [[ -s "$summary_file" ]]
 }
+
+#=============================================================================
+# Planning Integration Functions (STORY-008)
+#=============================================================================
+
+# Default max research topics to extract
+readonly RALPH_HYBRID_DEFAULT_MAX_RESEARCH_TOPICS=5
+
+# Common words to ignore during topic extraction
+readonly _RESEARCH_STOPWORDS="a an the and or but is are was were be been being have has had do does did will would could should may might must shall can to of in for on with at by from as into through during before after above below between under again further then once here there when where why how all each few more most other some such no nor not only own same so than too very just also"
+
+# Get default max topics from config or constant
+# Returns: Maximum number of topics to research
+research_get_default_max_topics() {
+    local max_topics
+
+    # Try to get from config
+    if declare -f cfg_get_value &>/dev/null; then
+        max_topics=$(cfg_get_value "research.max_topics" 2>/dev/null || true)
+    fi
+
+    # Fall back to environment variable
+    if [[ -z "$max_topics" ]]; then
+        max_topics="${RALPH_HYBRID_MAX_RESEARCH_TOPICS:-$RALPH_HYBRID_DEFAULT_MAX_RESEARCH_TOPICS}"
+    fi
+
+    echo "$max_topics"
+}
+
+# Extract research topics from a description or brainstorm
+# Arguments:
+#   $1 - Description/brainstorm text
+# Returns: List of extracted topics (one per line, deduplicated)
+research_extract_topics() {
+    local description="${1:-}"
+
+    if [[ -z "$description" ]]; then
+        return 0
+    fi
+
+    # Convert stopwords to a pattern for filtering
+    local stopwords_pattern
+    stopwords_pattern=$(echo "$_RESEARCH_STOPWORDS" | tr ' ' '\n' | sort -u | tr '\n' '|')
+    stopwords_pattern="^(${stopwords_pattern%|})$"
+
+    # Extract words, convert to lowercase, filter
+    echo "$description" | \
+        tr '[:upper:]' '[:lower:]' | \
+        tr -cs 'a-z0-9' '\n' | \
+        grep -E '^[a-z][a-z0-9]{2,}$' | \
+        grep -vE "$stopwords_pattern" | \
+        sort -u
+}
+
+# Filter topics to a reasonable number for research
+# Arguments:
+#   $1 - Max topics (optional, defaults to research_get_default_max_topics)
+# Reads from stdin: list of topics (one per line)
+# Returns: Filtered list of topics
+research_filter_topics() {
+    local max_topics="${1:-$(research_get_default_max_topics)}"
+
+    # Filter out very short topics and limit count
+    grep -E '^.{3,}$' | head -n "$max_topics"
+}
+
+# Load research findings from a directory
+# Arguments:
+#   $1 - Directory containing RESEARCH-*.md files
+# Returns: Combined content of all research files
+research_load_findings() {
+    local output_dir="${1:-}"
+
+    if [[ -z "$output_dir" ]] || [[ ! -d "$output_dir" ]]; then
+        return 0
+    fi
+
+    local content=""
+    local first=1
+
+    while IFS= read -r file; do
+        if [[ -n "$file" ]] && [[ -f "$file" ]]; then
+            local filename
+            filename=$(basename "$file")
+
+            if [[ $first -eq 0 ]]; then
+                content+=$'\n\n---\n\n'
+            fi
+            first=0
+
+            content+="### ${filename%.md}"$'\n\n'
+            content+=$(cat "$file")
+        fi
+    done < <(research_list_outputs "$output_dir")
+
+    echo "$content"
+}
+
+# Format research findings for injection into spec generation context
+# Arguments:
+#   $1 - Research findings content (from research_load_findings or synthesis)
+# Returns: Formatted context block for spec generation
+research_format_context() {
+    local findings="${1:-}"
+
+    if [[ -z "$findings" ]]; then
+        echo ""
+        return 0
+    fi
+
+    cat << EOF
+## Research Context
+
+The following research findings have been gathered to inform the specification:
+
+$findings
+
+---
+
+EOF
+}
+
+# Run research for planning workflow
+# Arguments:
+#   $1 - Description/brainstorm text
+#   $2 - Output directory for research files
+#   $3 - Optional: max topics (defaults to config)
+# Returns:
+#   0 on success
+#   1 on failure
+# Creates RESEARCH-*.md files in output_dir
+research_for_planning() {
+    local description="${1:-}"
+    local output_dir="${2:-}"
+    local max_topics="${3:-$(research_get_default_max_topics)}"
+
+    if [[ -z "$description" ]]; then
+        log_warn "research_for_planning: No description provided"
+        return 1
+    fi
+
+    if [[ -z "$output_dir" ]]; then
+        log_error "research_for_planning: Output directory is required"
+        return 1
+    fi
+
+    # Create output directory
+    mkdir -p "$output_dir"
+
+    # Extract and filter topics
+    local topics
+    topics=$(research_extract_topics "$description" | research_filter_topics "$max_topics")
+
+    if [[ -z "$topics" ]]; then
+        log_info "research_for_planning: No topics extracted from description"
+        return 0
+    fi
+
+    # Count topics
+    local topic_count
+    topic_count=$(echo "$topics" | wc -l)
+    log_info "Extracted $topic_count research topic(s)"
+
+    # Reset state for fresh batch
+    research_reset_state
+
+    # Spawn research agents for each topic
+    while IFS= read -r topic; do
+        if [[ -n "$topic" ]]; then
+            log_info "  - $topic"
+            spawn_research_agent "$topic" "$output_dir"
+        fi
+    done <<< "$topics"
+
+    # Wait for all agents
+    if ! wait_for_research_agents; then
+        log_warn "Some research agents failed, but continuing with available findings"
+    fi
+
+    # Synthesize findings if we have multiple files
+    local file_count
+    file_count=$(research_list_outputs "$output_dir" | wc -l)
+
+    if [[ $file_count -gt 1 ]]; then
+        log_info "Synthesizing $file_count research files..."
+        research_synthesize "$output_dir" || log_warn "Synthesis failed, using individual findings"
+    fi
+
+    return 0
+}
