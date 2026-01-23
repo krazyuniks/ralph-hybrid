@@ -92,8 +92,8 @@
         "Unit tests pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Use Claude with --print flag for non-interactive research. Agent prompt from templates/research-agent.md."
+      "passes": true,
+      "notes": "lib/research.sh with spawn_research_agent(), wait_for_research_agents(), research_can_spawn(), research_get_output_file(), research_kill_all(). Default max 3 concurrent agents. Model from profile research phase. 37 BATS tests in test_research.bats."
     },
     {
       "id": "STORY-007",

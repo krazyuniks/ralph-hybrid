@@ -116,3 +116,31 @@ Verification:
 - --profile quality validated and accepted
 - --profile invalid rejected with appropriate error
 
+---
+Iteration: 9
+Started: 2026-01-23T02:47:17Z
+Story: STORY-006 - Research Agent Infrastructure
+Status: complete
+
+Changes made:
+- Created lib/research.sh with parallel research agent spawning
+- Implemented spawn_research_agent(topic, output_dir) - spawns Claude with --print
+- Implemented wait_for_research_agents() - collects all results
+- Implemented wait_for_any_research_agent() - blocks until one completes
+- Added research_can_spawn() to check against concurrent limit
+- Added research_get_max_agents() with config/env override support
+- Added research_get_timeout() for configurable research timeout
+- Added research_get_model() to get model from profile research phase
+- Added topic sanitization for safe filenames (_research_sanitize_topic)
+- Added research_get_output_file() and research_list_outputs() utilities
+- Added research_kill_all() and research_reset_state() cleanup functions
+- Default max concurrent agents: 3
+- Default research timeout: 600s (10 minutes)
+- Output pattern: RESEARCH-{sanitized-topic}.md
+- Fallback prompt generation when templates/research-agent.md not found
+
+Verification:
+- Created tests/unit/test_research.bats with 37 unit tests
+- e2e tests pass (7 tests, no regressions)
+- Bash syntax checks pass for lib/research.sh
+
