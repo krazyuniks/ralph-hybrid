@@ -308,3 +308,29 @@ Verification:
 - All 7 e2e tests pass
 - Bash syntax checks pass for all scripts
 
+
+---
+Iteration: 16
+Started: 2026-01-23T03:31:25Z
+Story: STORY-012 - Verification Command Integration
+Status: complete
+
+Changes made:
+- Added cmd_verify() function to ralph-hybrid for goal-backward verification
+- CLI options: --profile, --model/-m, --output/-o, --verbose/-v, --help/-h
+- _verify_build_prompt() assembles verifier template with spec.md, prd.json, progress.txt
+- _verify_extract_verdict() parses VERIFIED/NEEDS_WORK/BLOCKED from output
+- _verify_extract_markdown() extracts VERIFICATION.md content from Claude output
+- _verify_display_summary() shows issue counts and verdict with colors
+- _verify_count_human_testing_items() counts checkbox items requiring manual testing
+- Exit codes: 0=VERIFIED, 1=NEEDS_WORK, 2=BLOCKED
+- Updated main help text with verify command and Verify Options section
+- Added verify to main case statement in main() function
+
+Verification:
+- 39 new unit tests in tests/unit/test_verify.bats
+- All 284 unit tests pass
+- All 37 integration tests pass
+- All 7 e2e tests pass
+- Bash syntax checks pass
+- SPEC.md updated with Verify Options section and exit codes

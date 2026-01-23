@@ -182,8 +182,8 @@
         "Documentation updated"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "Integrates with existing CLI structure."
+      "passes": true,
+      "notes": "cmd_verify() added with --profile, --model, --output, --verbose options. Exit codes: 0=VERIFIED, 1=NEEDS_WORK, 2=BLOCKED. Parses verification output for verdict and human testing items. 39 unit tests in test_verify.bats. SPEC.md updated with Verify Options section."
     },
     {
       "id": "STORY-013",
