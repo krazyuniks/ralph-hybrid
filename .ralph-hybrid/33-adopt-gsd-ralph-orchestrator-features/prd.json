@@ -1,0 +1,361 @@
+{
+  "description": "Adopt features from GSD and Ralph Orchestrator into ralph-hybrid. Framework infrastructure including: backpressure gates, model profiles, research agents, plan verification, goal-backward verification, scientific debugging, memory system, assumption surfacing, decimal numbering, and skill templates (adversarial review, code archaeology, incident response, integration checker).",
+  "createdAt": "2026-01-23T12:00:00Z",
+  "githubIssue": 33,
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Hook Execution Infrastructure",
+      "description": "As a ralph-hybrid developer, I want to execute hooks at iteration boundaries, so that external verification can gate story completion.",
+      "acceptanceCriteria": [
+        "lib/hooks.sh created with run_hook() function",
+        "Hook receives context via JSON file path argument",
+        "Hook exit code 0 = pass, non-zero = fail",
+        "VERIFICATION_FAILED exit code (75) distinguished from other failures",
+        "Unit tests pass"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "JSON context includes: story_id, iteration, feature_dir, output_file. Hooks in .ralph-hybrid/{branch}/hooks/ or .ralph-hybrid/hooks/. Implemented with 12 unit tests."
+    },
+    {
+      "id": "STORY-002",
+      "title": "Backpressure Hook Template",
+      "description": "As a project developer, I want to have a template for post-iteration verification hooks, so that I can implement project-specific test gates.",
+      "acceptanceCriteria": [
+        "templates/hooks/post_iteration.sh created",
+        "Template shows how to parse JSON context",
+        "Template demonstrates test command execution",
+        "Template returns appropriate exit codes",
+        "ralph-hybrid setup copies hooks to project",
+        "Unit tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Template should be working example. Include patterns for just test, npm test, pytest."
+    },
+    {
+      "id": "STORY-003",
+      "title": "Integrate Backpressure into Iteration Loop",
+      "description": "As a ralph-hybrid user, I want story completion gated by hook success, so that Claude can't mark stories done without tests passing.",
+      "acceptanceCriteria": [
+        "lib/iteration.sh calls run_hook post_iteration after Claude completes",
+        "Story passes only set to true if hook exits 0",
+        "Circuit breaker increments on VERIFICATION_FAILED",
+        "Config schema supports hooks.post_iteration.enabled",
+        "Integration tests pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Backward compatible: if no hook exists, behavior unchanged. Hook timeout configurable via hooks.timeout (default: 300s)."
+    },
+    {
+      "id": "STORY-004",
+      "title": "Profile Schema and Configuration",
+      "description": "As a ralph-hybrid user, I want to define model profiles in configuration, so that I can optimize cost vs quality tradeoffs.",
+      "acceptanceCriteria": [
+        "config.yaml schema extended with profiles section",
+        "Three built-in profiles: quality, balanced, budget",
+        "Profile defines model for: planning, execution, research, verification",
+        "lib/config.sh loads and validates profiles",
+        "Unit tests pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "quality=opus all, balanced=opus planning/sonnet execution, budget=sonnet/haiku"
+    },
+    {
+      "id": "STORY-005",
+      "title": "Profile CLI Flag and Per-Story Override",
+      "description": "As a ralph-hybrid user, I want to select profile via CLI and override per-story, so that I have flexible control over model selection.",
+      "acceptanceCriteria": [
+        "ralph-hybrid run --profile <name> flag added",
+        "prd.json schema supports model field per story",
+        "Per-story model overrides profile default",
+        "Model passed to Claude invocation correctly",
+        "Unit tests pass",
+        "Documentation updated"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Default profile: balanced. Per-story override: model field in story object."
+    },
+    {
+      "id": "STORY-006",
+      "title": "Research Agent Infrastructure",
+      "description": "As a ralph-hybrid developer, I want to spawn research agents in parallel, so that topics can be investigated concurrently.",
+      "acceptanceCriteria": [
+        "lib/research.sh created with spawn_research_agent() function",
+        "Agents spawn in background with output to RESEARCH-{topic}.md",
+        "wait_for_research_agents() collects all results",
+        "Configurable max concurrent agents",
+        "Unit tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Use Claude with --print flag for non-interactive research. Agent prompt from templates/research-agent.md."
+    },
+    {
+      "id": "STORY-007",
+      "title": "Research Agent Template and Synthesis",
+      "description": "As a ralph-hybrid user, I want research agents with structured output and synthesis, so that findings are useful and integrated.",
+      "acceptanceCriteria": [
+        "templates/research-agent.md created with investigation prompt",
+        "Output format: Summary, Key Findings, Confidence Level, Sources",
+        "Confidence levels: HIGH, MEDIUM, LOW with criteria",
+        "Synthesis step combines findings into RESEARCH-SUMMARY.md",
+        "Unit tests pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "HIGH=official docs, MEDIUM=community consensus, LOW=single source"
+    },
+    {
+      "id": "STORY-008",
+      "title": "Research Flag in Planning Workflow",
+      "description": "As a ralph-hybrid user, I want to trigger research during planning, so that specs are informed by investigation.",
+      "acceptanceCriteria": [
+        "/ralph-hybrid-plan --research flag added",
+        "Topic extraction from brainstorm/description",
+        "Research agents spawned per unique topic",
+        "Results loaded before spec generation",
+        "Documentation updated"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Integrates with existing /ralph-hybrid-plan workflow."
+    },
+    {
+      "id": "STORY-009",
+      "title": "Plan Checker Agent",
+      "description": "As a ralph-hybrid developer, I want to verify plans before execution, so that issues are caught early.",
+      "acceptanceCriteria": [
+        "templates/plan-checker.md created with six-dimension verification",
+        "Dimensions: Coverage, Completeness, Dependencies, Links, Scope, Verification",
+        "Issues classified: BLOCKER, WARNING, INFO",
+        "Output format: PLAN-REVIEW.md",
+        "Unit tests pass"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Six dimensions ensure comprehensive plan review before execution."
+    },
+    {
+      "id": "STORY-010",
+      "title": "Plan Verification Integration",
+      "description": "As a ralph-hybrid user, I want plans verified with revision loop, so that issues are fixed before execution.",
+      "acceptanceCriteria": [
+        "Plan checker runs after spec generation in /ralph-hybrid-plan",
+        "Up to 3 revision iterations on BLOCKERs",
+        "--skip-verify flag bypasses verification",
+        "Final plan status shown to user",
+        "Integration tests pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Revision loop allows fixing issues before committing to execution."
+    },
+    {
+      "id": "STORY-011",
+      "title": "Verifier Agent Template",
+      "description": "As a ralph-hybrid developer, I want to verify goals are achieved, not just tasks completed, so that features actually work end-to-end.",
+      "acceptanceCriteria": [
+        "templates/verifier.md created with goal-backward approach",
+        "Checks: deliverables exist, stubs detected, wiring verified",
+        "Stub detection: placeholder returns, TODO comments, empty implementations",
+        "Output format: VERIFICATION.md",
+        "Unit tests pass"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Goal-backward verifies outcomes, not just task completion."
+    },
+    {
+      "id": "STORY-012",
+      "title": "Verification Command Integration",
+      "description": "As a ralph-hybrid user, I want to run verification on demand, so that I can validate before merging.",
+      "acceptanceCriteria": [
+        "ralph-hybrid verify command added",
+        "Loads verifier agent with current feature context",
+        "Human testing items flagged separately",
+        "Exit code reflects verification status",
+        "Documentation updated"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Integrates with existing CLI structure."
+    },
+    {
+      "id": "STORY-013",
+      "title": "Debug Agent Template",
+      "description": "As a ralph-hybrid developer, I want to debug using scientific method, so that root causes are found systematically.",
+      "acceptanceCriteria": [
+        "templates/debug-agent.md created with hypothesis-driven pattern",
+        "Pattern: Gather symptoms, Form hypotheses, Test one variable, Collect evidence",
+        "Return states: ROOT_CAUSE_FOUND, DEBUG_COMPLETE, CHECKPOINT_REACHED",
+        "Output format structured for persistence",
+        "Unit tests pass"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Scientific method prevents random guessing."
+    },
+    {
+      "id": "STORY-014",
+      "title": "Debug State Persistence",
+      "description": "As a ralph-hybrid user, I want debug state to survive context resets, so that investigation continues across sessions.",
+      "acceptanceCriteria": [
+        ".ralph-hybrid/{branch}/debug-state.md created during debugging",
+        "State includes: hypotheses, evidence, ruled out, current focus",
+        "Debug agent loads previous state on start",
+        "ralph-hybrid debug command added",
+        "User choice after finding: fix now, plan solution, handle manually",
+        "Documentation updated"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Persistence enables multi-session debugging."
+    },
+    {
+      "id": "STORY-015",
+      "title": "Memory File Format and Loading",
+      "description": "As a ralph-hybrid developer, I want to define memory file structure, so that learnings persist across sessions.",
+      "acceptanceCriteria": [
+        "Memory format defined: categories (Patterns, Decisions, Fixes, Context)",
+        "lib/memory.sh created with load_memories() function",
+        "Inheritance: project-wide .ralph-hybrid/memories.md + feature-specific",
+        "Token budget calculation (~4 chars per token)",
+        "Unit tests pass"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Categories enable organized memory storage. Inheritance allows project + feature memories."
+    },
+    {
+      "id": "STORY-016",
+      "title": "Memory Writing and Injection",
+      "description": "As a ralph-hybrid user, I want memories written and injected automatically, so that learnings accumulate over time.",
+      "acceptanceCriteria": [
+        "write_memory() function appends to memories.md",
+        "Tag-based filtering for relevant memory retrieval",
+        "Token budget enforced (configurable, default 2000 tokens)",
+        "Injection modes: auto, manual, none in config",
+        "Memories injected into iteration prompt",
+        "Unit tests pass",
+        "Documentation updated"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Tag filtering enables relevant memory retrieval without context overflow."
+    },
+    {
+      "id": "STORY-017",
+      "title": "Assumption Lister Agent",
+      "description": "As a ralph-hybrid user, I want assumptions surfaced before planning, so that misunderstandings are caught early.",
+      "acceptanceCriteria": [
+        "templates/assumption-lister.md created",
+        "Five categories: Technical, Order, Scope, Risk, Dependencies",
+        "Output format: assumptions with confidence and impact",
+        "--list-assumptions flag added to /ralph-hybrid-plan",
+        "Assumptions presented before proceeding",
+        "Unit tests pass",
+        "Documentation updated"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Early assumption surfacing prevents planning derailment."
+    },
+    {
+      "id": "STORY-018",
+      "title": "Decimal Story IDs",
+      "description": "As a ralph-hybrid user, I want to insert stories with decimal IDs, so that urgent work doesn't require renumbering.",
+      "acceptanceCriteria": [
+        "prd.json schema supports decimal IDs (e.g., STORY-002.1)",
+        "Story ordering respects decimal values",
+        "--insert-after flag added to /ralph-hybrid-amend",
+        "Existing story numbers preserved on insert",
+        "Unit tests pass",
+        "Documentation updated"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Decimal IDs enable insertion without renumbering existing stories."
+    },
+    {
+      "id": "STORY-019",
+      "title": "Adversarial Review Skill Template",
+      "description": "As a project developer, I want security-focused code review skill, so that vulnerabilities are found before merge.",
+      "acceptanceCriteria": [
+        "templates/skills/adversarial-review.md created",
+        "Red team / blue team pattern implemented",
+        "Checks: injection, auth bypass, data exposure, race conditions",
+        "Severity levels: CRITICAL, HIGH, MEDIUM, LOW",
+        "ralph-hybrid setup copies skill to project",
+        "Documentation updated"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "Red/blue team pattern: Blue=secure implementation, Red=penetration testing, Fixer=remediation."
+    },
+    {
+      "id": "STORY-020",
+      "title": "Code Archaeology Skill Template",
+      "description": "As a project developer, I want safe legacy code investigation skill, so that modifications don't break existing behavior.",
+      "acceptanceCriteria": [
+        "templates/skills/code-archaeology.md created",
+        "Four-role pattern: Surveyor, Historian, Archaeologist, Careful Modifier",
+        "Output: SURVEY.md, HISTORY.md, GOTCHAS.md",
+        "ralph-hybrid setup copies skill to project",
+        "Documentation updated"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Tests-first approach for legacy modifications."
+    },
+    {
+      "id": "STORY-021",
+      "title": "Incident Response Skill Template",
+      "description": "As a project developer, I want structured incident response skill, so that production issues are handled systematically.",
+      "acceptanceCriteria": [
+        "templates/skills/incident-response.md created",
+        "OODA loop pattern: Observer, Mitigator, Investigator, Fixer",
+        "Speed vs thoroughness separated",
+        "ralph-hybrid setup copies skill to project",
+        "Documentation updated"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "Mitigator fast, Investigator thorough - separate concerns."
+    },
+    {
+      "id": "STORY-022",
+      "title": "Integration Checker Agent",
+      "description": "As a ralph-hybrid developer, I want to verify feature integration, so that orphaned code and broken flows are detected.",
+      "acceptanceCriteria": [
+        "templates/integration-checker.md created",
+        "Checks: exports used, routes have consumers, auth on sensitive routes",
+        "End-to-end flow tracing with break point identification",
+        "Output format: INTEGRATION.md",
+        "Unit tests pass"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "Detects orphaned code and missing connections."
+    },
+    {
+      "id": "STORY-023",
+      "title": "Integration Check Command",
+      "description": "As a ralph-hybrid user, I want to run integration checks on demand, so that I can validate before merging.",
+      "acceptanceCriteria": [
+        "ralph-hybrid integrate command added (or flag on verify)",
+        "Orphaned code detection with suggestions",
+        "Missing connections flagged with fix recommendations",
+        "Exit code reflects integration status",
+        "Documentation updated"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Integrates with existing CLI structure."
+    }
+  ]
+}
