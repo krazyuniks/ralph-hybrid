@@ -263,10 +263,144 @@ cfg_load() {
     export RALPH_HYBRID_LOG_VERBOSITY="${RALPH_HYBRID_LOG_VERBOSITY:-$(cfg_get_value "logging.verbosity")}"
     export RALPH_HYBRID_LOG_VERBOSITY="${RALPH_HYBRID_LOG_VERBOSITY:-$RALPH_HYBRID_DEFAULT_LOG_VERBOSITY}"
 
+    # Profile settings
+    _cfg_load_profile
+
     log_debug "Configuration loaded"
 }
 
 # Alias for backwards compatibility
 load_config() {
     cfg_load "$@"
+}
+
+#=============================================================================
+# Profile Functions
+#=============================================================================
+
+# Validate that a profile name is valid (built-in or custom)
+# Arguments:
+#   $1 - Profile name to validate
+# Returns:
+#   0 if valid, 1 if invalid
+cfg_validate_profile() {
+    local profile="${1:-}"
+
+    if [[ -z "$profile" ]]; then
+        return 1
+    fi
+
+    # Check built-in profiles
+    case "$profile" in
+        "$RALPH_HYBRID_PROFILE_QUALITY"|"$RALPH_HYBRID_PROFILE_BALANCED"|"$RALPH_HYBRID_PROFILE_BUDGET")
+            return 0
+            ;;
+    esac
+
+    # Check for custom profile in config
+    local custom_planning
+    custom_planning=$(cfg_get_value "profiles.${profile}.planning")
+    if [[ -n "$custom_planning" ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Validate that a model phase is valid
+# Arguments:
+#   $1 - Phase name to validate (planning, execution, research, verification)
+# Returns:
+#   0 if valid, 1 if invalid
+cfg_validate_model_phase() {
+    local phase="${1:-}"
+
+    if [[ -z "$phase" ]]; then
+        return 1
+    fi
+
+    case "$phase" in
+        planning|execution|research|verification)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+# Get the model for a profile and phase
+# Arguments:
+#   $1 - Profile name (quality, balanced, budget, or custom)
+#   $2 - Phase name (planning, execution, research, verification)
+# Returns:
+#   Model name (opus, sonnet, haiku) or empty if not found
+cfg_get_profile_model() {
+    local profile="${1:-}"
+    local phase="${2:-}"
+
+    if [[ -z "$profile" ]] || [[ -z "$phase" ]]; then
+        return 0
+    fi
+
+    # First try to get from config (allows overrides and custom profiles)
+    local config_model
+    config_model=$(cfg_get_value "profiles.${profile}.${phase}")
+    if [[ -n "$config_model" ]]; then
+        echo "$config_model"
+        return 0
+    fi
+
+    # Fall back to built-in defaults for standard profiles
+    case "$profile" in
+        "$RALPH_HYBRID_PROFILE_QUALITY")
+            case "$phase" in
+                planning)     echo "$RALPH_HYBRID_BUILTIN_QUALITY_PLANNING" ;;
+                execution)    echo "$RALPH_HYBRID_BUILTIN_QUALITY_EXECUTION" ;;
+                research)     echo "$RALPH_HYBRID_BUILTIN_QUALITY_RESEARCH" ;;
+                verification) echo "$RALPH_HYBRID_BUILTIN_QUALITY_VERIFICATION" ;;
+            esac
+            ;;
+        "$RALPH_HYBRID_PROFILE_BALANCED")
+            case "$phase" in
+                planning)     echo "$RALPH_HYBRID_BUILTIN_BALANCED_PLANNING" ;;
+                execution)    echo "$RALPH_HYBRID_BUILTIN_BALANCED_EXECUTION" ;;
+                research)     echo "$RALPH_HYBRID_BUILTIN_BALANCED_RESEARCH" ;;
+                verification) echo "$RALPH_HYBRID_BUILTIN_BALANCED_VERIFICATION" ;;
+            esac
+            ;;
+        "$RALPH_HYBRID_PROFILE_BUDGET")
+            case "$phase" in
+                planning)     echo "$RALPH_HYBRID_BUILTIN_BUDGET_PLANNING" ;;
+                execution)    echo "$RALPH_HYBRID_BUILTIN_BUDGET_EXECUTION" ;;
+                research)     echo "$RALPH_HYBRID_BUILTIN_BUDGET_RESEARCH" ;;
+                verification) echo "$RALPH_HYBRID_BUILTIN_BUDGET_VERIFICATION" ;;
+            esac
+            ;;
+    esac
+
+    return 0
+}
+
+# Get the current active profile
+# Returns the profile from config or default
+cfg_get_current_profile() {
+    local profile
+    profile="${RALPH_HYBRID_PROFILE:-}"
+
+    if [[ -z "$profile" ]]; then
+        profile=$(cfg_get_value "defaults.profile")
+    fi
+
+    if [[ -z "$profile" ]]; then
+        profile="$RALPH_HYBRID_DEFAULT_PROFILE"
+    fi
+
+    echo "$profile"
+}
+
+# Load profile setting into environment
+# Called by cfg_load to set RALPH_HYBRID_PROFILE
+_cfg_load_profile() {
+    export RALPH_HYBRID_PROFILE="${RALPH_HYBRID_PROFILE:-$(cfg_get_value "defaults.profile")}"
+    export RALPH_HYBRID_PROFILE="${RALPH_HYBRID_PROFILE:-$RALPH_HYBRID_DEFAULT_PROFILE}"
 }

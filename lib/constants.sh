@@ -256,6 +256,40 @@ readonly RALPH_HYBRID_DEFAULT_LOG_VERBOSITY="full"
 readonly _RALPH_HYBRID_COMPACT_TRUNCATE_THRESHOLD=500
 
 #=============================================================================
+# Model Profile Settings
+#=============================================================================
+
+# Valid profile names
+readonly RALPH_HYBRID_PROFILE_QUALITY="quality"
+readonly RALPH_HYBRID_PROFILE_BALANCED="balanced"
+readonly RALPH_HYBRID_PROFILE_BUDGET="budget"
+
+# Default profile
+readonly RALPH_HYBRID_DEFAULT_PROFILE="balanced"
+
+# Valid model phase names
+readonly -a RALPH_HYBRID_MODEL_PHASES=("planning" "execution" "research" "verification")
+
+# Built-in profile definitions (profile:phase -> model)
+# Quality profile: opus for all phases
+readonly RALPH_HYBRID_BUILTIN_QUALITY_PLANNING="opus"
+readonly RALPH_HYBRID_BUILTIN_QUALITY_EXECUTION="opus"
+readonly RALPH_HYBRID_BUILTIN_QUALITY_RESEARCH="opus"
+readonly RALPH_HYBRID_BUILTIN_QUALITY_VERIFICATION="opus"
+
+# Balanced profile: opus for planning, sonnet for execution/research/verification
+readonly RALPH_HYBRID_BUILTIN_BALANCED_PLANNING="opus"
+readonly RALPH_HYBRID_BUILTIN_BALANCED_EXECUTION="sonnet"
+readonly RALPH_HYBRID_BUILTIN_BALANCED_RESEARCH="sonnet"
+readonly RALPH_HYBRID_BUILTIN_BALANCED_VERIFICATION="sonnet"
+
+# Budget profile: sonnet for planning/execution, haiku for research/verification
+readonly RALPH_HYBRID_BUILTIN_BUDGET_PLANNING="sonnet"
+readonly RALPH_HYBRID_BUILTIN_BUDGET_EXECUTION="sonnet"
+readonly RALPH_HYBRID_BUILTIN_BUDGET_RESEARCH="haiku"
+readonly RALPH_HYBRID_BUILTIN_BUDGET_VERIFICATION="haiku"
+
+#=============================================================================
 # Claude CLI Settings
 #=============================================================================
 

@@ -18,6 +18,45 @@ defaults:
   # Default prompt template (from ~/.ralph-hybrid/templates/)
   prompt_template: "prompt-tdd.md"
 
+  # Default model profile (quality, balanced, budget)
+  profile: balanced
+
+#=============================================================================
+# Model Profiles
+#=============================================================================
+# Profiles define which Claude model to use for each phase of work.
+# Built-in profiles:
+#   - quality:  opus for all phases (best quality, highest cost)
+#   - balanced: opus for planning, sonnet for execution (good balance)
+#   - budget:   sonnet for planning/execution, haiku for research (lowest cost)
+#
+# You can override built-in profiles or define custom ones:
+profiles:
+  quality:
+    planning: opus
+    execution: opus
+    research: opus
+    verification: opus
+
+  balanced:
+    planning: opus
+    execution: sonnet
+    research: sonnet
+    verification: sonnet
+
+  budget:
+    planning: sonnet
+    execution: sonnet
+    research: haiku
+    verification: haiku
+
+  # Example custom profile:
+  # my_custom:
+  #   planning: opus
+  #   execution: haiku
+  #   research: haiku
+  #   verification: sonnet
+
 #=============================================================================
 # Circuit Breaker
 #=============================================================================
