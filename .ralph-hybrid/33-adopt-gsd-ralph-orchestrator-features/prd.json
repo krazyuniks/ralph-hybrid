@@ -152,8 +152,8 @@
         "Integration tests pass"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "Revision loop allows fixing issues before committing to execution."
+      "passes": true,
+      "notes": "Phase 7: VERIFY added to /ralph-hybrid-plan workflow. Revision loop (up to 3 iterations) for BLOCKER issues. --skip-verify flag documented. PLAN-REVIEW.md output with final status. 35 integration tests in test_plan_verification_integration.bats. SPEC.md updated with plan verification documentation."
     },
     {
       "id": "STORY-011",
