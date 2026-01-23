@@ -202,6 +202,7 @@ ralph-hybrid monitor                   # Launch tmux monitoring dashboard
 ralph-hybrid archive                   # Archive current feature
 ralph-hybrid validate                  # Run preflight checks without starting loop
 ralph-hybrid verify [options]          # Run goal-backward verification on current feature
+ralph-hybrid debug [options] "desc"    # Start or continue scientific debugging session
 ralph-hybrid import <file> [options]   # Import PRD from Markdown or JSON file
 ralph-hybrid help                      # Show help
 ```
@@ -299,6 +300,63 @@ ralph-hybrid import requirements.json --output ./custom-prd.json
 
 # Override format detection
 ralph-hybrid import my-spec.txt --format markdown
+```
+
+### Debug Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--profile` | (from config) | Model profile for debugging (quality, balanced, budget) |
+| `-m, --model` | (profile default) | Specific model to use (overrides profile) |
+| `--continue` | false | Continue from previous debug state |
+| `--reset` | false | Start fresh, discarding previous debug state |
+| `-v, --verbose` | false | Enable verbose output |
+
+#### Debug Exit Codes
+
+| Exit Code | Meaning | Description |
+|-----------|---------|-------------|
+| 0 | ROOT_CAUSE_FOUND or DEBUG_COMPLETE | Root cause found or issue resolved |
+| 1 | ERROR | Error during debugging |
+| 10 | CHECKPOINT_REACHED | Progress saved, needs continuation |
+
+#### Debug Return States
+
+| State | Description |
+|-------|-------------|
+| ROOT_CAUSE_FOUND | Root cause identified with evidence; user chooses: fix now, plan solution, or handle manually |
+| DEBUG_COMPLETE | Issue fixed and verified |
+| CHECKPOINT_REACHED | Progress saved for multi-session debugging |
+
+#### Debug Process
+
+The `ralph-hybrid debug` command uses the scientific method:
+
+1. **Gather Symptoms** - Collect observable evidence before forming hypotheses
+2. **Form Hypotheses** - Propose ranked, testable explanations (H1, H2, H3...)
+3. **Test One Variable** - Change exactly one thing per test, revert if not fixed
+4. **Collect Evidence** - Record results: CONFIRMED, RULED_OUT, INCONCLUSIVE, PARTIAL
+5. **Iterate** - Refine hypotheses based on evidence
+
+State persists in `.ralph-hybrid/{branch}/debug-state.md` across sessions, enabling:
+- Multi-session debugging for complex issues
+- Handoff between context windows
+- Progress tracking with hypotheses, evidence, and findings
+
+#### Debug Examples
+
+```bash
+# Start new debug session
+ralph-hybrid debug "tests failing after refactor"
+
+# Continue previous debug session
+ralph-hybrid debug --continue
+
+# Start fresh (discard previous state)
+ralph-hybrid debug --reset "investigate from scratch"
+
+# Use quality profile for debugging
+ralph-hybrid debug --profile quality "complex race condition"
 ```
 
 ---
