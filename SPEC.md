@@ -2220,6 +2220,7 @@ Ralph Hybrid includes a template library for skills, scripts, and hooks that can
 | `visual-parity-migration.md` | Migrating UI frameworks | Enforces verbatim class copying, CSS variable auditing, visual regression validation |
 | `adversarial-review.md` | Security-focused code review | Red team/blue team pattern for finding injection, auth bypass, data exposure, race conditions |
 | `code-archaeology.md` | Legacy code modification | Four-role pattern (Surveyor, Historian, Archaeologist, Careful Modifier) for safe legacy changes |
+| `incident-response.md` | Production incidents | OODA loop pattern (Observer, Mitigator, Investigator, Fixer) with speed vs thoroughness separation |
 
 #### Scripts
 
@@ -2245,6 +2246,7 @@ ralph-hybrid/templates/           ← Generic templates (this repo)
 ├── skills/visual-parity-migration.md
 ├── skills/adversarial-review.md
 ├── skills/code-archaeology.md
+├── skills/incident-response.md
 ├── scripts/css-audit.sh
 └── hooks/post-iteration-visual-diff.sh
 
@@ -2255,6 +2257,7 @@ ralph-hybrid/templates/           ← Generic templates (this repo)
 ├── skills/visual-parity-migration.md   ← Customized for project
 ├── skills/adversarial-review.md        ← Security review skill
 ├── skills/code-archaeology.md          ← Legacy code investigation skill
+├── skills/incident-response.md         ← Production incident handling skill
 ├── scripts/css-audit.sh                ← Configured with project paths
 └── hooks/post-iteration-visual-diff.sh ← Configured with URLs
 ```
@@ -2271,6 +2274,7 @@ The `/ralph-hybrid-plan` command detects patterns in the epic description and pr
 | Large Codebase | many files, multiple subsystems | file-inventory script |
 | Security Review | auth, login, password, security, encrypt, token, session | adversarial-review skill |
 | Legacy Code | legacy, old, refactor, migrate, ancient, technical debt, modernize | code-archaeology skill |
+| Incident Response | incident, outage, down, production, alert, emergency, urgent, critical, SEV-1, SEV-2 | incident-response skill |
 
 ### Script Output Format
 
