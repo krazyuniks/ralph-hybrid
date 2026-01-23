@@ -1618,6 +1618,65 @@ _setup_copy_hook_templates() {
     return 0
 }
 
+#-----------------------------------------------------------------------------
+# Setup: Copy skill templates to project
+#-----------------------------------------------------------------------------
+
+_setup_copy_skill_templates() {
+    local project_dir="$1"
+    local ralph_home="${HOME}/.ralph-hybrid"
+    local skills_src="${ralph_home}/templates/skills"
+    local skills_dest="${project_dir}/.ralph-hybrid/skills"
+
+    # Check if skill templates exist in ralph home
+    if [[ ! -d "$skills_src" ]]; then
+        log_debug "No skill templates found in ${skills_src}"
+        return 0
+    fi
+
+    # Check if there are any .md files
+    local has_skills=0
+    for skill_file in "${skills_src}"/*.md; do
+        if [[ -f "$skill_file" ]]; then
+            has_skills=1
+            break
+        fi
+    done
+
+    if [[ $has_skills -eq 0 ]]; then
+        log_debug "No skill templates (*.md) found in ${skills_src}"
+        return 0
+    fi
+
+    # Create project-wide skills directory
+    mkdir -p "$skills_dest"
+
+    # Copy skill templates (but don't overwrite existing)
+    local copied=0
+    local skipped=0
+    for skill_file in "${skills_src}"/*.md; do
+        if [[ -f "$skill_file" ]]; then
+            local filename
+            filename=$(basename "$skill_file")
+            if [[ -f "${skills_dest}/${filename}" ]]; then
+                skipped=$((skipped + 1))
+            else
+                cp "$skill_file" "${skills_dest}/${filename}"
+                copied=$((copied + 1))
+            fi
+        fi
+    done
+
+    if [[ $copied -gt 0 ]]; then
+        log_info "Installed ${copied} skill template(s) to ${skills_dest}/"
+    fi
+    if [[ $skipped -gt 0 ]]; then
+        log_debug "Skipped ${skipped} existing skill(s)"
+    fi
+
+    return 0
+}
+
 cmd_setup() {
     local ralph_home="${HOME}/.ralph-hybrid"
     local commands_src="${ralph_home}/commands"
@@ -1682,6 +1741,9 @@ cmd_setup() {
 
     # Copy hook templates to project
     _setup_copy_hook_templates "$project_dir"
+
+    # Copy skill templates to project
+    _setup_copy_skill_templates "$project_dir"
 
     echo ""
     log_info "Quick start:"
