@@ -547,3 +547,34 @@ Verification:
 - All 37 integration tests pass
 - All 7 e2e tests pass
 - Bash syntax checks pass for all scripts
+---
+Iteration: 6
+Started: 2026-01-23T09:46:33Z
+Story: STORY-021 - Incident Response Skill Template
+Status: complete
+
+Changes made:
+- Created templates/skills/incident-response.md with OODA loop pattern
+- Four-role pattern: Observer (Situation Analyst), Mitigator (Fast Response Agent),
+  Investigator (Root Cause Analyst), Fixer (Permanent Resolution Agent)
+- Speed vs Thoroughness matrix separates concerns:
+  - Observer: HIGH speed priority, MEDIUM thoroughness
+  - Mitigator: CRITICAL speed priority, LOW thoroughness (restore service fast!)
+  - Investigator: LOW speed priority, CRITICAL thoroughness (find root cause correctly)
+  - Fixer: MEDIUM speed priority, HIGH thoroughness
+- Severity classification SEV-1 through SEV-4 with response time criteria
+- Mitigation strategies: rollback, scale/restart, traffic management, workaround
+- Investigation framework: timeline reconstruction, log analysis, diff analysis,
+  hypothesis testing, 5 Whys analysis
+- Root cause categories: CODE_BUG, CONFIG_ERROR, INFRASTRUCTURE, EXTERNAL, HUMAN_ERROR
+- Output format: INCIDENT-RESPONSE.md with metrics
+- Quick incident commands for health checks, logs, resources
+- Communication templates: initial alert, status update, resolution notice
+- Post-incident checklist including post-mortem scheduling
+- Integration guidance with Code Archaeology, Adversarial Review, Debug Agent
+- Updated SPEC.md with skill in Template Library and pattern detection keywords
+
+Verification:
+- 91 unit tests in test_incident_response.bats
+- All bash syntax checks pass
+- e2e tests pass (6 passed, 1 skipped for optional claude CLI)
