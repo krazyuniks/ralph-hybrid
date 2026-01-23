@@ -46,3 +46,25 @@ Verification:
 - Tested ralph-hybrid setup copies hooks to project directory
 - Bash syntax checks pass for all scripts
 
+---
+Iteration: 4
+Started: 2026-01-23T02:14:33Z
+Story: STORY-003 - Integrate Backpressure into Iteration Loop
+Status: complete
+
+Changes made:
+- Added _run_backpressure_gate() function to ralph-hybrid script
+- Integrated backpressure verification into _run_handle_completion() for both story_complete and complete signals
+- Extended lib/config.sh YAML parser to support 3-level nesting (hooks.post_iteration.enabled)
+- Config schema supports hooks.post_iteration.enabled (default: true if hook exists)
+- Config supports hooks.timeout for hook execution timeout (default: 300s)
+- Backpressure gate checks hook_exists() before running (backward compatible)
+- VERIFICATION_FAILED (exit 75) triggers story rollback and circuit breaker increment
+- Updated templates/config.yaml.example with hooks section documentation
+- Created tests/integration/test_backpressure_integration.bats with 10 integration tests
+
+Verification:
+- 37 BATS tests pass (12 hooks.sh + 15 hook template + 10 integration)
+- e2e tests pass (7 tests, no regressions)
+- Bash syntax checks pass for ralph-hybrid, lib/config.sh, lib/hooks.sh
+

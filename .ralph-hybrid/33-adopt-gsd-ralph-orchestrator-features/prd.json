@@ -46,8 +46,8 @@
         "Integration tests pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Backward compatible: if no hook exists, behavior unchanged. Hook timeout configurable via hooks.timeout (default: 300s)."
+      "passes": true,
+      "notes": "Implemented _run_backpressure_gate() function in ralph-hybrid. Integration in _run_handle_completion for both story_complete and complete signals. Config parsing extended to 3-level YAML (hooks.post_iteration.enabled). Backward compatible: no hook = unchanged behavior. 10 integration tests + 27 unit tests pass."
     },
     {
       "id": "STORY-004",
