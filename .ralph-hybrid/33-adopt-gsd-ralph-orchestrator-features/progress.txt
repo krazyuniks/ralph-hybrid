@@ -453,3 +453,28 @@ Verification:
 - 55+ new unit tests in test_memory.bats (105 total)
 - e2e tests pass (7 tests)
 - Bash syntax checks pass for ralph-hybrid and lib/memory.sh
+
+---
+Iteration: 1
+Started: 2026-01-23T08:46:27Z
+Story: STORY-017 - Assumption Lister Agent
+Status: complete
+
+Changes made:
+- Created templates/assumption-lister.md with five-category assumption surfacing
+- Categories: Technical, Order, Scope, Risk, Dependencies
+- Confidence levels: HIGH, MEDIUM, LOW with clear criteria
+- Impact levels: CRITICAL, HIGH, MEDIUM, LOW for prioritization
+- Output format: ASSUMPTIONS.md with Executive Summary, Critical Assumptions,
+  Assumption Summary table, and Recommendations
+- Added --list-assumptions flag to /ralph-hybrid-plan command
+- Added Phase 1.5: ASSUMPTIONS to planning workflow (after SUMMARIZE, before CLARIFY)
+- Phase integrates validated assumptions into CLARIFY questions
+- Updated SPEC.md with Assumption Lister documentation (Commands table, Workflow States, new section)
+
+Verification:
+- 74 unit tests in test_assumption_lister.bats
+- All 552 unit tests pass
+- All 37 integration tests pass
+- All 7 e2e tests pass
+- Bash syntax checks pass for all scripts

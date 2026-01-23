@@ -262,8 +262,8 @@
         "Documentation updated"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": "Early assumption surfacing prevents planning derailment."
+      "passes": true,
+      "notes": "templates/assumption-lister.md with 5 categories (Technical, Order, Scope, Risk, Dependencies). Confidence levels: HIGH/MEDIUM/LOW. Impact levels: CRITICAL/HIGH/MEDIUM/LOW. Output format ASSUMPTIONS.md. --list-assumptions flag added to /ralph-hybrid-plan. Phase 1.5: ASSUMPTIONS in workflow (after SUMMARIZE, before CLARIFY). SPEC.md updated. 74 unit tests in test_assumption_lister.bats."
     },
     {
       "id": "STORY-018",
