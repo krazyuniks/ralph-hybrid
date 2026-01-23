@@ -766,6 +766,52 @@ _setup_update_claude_md() {
     return 0
 }
 
+#-----------------------------------------------------------------------------
+# Setup: Copy hook templates to project
+#-----------------------------------------------------------------------------
+
+_setup_copy_hook_templates() {
+    local project_dir="$1"
+    local ralph_home="${HOME}/.ralph-hybrid"
+    local hooks_src="${ralph_home}/templates/hooks"
+    local hooks_dest="${project_dir}/.ralph-hybrid/hooks"
+
+    # Check if hook templates exist in ralph home
+    if [[ ! -d "$hooks_src" ]]; then
+        log_debug "No hook templates found in ${hooks_src}"
+        return 0
+    fi
+
+    # Create project-wide hooks directory
+    mkdir -p "$hooks_dest"
+
+    # Copy hook templates (but don't overwrite existing)
+    local copied=0
+    local skipped=0
+    for hook_file in "${hooks_src}"/*.sh; do
+        if [[ -f "$hook_file" ]]; then
+            local filename
+            filename=$(basename "$hook_file")
+            if [[ -f "${hooks_dest}/${filename}" ]]; then
+                skipped=$((skipped + 1))
+            else
+                cp "$hook_file" "${hooks_dest}/${filename}"
+                chmod +x "${hooks_dest}/${filename}"
+                copied=$((copied + 1))
+            fi
+        fi
+    done
+
+    if [[ $copied -gt 0 ]]; then
+        log_info "Installed ${copied} hook template(s) to ${hooks_dest}/"
+    fi
+    if [[ $skipped -gt 0 ]]; then
+        log_debug "Skipped ${skipped} existing hook(s)"
+    fi
+
+    return 0
+}
+
 cmd_setup() {
     local ralph_home="${HOME}/.ralph-hybrid"
     local commands_src="${ralph_home}/commands"
@@ -827,6 +873,9 @@ cmd_setup() {
 
     # Update .gitignore with ephemeral state files
     _setup_update_gitignore "$project_dir"
+
+    # Copy hook templates to project
+    _setup_copy_hook_templates "$project_dir"
 
     echo ""
     log_info "Quick start:"
