@@ -198,8 +198,10 @@ debug_extract_hypotheses() {
 # Returns: Number of tested hypotheses
 debug_count_tested_hypotheses() {
     local content="${1:-}"
+    local count
 
-    echo "$content" | grep -c "CONFIRMED\|RULED_OUT\|PARTIAL" 2>/dev/null || echo "0"
+    count=$(echo "$content" | grep -cE "CONFIRMED|RULED_OUT|PARTIAL" 2>/dev/null) || count=0
+    echo "$count"
 }
 
 # Count untested hypotheses
@@ -208,8 +210,10 @@ debug_count_tested_hypotheses() {
 # Returns: Number of untested hypotheses
 debug_count_untested_hypotheses() {
     local content="${1:-}"
+    local count
 
-    echo "$content" | grep -c "UNTESTED\|TESTING" 2>/dev/null || echo "0"
+    count=$(echo "$content" | grep -cE "UNTESTED|TESTING" 2>/dev/null) || count=0
+    echo "$count"
 }
 
 # Extract root cause if found

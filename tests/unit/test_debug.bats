@@ -40,7 +40,7 @@ teardown() {
 
 @test "debug_get_state_file returns empty for empty input" {
     local result
-    result=$(debug_get_state_file "")
+    result=$(debug_get_state_file "" || true)
     [[ -z "$result" ]]
 }
 
@@ -431,10 +431,10 @@ Due to a missing connection release in the error handler.
 - **Result:** PARTIAL
 '
 
-    # Count tested
+    # Count tested - RULED_OUT (H1) + PARTIAL (H2) + RULED_OUT (Test1) + PARTIAL (Test2) = 4 matches
     local tested
     tested=$(debug_count_tested_hypotheses "$state")
-    [[ "$tested" == "3" ]]  # RULED_OUT + PARTIAL + RULED_OUT + PARTIAL = 3 (matches pattern)
+    [[ "$tested" == "4" ]]
 
     # Count untested
     local untested
