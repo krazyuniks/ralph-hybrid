@@ -10,6 +10,7 @@ Plan a new feature for Ralph Hybrid development. Guide the user through requirem
 
 | Flag | Description |
 |------|-------------|
+| `--list-assumptions` | Surface implicit assumptions before planning begins |
 | `--research` | Spawn research agents to investigate topics extracted from the description before spec generation |
 | `--regenerate` | Regenerate prd.json from existing spec.md |
 | `--no-issue` | Skip GitHub issue lookup |
@@ -18,17 +19,19 @@ Plan a new feature for Ralph Hybrid development. Guide the user through requirem
 ## Workflow States
 
 ```
-Phase 0: DISCOVER    → Extract context from GitHub issue
-Phase 1: SUMMARIZE   → Combine external context with user input
-Phase 2: CLARIFY     → Ask targeted questions to fill gaps
-Phase 2.5: RESEARCH  → [Optional] Spawn research agents for topics (--research flag)
-Phase 3: ANALYZE     → Detect patterns requiring skills/scripts/hooks
-Phase 4: DRAFT       → Generate spec.md document
-Phase 5: DECOMPOSE   → Break spec into properly-sized stories
-Phase 6: GENERATE    → Create prd.json for Ralph execution
-Phase 7: VERIFY      → Run plan checker and fix issues (unless --skip-verify)
+Phase 0: DISCOVER     → Extract context from GitHub issue
+Phase 1: SUMMARIZE    → Combine external context with user input
+Phase 1.5: ASSUMPTIONS → [Optional] Surface implicit assumptions (--list-assumptions flag)
+Phase 2: CLARIFY      → Ask targeted questions to fill gaps
+Phase 2.5: RESEARCH   → [Optional] Spawn research agents for topics (--research flag)
+Phase 3: ANALYZE      → Detect patterns requiring skills/scripts/hooks
+Phase 4: DRAFT        → Generate spec.md document
+Phase 5: DECOMPOSE    → Break spec into properly-sized stories
+Phase 6: GENERATE     → Create prd.json for Ralph execution
+Phase 7: VERIFY       → Run plan checker and fix issues (unless --skip-verify)
 ```
 
+> **Note:** The ASSUMPTIONS phase is optional and triggered by `--list-assumptions` flag.
 > **Note:** The RESEARCH phase is optional and triggered by `--research` flag.
 
 ---
@@ -125,6 +128,149 @@ Using provided description: "$ARGUMENTS"
 
 ### Output:
 > "Based on [issue #42 / your description], I understand you want to [summary]. Let me ask a few clarifying questions."
+
+---
+
+## Phase 1.5: ASSUMPTIONS (Optional)
+
+**Goal:** Surface implicit assumptions in the feature description before planning proceeds.
+
+> **Trigger:** This phase runs when `--list-assumptions` flag is provided, OR when the user explicitly requests assumption analysis during planning.
+
+### Why Surface Assumptions?
+
+Misaligned assumptions are a leading cause of planning failures:
+- Technical assumptions that don't match reality
+- Scope assumptions that lead to missed requirements
+- Order assumptions that create blocking dependencies
+- Risk assumptions that leave vulnerabilities unaddressed
+- Dependency assumptions that cause delays
+
+Catching these early saves significant rework later.
+
+### Actions:
+
+#### Step 1: Collect Context
+
+Gather all available context:
+- Feature description (`$ARGUMENTS`)
+- GitHub issue (if discovered)
+- Any clarifying answers from SUMMARIZE phase
+- Existing codebase patterns
+
+#### Step 2: Run Assumption Lister Agent
+
+Use the assumption lister template (templates/assumption-lister.md) to analyze the context:
+
+```
+[ASSUMPTIONS] Analyzing feature description for implicit assumptions...
+
+Checking for:
+  ⏳ Technical assumptions...
+  ⏳ Order assumptions...
+  ⏳ Scope assumptions...
+  ⏳ Risk assumptions...
+  ⏳ Dependency assumptions...
+```
+
+The assumption lister produces ASSUMPTIONS.md output with:
+- Categorized assumptions
+- Confidence levels (HIGH/MEDIUM/LOW)
+- Impact levels (CRITICAL/HIGH/MEDIUM/LOW)
+- Validation methods
+- Questions to ask
+
+#### Step 3: Present Assumptions to User
+
+```
+[ASSUMPTIONS] Analysis complete
+
+Found 8 assumptions (3 require validation):
+
+CRITICAL (must validate before planning):
+  ⚠️ ASM-001: Assumes database supports transactions
+     Confidence: MEDIUM, Impact: CRITICAL
+     Validation: Check if using SQLite (no concurrent transactions)
+
+  ⚠️ ASM-002: Assumes user auth is already implemented
+     Confidence: LOW, Impact: HIGH
+     Validation: Check for existing auth middleware
+
+  ⚠️ ASM-003: Assumes API follows REST conventions
+     Confidence: MEDIUM, Impact: HIGH
+     Validation: Review existing endpoints
+
+Other assumptions (8 total) documented in ASSUMPTIONS.md
+
+Would you like to:
+  A) Review and validate critical assumptions now
+  B) Proceed to CLARIFY phase (assumptions will guide questions)
+  C) Skip assumption handling (not recommended)
+```
+
+#### Step 4: Validate Critical Assumptions
+
+If user chooses to validate:
+
+```
+Let's validate the critical assumptions:
+
+ASM-001: Database supports transactions
+  → Checking database configuration...
+  [Reads config files, checks for database type]
+  ✓ VALIDATED: Using PostgreSQL, transactions supported
+
+ASM-002: User auth is already implemented
+  → Searching for auth middleware...
+  [Searches codebase for auth patterns]
+  ✗ NOT FOUND: No auth middleware detected
+  → This means we need to add auth stories to the plan
+
+ASM-003: API follows REST conventions
+  → Reviewing existing endpoints...
+  [Checks routes and API patterns]
+  ⚠️ PARTIAL: Some endpoints are REST, some are RPC-style
+  → Will need to decide on convention
+```
+
+#### Step 5: Update Context and Proceed
+
+Validated assumptions inform the rest of planning:
+
+```
+[ASSUMPTIONS] Updated planning context:
+
+Assumptions validated:
+  ✓ ASM-001: Database supports transactions (CONFIRMED)
+  ✗ ASM-002: No existing auth (PLAN IMPACT: Add auth stories)
+  ⚠️ ASM-003: Mixed API styles (CLARIFY: Decide convention)
+
+ASSUMPTIONS.md saved to .ralph-hybrid/{branch}/
+
+Proceeding to CLARIFY phase with updated context...
+```
+
+### Output Location:
+
+```
+.ralph-hybrid/{branch}/
+├── ASSUMPTIONS.md   # Assumption analysis results
+├── spec.md          # (created later)
+├── prd.json         # (created later)
+└── progress.txt     # (created later)
+```
+
+### Skip Conditions:
+- `--list-assumptions` flag not provided AND user doesn't request it
+- Feature is very simple (< 50 words, no technical terms)
+- User explicitly skips assumption handling
+
+### Integration with CLARIFY Phase
+
+If assumptions were surfaced, the CLARIFY phase uses them:
+- Questions focus on validating uncertain assumptions
+- Already-validated assumptions skip related questions
+- Invalidated assumptions trigger scope discussions
 
 ---
 

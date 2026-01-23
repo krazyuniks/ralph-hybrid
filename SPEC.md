@@ -699,6 +699,7 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 | Command | Purpose |
 |---------|---------|
 | `/ralph-hybrid-plan <description>` | Interactive planning workflow |
+| `/ralph-hybrid-plan --list-assumptions` | Surface implicit assumptions before planning |
 | `/ralph-hybrid-plan --research` | Planning with research agent investigation |
 | `/ralph-hybrid-plan --regenerate` | Generate prd.json from existing spec.md |
 | `/ralph-hybrid-plan --skip-verify` | Skip plan verification phase (not recommended) |
@@ -713,6 +714,11 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
        ▼
 ┌─────────────┐
 │  SUMMARIZE  │ ← Combine issue context + user input
+└──────┬──────┘
+       │
+       ▼ (if --list-assumptions flag)
+┌─────────────┐
+│ ASSUMPTIONS │ ← [Optional] Surface implicit assumptions in feature description
 └──────┬──────┘
        │
        ▼
@@ -784,6 +790,58 @@ After generating spec.md and prd.json, the planning workflow runs plan verificat
 **Output:**
 - `PLAN-REVIEW.md` saved to feature folder with verification results
 - Final plan status shown to user (READY/NEEDS_REVISION/BLOCKED/NOT_VERIFIED)
+
+### Assumption Lister (Optional)
+
+When the `--list-assumptions` flag is provided, assumptions are surfaced before planning proceeds:
+
+**Why Surface Assumptions?**
+Misaligned assumptions are a leading cause of planning failures:
+- Technical assumptions that don't match reality
+- Scope assumptions that lead to missed requirements
+- Order assumptions that create blocking dependencies
+- Risk assumptions that leave vulnerabilities unaddressed
+- Dependency assumptions that cause delays
+
+**Five Assumption Categories:**
+
+| Category | Description | Examples |
+|----------|-------------|----------|
+| Technical | Technologies, frameworks, infrastructure | "The database supports transactions" |
+| Order | What must happen before what | "Users must be logged in first" |
+| Scope | What's included or excluded | "Mobile support isn't needed" |
+| Risk | What could go wrong | "The API will always respond" |
+| Dependencies | External systems, teams, resources | "The design team will provide mockups" |
+
+**Confidence and Impact Levels:**
+
+Each assumption is rated for:
+- **Confidence**: HIGH (verified), MEDIUM (reasonable but unverified), LOW (uncertain)
+- **Impact**: CRITICAL (invalidates plan), HIGH (significant rework), MEDIUM (some adjustment), LOW (minor)
+
+Assumptions with HIGH impact AND (LOW or MEDIUM confidence) require validation before planning proceeds.
+
+**Assumption Lister Workflow:**
+1. Analyze feature description, GitHub issue, and clarifying answers
+2. Surface implicit assumptions across all five categories
+3. Rate each assumption for confidence and impact
+4. Present critical assumptions (high impact, low confidence) to user
+5. Guide validation of uncertain assumptions
+6. Update context and proceed to CLARIFY phase
+
+**Output:**
+- `ASSUMPTIONS.md` saved to feature folder with categorized assumptions
+- Questions to ask user derived from uncertain assumptions
+- Updated context informs CLARIFY phase questions
+
+**Output Location:**
+```
+.ralph-hybrid/{branch}/
+├── ASSUMPTIONS.md   # Assumption analysis results
+├── spec.md          # (created later, informed by assumptions)
+├── prd.json
+└── progress.txt
+```
 
 ### Research Phase (Optional)
 
