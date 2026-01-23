@@ -144,3 +144,24 @@ Verification:
 - e2e tests pass (7 tests, no regressions)
 - Bash syntax checks pass for lib/research.sh
 
+---
+Iteration: 10
+Started: 2026-01-23T02:54:51Z
+Story: STORY-007 - Research Agent Template and Synthesis
+Status: complete
+
+Changes made:
+- Created templates/research-agent.md with structured investigation prompt
+- Template sections: Summary, Key Findings, Confidence Level, Sources, Recommendations
+- Confidence criteria defined: HIGH (official docs), MEDIUM (community consensus), LOW (single source)
+- Added research_synthesize() function to lib/research.sh for combining findings
+- Added _research_build_synthesis_prompt() to build synthesis prompts with file contents
+- Added _research_get_synthesis_template() for synthesis output structure
+- Added research_get_summary_file() and research_has_summary() utility functions
+- Synthesis output: RESEARCH-SUMMARY.md with themes, conflicts, recommendations
+
+Verification:
+- 21 new unit tests added to tests/unit/test_research.bats (58 total)
+- e2e tests pass (7 tests, no regressions)
+- Bash syntax checks pass for lib/research.sh
+

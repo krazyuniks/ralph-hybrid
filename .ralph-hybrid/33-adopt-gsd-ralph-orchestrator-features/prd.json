@@ -107,8 +107,8 @@
         "Unit tests pass"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "HIGH=official docs, MEDIUM=community consensus, LOW=single source"
+      "passes": true,
+      "notes": "templates/research-agent.md with structured investigation prompt. Confidence criteria: HIGH=official docs, MEDIUM=community consensus, LOW=single source. research_synthesize() combines findings into RESEARCH-SUMMARY.md. 21 new unit tests (58 total in test_research.bats)."
     },
     {
       "id": "STORY-008",
