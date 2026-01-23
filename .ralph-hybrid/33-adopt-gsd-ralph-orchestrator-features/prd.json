@@ -278,8 +278,8 @@
         "Documentation updated"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": "Decimal IDs enable insertion without renumbering existing stories."
+      "passes": true,
+      "notes": "Decimal IDs in lib/prd.sh. Functions: prd_parse_story_id(), prd_compare_story_ids(), prd_validate_story_id(), prd_generate_story_id_after(), prd_generate_story_id_between(), prd_get_next_decimal_id(), prd_sort_stories_by_id(), prd_insert_story_after(). --insert-after flag in ralph-hybrid-amend. 40 unit tests in test_decimal_ids.bats. SPEC.md updated."
     },
     {
       "id": "STORY-019",

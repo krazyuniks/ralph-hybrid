@@ -478,3 +478,27 @@ Verification:
 - All 37 integration tests pass
 - All 7 e2e tests pass
 - Bash syntax checks pass for all scripts
+---
+Iteration: 3
+Started: 2026-01-23T09:14:33Z
+Story: STORY-018 - Decimal Story IDs
+Status: complete
+
+Changes made:
+- Added prd_parse_story_id() to extract numeric/decimal part from story IDs
+- Added prd_compare_story_ids() for proper decimal ordering (2.9 < 2.10)
+- Added prd_validate_story_id() for ID format validation
+- Added prd_generate_story_id_after() for generating next decimal ID
+- Added prd_generate_story_id_between() for midpoint generation
+- Added prd_get_next_decimal_id() to find available decimal ID
+- Added prd_sort_stories_by_id() for decimal-aware sorting
+- Added prd_insert_story_after() for inserting with auto-generated ID
+- Updated /ralph-hybrid-amend command with --insert-after flag documentation
+- Added Decimal Story IDs section to SPEC.md
+
+Verification:
+- 40 unit tests in test_decimal_ids.bats (all pass)
+- 592 total unit tests pass
+- 37 integration tests pass
+- Bash syntax checks pass for lib/prd.sh
+
