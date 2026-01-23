@@ -201,6 +201,7 @@ ralph-hybrid status                    # Show current state
 ralph-hybrid monitor                   # Launch tmux monitoring dashboard
 ralph-hybrid archive                   # Archive current feature
 ralph-hybrid validate                  # Run preflight checks without starting loop
+ralph-hybrid verify [options]          # Run goal-backward verification on current feature
 ralph-hybrid import <file> [options]   # Import PRD from Markdown or JSON file
 ralph-hybrid help                      # Show help
 ```
@@ -236,6 +237,41 @@ Models are selected with the following priority:
 This allows fine-grained control: use profiles for cost optimization, but override specific stories that need a more capable model.
 
 > **Note:** The feature folder is automatically derived from the current git branch name. No `-f` flag is needed.
+
+### Verify Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--profile` | (from config) | Model profile for verification (quality, balanced, budget) |
+| `-m, --model` | (profile default) | Specific model to use (overrides profile) |
+| `-o, --output` | .ralph-hybrid/{branch}/VERIFICATION.md | Output file for verification results |
+| `-v, --verbose` | false | Enable verbose output |
+
+#### Verification Exit Codes
+
+| Exit Code | Meaning | Description |
+|-----------|---------|-------------|
+| 0 | VERIFIED | All goals achieved, no issues found |
+| 1 | NEEDS_WORK | Issues found that need to be fixed |
+| 2 | BLOCKED | Critical issues preventing feature completion |
+
+#### Verification Process
+
+The `ralph-hybrid verify` command uses the goal-backward verification approach:
+
+1. **Goal Extraction** - Extracts concrete goals from spec.md
+2. **Deliverables Verification** - Verifies code exists, is accessible, and is integrated
+3. **Stub Detection** - Scans for placeholder implementations, TODO comments, empty functions
+4. **Wiring Verification** - Verifies components are connected (frontend→backend→database)
+5. **Human Testing Items** - Flags items requiring manual verification (UI/UX, user flows)
+
+Output is written to VERIFICATION.md with:
+- Goals verification table
+- Deliverables check (completed and incomplete)
+- Stub detection results
+- Wiring verification status
+- Human testing checklist
+- Issue summary and recommendations
 
 ### Import Options
 

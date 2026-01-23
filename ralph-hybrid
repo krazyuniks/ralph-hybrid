@@ -68,6 +68,7 @@ Commands:
   archive                Archive a completed feature
   restore                Restore a feature from archive
   validate [--smoke]     Run preflight checks (--smoke adds HTTP health checks)
+  verify [options]       Run goal-backward verification on current feature
   setup                  Install Claude commands (/ralph-hybrid-plan, etc.) to project
   import <file>          Import PRD from Markdown or JSON file
   help                   Show this help message
@@ -97,12 +98,20 @@ Import Options:
   --format FORMAT          Override format detection (markdown, json)
   --output PATH            Output path (default: .ralph-hybrid/{branch}/prd.json)
 
+Verify Options:
+  --profile PROFILE        Model profile for verification (quality, balanced, budget)
+  -m, --model MODEL        Specific model to use (overrides profile)
+  -o, --output FILE        Output file (default: .ralph-hybrid/{branch}/VERIFICATION.md)
+  -v, --verbose            Enable verbose output
+
 Examples:
   ralph-hybrid run -n 30 -t 20
   ralph-hybrid status
   ralph-hybrid archive
   ralph-hybrid validate              # Preflight checks only
   ralph-hybrid validate --smoke      # Preflight + HTTP health checks
+  ralph-hybrid verify                # Run goal-backward verification
+  ralph-hybrid verify --profile quality
   ralph-hybrid import spec.md
   ralph-hybrid import requirements.json --output ./prd.json
 
@@ -617,6 +626,383 @@ cmd_restore() {
     cmd_status
 
     return 0
+}
+
+#=============================================================================
+# Verify Command - Run Goal-Backward Verification
+#=============================================================================
+
+# Exit codes for verification
+readonly VERIFY_EXIT_VERIFIED=0
+readonly VERIFY_EXIT_NEEDS_WORK=1
+readonly VERIFY_EXIT_BLOCKED=2
+
+# Run goal-backward verification on the current feature
+# Uses the verifier.md template with Claude to check:
+# - Goals achieved (not just tasks completed)
+# - Stub detection
+# - Wiring verification
+# - Human testing items flagged
+cmd_verify() {
+    local profile=""
+    local model=""
+    local output_file=""
+    local verbose=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile)
+                profile="$2"
+                shift 2
+                ;;
+            --model|-m)
+                model="$2"
+                shift 2
+                ;;
+            --output|-o)
+                output_file="$2"
+                shift 2
+                ;;
+            --verbose|-v)
+                verbose=true
+                shift
+                ;;
+            --help|-h)
+                _verify_show_help
+                return 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                _verify_show_help
+                return 1
+                ;;
+        esac
+    done
+
+    # Check git repo first
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Get feature directory
+    local feature_dir
+    if ! feature_dir=$(get_feature_dir 2>/dev/null); then
+        log_error "Not in a feature branch or feature not initialized"
+        log_info "Run 'ralph-hybrid setup' and create a feature using /ralph-hybrid-plan"
+        return 1
+    fi
+
+    # Check required files exist
+    local spec_file="${feature_dir}/spec.md"
+    local prd_file="${feature_dir}/prd.json"
+    local progress_file="${feature_dir}/progress.txt"
+
+    if [[ ! -f "$spec_file" ]]; then
+        log_error "spec.md not found at: $spec_file"
+        log_info "Create a spec using /ralph-hybrid-plan first"
+        return 1
+    fi
+
+    if [[ ! -f "$prd_file" ]]; then
+        log_error "prd.json not found at: $prd_file"
+        log_info "Create a PRD using /ralph-hybrid-plan first"
+        return 1
+    fi
+
+    # Set default output file
+    if [[ -z "$output_file" ]]; then
+        output_file="${feature_dir}/VERIFICATION.md"
+    fi
+
+    # Determine model to use
+    # Priority: CLI model > profile verification model > default
+    local effective_model=""
+    if [[ -n "$model" ]]; then
+        effective_model="$model"
+    elif [[ -n "$profile" ]]; then
+        if ! cfg_validate_profile "$profile"; then
+            log_error "Invalid profile: $profile"
+            log_info "Valid profiles: quality, balanced, budget (or custom from config)"
+            return 1
+        fi
+        effective_model=$(cfg_get_profile_model "$profile" "verification")
+    elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
+        effective_model=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "verification")
+    fi
+
+    log_info "Running goal-backward verification..."
+    log_info "Feature: $(basename "$feature_dir")"
+
+    # Build the verification prompt
+    local prompt
+    prompt=$(_verify_build_prompt "$feature_dir" "$spec_file" "$prd_file" "$progress_file")
+
+    # Build Claude command
+    local claude_args="--permission-mode bypassPermissions"
+    if [[ -n "$effective_model" ]]; then
+        claude_args+=" --model ${effective_model}"
+        log_debug "Using model: $effective_model"
+    fi
+
+    # Run Claude with the verifier prompt
+    log_info "Invoking verification agent..."
+
+    local temp_output
+    temp_output=$(mktemp)
+
+    set +e
+    echo "$prompt" | claude -p $claude_args 2>&1 | tee "$temp_output"
+    local claude_exit=$?
+    set -e
+
+    if [[ $claude_exit -ne 0 ]]; then
+        log_error "Claude verification failed with exit code: $claude_exit"
+        rm -f "$temp_output"
+        return 1
+    fi
+
+    # Extract VERIFICATION.md content from output
+    local verification_content
+    verification_content=$(_verify_extract_markdown "$temp_output")
+
+    if [[ -z "$verification_content" ]]; then
+        log_warn "Could not extract VERIFICATION.md from output"
+        log_info "Raw output saved to: $temp_output"
+        # Use the full output as verification content
+        verification_content=$(cat "$temp_output")
+    fi
+
+    # Save verification output
+    echo "$verification_content" > "$output_file"
+    log_success "Verification saved to: $output_file"
+    rm -f "$temp_output"
+
+    # Parse verdict and return appropriate exit code
+    local verdict
+    verdict=$(_verify_extract_verdict "$output_file")
+
+    # Display summary
+    echo ""
+    _verify_display_summary "$output_file" "$verdict"
+
+    # Flag human testing items
+    local human_items
+    human_items=$(_verify_count_human_testing_items "$output_file")
+    if [[ $human_items -gt 0 ]]; then
+        echo ""
+        log_warn "Human testing required: $human_items item(s) need manual verification"
+        log_info "See 'Human Testing Required' section in $output_file"
+    fi
+
+    # Return exit code based on verdict
+    case "$verdict" in
+        VERIFIED)
+            log_success "Verification complete: VERIFIED"
+            return $VERIFY_EXIT_VERIFIED
+            ;;
+        NEEDS_WORK)
+            log_warn "Verification complete: NEEDS_WORK"
+            return $VERIFY_EXIT_NEEDS_WORK
+            ;;
+        BLOCKED)
+            log_error "Verification complete: BLOCKED"
+            return $VERIFY_EXIT_BLOCKED
+            ;;
+        *)
+            log_warn "Could not determine verdict (defaulting to NEEDS_WORK)"
+            return $VERIFY_EXIT_NEEDS_WORK
+            ;;
+    esac
+}
+
+# Show help for verify command
+_verify_show_help() {
+    cat << EOF
+Ralph Hybrid - Verify Command
+
+Usage: ralph-hybrid verify [options]
+
+Run goal-backward verification on the current feature to ensure:
+- Goals are actually achieved (not just tasks completed)
+- No stub or placeholder code remains
+- Components are properly wired together
+- Human testing items are flagged
+
+Options:
+  --profile PROFILE    Model profile to use (quality, balanced, budget)
+  --model, -m MODEL    Specific model to use (overrides profile)
+  --output, -o FILE    Output file (default: .ralph-hybrid/{branch}/VERIFICATION.md)
+  --verbose, -v        Enable verbose output
+  --help, -h           Show this help message
+
+Exit Codes:
+  0 - VERIFIED: All goals achieved, no issues found
+  1 - NEEDS_WORK: Issues found that need to be fixed
+  2 - BLOCKED: Critical issues preventing feature completion
+
+Examples:
+  ralph-hybrid verify                    # Run with default settings
+  ralph-hybrid verify --profile quality  # Use quality profile (opus model)
+  ralph-hybrid verify -m sonnet          # Use specific model
+  ralph-hybrid verify -o custom.md       # Custom output file
+EOF
+}
+
+# Build the verification prompt with feature context
+_verify_build_prompt() {
+    local feature_dir="$1"
+    local spec_file="$2"
+    local prd_file="$3"
+    local progress_file="$4"
+
+    local template_file="${SCRIPT_DIR}/templates/verifier.md"
+    local branch_name
+    branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    local timestamp
+    timestamp=$(date -Iseconds)
+    local feature_name
+    feature_name=$(basename "$feature_dir")
+
+    # Start with template
+    local prompt=""
+    if [[ -f "$template_file" ]]; then
+        prompt=$(cat "$template_file")
+    else
+        log_error "Verifier template not found at: $template_file"
+        return 1
+    fi
+
+    # Replace placeholders
+    prompt="${prompt//\{\{FEATURE_NAME\}\}/$feature_name}"
+    prompt="${prompt//\{\{TIMESTAMP\}\}/$timestamp}"
+    prompt="${prompt//\{\{BRANCH_NAME\}\}/$branch_name}"
+
+    # Add context files
+    prompt+=$'\n\n---\n\n'
+    prompt+="# Verification Context"$'\n\n'
+
+    prompt+="## spec.md"$'\n\n'
+    prompt+='```markdown'$'\n'
+    prompt+=$(cat "$spec_file")
+    prompt+=$'\n```\n\n'
+
+    prompt+="## prd.json"$'\n\n'
+    prompt+='```json'$'\n'
+    prompt+=$(cat "$prd_file")
+    prompt+=$'\n```\n\n'
+
+    if [[ -f "$progress_file" ]]; then
+        prompt+="## progress.txt"$'\n\n'
+        prompt+='```'$'\n'
+        prompt+=$(cat "$progress_file")
+        prompt+=$'\n```\n\n'
+    fi
+
+    prompt+=$'\n---\n\n'
+    prompt+="Now perform the goal-backward verification and output a complete VERIFICATION.md file."
+
+    echo "$prompt"
+}
+
+# Extract markdown content from Claude output
+_verify_extract_markdown() {
+    local output_file="$1"
+
+    # Try to extract content between markdown code blocks
+    # or content that starts with "# Feature Verification"
+    local content
+    content=$(cat "$output_file")
+
+    # Look for VERIFICATION.md content markers
+    if echo "$content" | grep -q "^# Feature Verification"; then
+        # Content starts with the expected header, extract from there
+        echo "$content" | sed -n '/^# Feature Verification/,$p'
+        return 0
+    fi
+
+    # Try extracting from markdown code block
+    if echo "$content" | grep -q '```markdown'; then
+        echo "$content" | sed -n '/```markdown/,/```/p' | sed '1d;$d'
+        return 0
+    fi
+
+    # Return empty if no clear markdown found
+    echo ""
+}
+
+# Extract verdict from verification output
+_verify_extract_verdict() {
+    local output_file="$1"
+
+    # Look for "**Verdict:** XXXX" pattern
+    local verdict
+    verdict=$(grep -oE '\*\*Verdict:\*\*\s*(VERIFIED|NEEDS_WORK|BLOCKED)' "$output_file" | head -1 | grep -oE '(VERIFIED|NEEDS_WORK|BLOCKED)' || echo "")
+
+    if [[ -z "$verdict" ]]; then
+        # Try alternate patterns
+        verdict=$(grep -oE 'Verdict:\s*(VERIFIED|NEEDS_WORK|BLOCKED)' "$output_file" | head -1 | grep -oE '(VERIFIED|NEEDS_WORK|BLOCKED)' || echo "")
+    fi
+
+    echo "$verdict"
+}
+
+# Display verification summary
+_verify_display_summary() {
+    local output_file="$1"
+    local verdict="$2"
+
+    echo "━━━ Verification Summary ━━━"
+    echo ""
+
+    # Extract and display issue counts
+    local stub_count wiring_count deliverable_count partial_count human_count
+
+    stub_count=$(grep -c "STUB_FOUND" "$output_file" 2>/dev/null || echo "0")
+    wiring_count=$(grep -c "WIRING_MISSING" "$output_file" 2>/dev/null || echo "0")
+    deliverable_count=$(grep -c "DELIVERABLE_MISSING" "$output_file" 2>/dev/null || echo "0")
+    partial_count=$(grep -c "PARTIAL_IMPLEMENTATION" "$output_file" 2>/dev/null || echo "0")
+    human_count=$(_verify_count_human_testing_items "$output_file")
+
+    printf "  %-25s %s\n" "Stubs found:" "$stub_count"
+    printf "  %-25s %s\n" "Wiring issues:" "$wiring_count"
+    printf "  %-25s %s\n" "Missing deliverables:" "$deliverable_count"
+    printf "  %-25s %s\n" "Partial implementations:" "$partial_count"
+    printf "  %-25s %s\n" "Human testing items:" "$human_count"
+    echo ""
+
+    # Show verdict with color
+    case "$verdict" in
+        VERIFIED)
+            printf "  Verdict: ${UI_SUCCESS}%s${UI_RESET}\n" "$verdict"
+            ;;
+        NEEDS_WORK)
+            printf "  Verdict: ${UI_WARNING}%s${UI_RESET}\n" "$verdict"
+            ;;
+        BLOCKED)
+            printf "  Verdict: ${UI_ERROR}%s${UI_RESET}\n" "$verdict"
+            ;;
+        *)
+            printf "  Verdict: %s\n" "${verdict:-UNKNOWN}"
+            ;;
+    esac
+}
+
+# Count human testing items in verification output
+_verify_count_human_testing_items() {
+    local output_file="$1"
+
+    # Count checkbox items in Human Testing Required section
+    local count=0
+
+    # Extract human testing section and count checkboxes
+    # Pattern matches from "Human Testing Required" to next top-level ## section
+    if grep -q "Human Testing Required" "$output_file" 2>/dev/null; then
+        # grep -c returns 0 (and exit code 1) when no matches, so capture and handle
+        count=$(sed -n '/Human Testing Required/,/^## [^#]/p' "$output_file" | grep -c '^\s*- \[' 2>/dev/null) || count=0
+    fi
+
+    echo "$count"
 }
 
 #=============================================================================
@@ -2546,6 +2932,10 @@ main() {
             ;;
         validate)
             cmd_validate "$@"
+            return $?
+            ;;
+        verify)
+            cmd_verify "$@"
             return $?
             ;;
         setup)
