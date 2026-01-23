@@ -68,3 +68,26 @@ Verification:
 - e2e tests pass (7 tests, no regressions)
 - Bash syntax checks pass for ralph-hybrid, lib/config.sh, lib/hooks.sh
 
+---
+Iteration: 5
+Started: 2026-01-23T02:22:40Z
+Story: STORY-004 - Profile Schema and Configuration
+Status: complete
+
+Changes made:
+- Added model profile constants to lib/constants.sh (RALPH_HYBRID_PROFILE_*, RALPH_HYBRID_BUILTIN_*)
+- Added profile functions to lib/config.sh:
+  - cfg_get_profile_model(profile, phase) - returns model for profile/phase combo
+  - cfg_validate_profile(name) - validates profile exists (built-in or custom)
+  - cfg_validate_model_phase(name) - validates phase name
+  - _cfg_load_profile() - loads RALPH_HYBRID_PROFILE from config
+- Extended cfg_load() to set RALPH_HYBRID_PROFILE environment variable
+- Updated templates/config.yaml.example with profiles section documentation
+- Three built-in profiles: quality (opus all), balanced (opus/sonnet), budget (sonnet/haiku)
+- Support for custom profiles defined in config.yaml
+
+Verification:
+- 14 unit tests pass (tests/unit/test_profiles.bats)
+- Bash syntax checks pass for lib/constants.sh, lib/config.sh
+- e2e tests pass (7 tests, no regressions)
+
