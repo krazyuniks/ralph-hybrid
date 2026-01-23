@@ -89,6 +89,20 @@ logging:
   verbosity: "full"
 
 #=============================================================================
+# Hooks Settings
+#=============================================================================
+hooks:
+  # Global hook timeout in seconds (default: 300)
+  timeout: 300
+
+  # Post-iteration hook configuration
+  # This hook runs after each iteration when Claude signals story completion.
+  # It provides "backpressure" by verifying tests/lint pass before accepting.
+  post_iteration:
+    # Enable/disable post_iteration hook (default: true if hook exists)
+    enabled: true
+
+#=============================================================================
 # Project-Specific Quality Checks (override in project config)
 #=============================================================================
 # IMPORTANT: Quality checks should be READ-ONLY verification commands.

@@ -32,7 +32,8 @@ RALPH_HYBRID_PROJECT_CONFIG="${RALPH_HYBRID_PROJECT_CONFIG:-.ralph-hybrid/config
 #=============================================================================
 
 # Extract a value from a YAML file by key path
-# Supports simple key: value and one level of nesting (e.g., "defaults.max_iterations")
+# Supports simple key: value and up to three levels of nesting
+# Examples: "model", "defaults.max_iterations", "hooks.post_iteration.enabled"
 # Usage: cfg_load_yaml_value "config.yaml" "defaults.max_iterations"
 cfg_load_yaml_value() {
     local file="$1"
@@ -42,72 +43,15 @@ cfg_load_yaml_value() {
         return 0
     fi
 
-    # Check if it's a nested key (contains a dot)
-    if [[ "$key_path" == *.* ]]; then
-        local section="${key_path%%.*}"
-        local key="${key_path#*.}"
+    # Count the number of dots to determine nesting level
+    local dot_count="${key_path//[^.]/}"
+    local nesting_level=${#dot_count}
 
-        # Find the section and extract the nested key
-        # Look for the section header, then find the key within it
-        local in_section=0
-        local result=""
-
-        while IFS= read -r line || [[ -n "$line" ]]; do
-            # Check if we're entering the target section
-            # Pattern: ^${section}:$ or ^${section}:[[:space:]]*$
-            # Matches: YAML section header (e.g., "defaults:" or "defaults:   ")
-            # Example: "defaults:" -> matches for section="defaults"
-            # Note: ${section} is interpolated, so "defaults" becomes ^defaults:$
-            #       [[:space:]]* allows trailing whitespace after colon
-            if [[ "$line" =~ ^${section}:$ ]] || [[ "$line" =~ ^${section}:[[:space:]]*$ ]]; then
-                in_section=1
-                continue
-            fi
-
-            # Check if we've exited the section (new top-level key)
-            # Pattern: ^[a-zA-Z_] (starts with letter or underscore, no leading space)
-            # Matches: New top-level YAML key (not indented)
-            # Example: "circuit_breaker:" after being in "defaults:" section
-            # Note: Combined with !^[[:space:]] to ensure no leading whitespace
-            if [[ $in_section -eq 1 ]] && [[ "$line" =~ ^[a-zA-Z_] ]] && [[ ! "$line" =~ ^[[:space:]] ]]; then
-                in_section=0
-            fi
-
-            # If in section, look for the key
-            if [[ $in_section -eq 1 ]]; then
-                # Pattern: ^[[:space:]]+${key}:[[:space:]]*(.*)$
-                # Matches: Indented YAML key-value pair
-                # Example: "  max_iterations: 20" -> captures "20" for key="max_iterations"
-                # Breakdown:
-                #   ^[[:space:]]+  - Required leading whitespace (indentation)
-                #   ${key}         - Interpolated key name to find
-                #   :              - Literal colon after key
-                #   [[:space:]]*   - Optional whitespace after colon
-                #   (.*)$          - Capture group: everything to end of line (the value)
-                if [[ "$line" =~ ^[[:space:]]+${key}:[[:space:]]*(.*)$ ]]; then
-                    result="${BASH_REMATCH[1]}"
-                    # Remove surrounding quotes if present
-                    result="${result#\"}"
-                    result="${result%\"}"
-                    result="${result#\'}"
-                    result="${result%\'}"
-                    echo "$result"
-                    return 0
-                fi
-            fi
-        done < "$file"
-    else
+    if [[ $nesting_level -eq 0 ]]; then
         # Simple top-level key (no dot in key_path)
         while IFS= read -r line || [[ -n "$line" ]]; do
             # Pattern: ^${key_path}:[[:space:]]*(.*)$
             # Matches: Top-level YAML key-value pair (no indentation)
-            # Example: "model: opus" -> captures "opus" for key_path="model"
-            # Breakdown:
-            #   ^              - Start of line (no leading whitespace)
-            #   ${key_path}    - Interpolated key name
-            #   :              - Literal colon
-            #   [[:space:]]*   - Optional whitespace after colon
-            #   (.*)$          - Capture group: the value to end of line
             if [[ "$line" =~ ^${key_path}:[[:space:]]*(.*)$ ]]; then
                 local result="${BASH_REMATCH[1]}"
                 # Remove surrounding quotes if present
@@ -117,6 +61,98 @@ cfg_load_yaml_value() {
                 result="${result%\'}"
                 echo "$result"
                 return 0
+            fi
+        done < "$file"
+    elif [[ $nesting_level -eq 1 ]]; then
+        # Two-level nesting (e.g., "defaults.max_iterations")
+        local section="${key_path%%.*}"
+        local key="${key_path#*.}"
+
+        local in_section=0
+
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Check if we're entering the target section
+            if [[ "$line" =~ ^${section}:$ ]] || [[ "$line" =~ ^${section}:[[:space:]]*$ ]]; then
+                in_section=1
+                continue
+            fi
+
+            # Check if we've exited the section (new top-level key)
+            if [[ $in_section -eq 1 ]] && [[ "$line" =~ ^[a-zA-Z_] ]] && [[ ! "$line" =~ ^[[:space:]] ]]; then
+                in_section=0
+            fi
+
+            # If in section, look for the key
+            if [[ $in_section -eq 1 ]]; then
+                if [[ "$line" =~ ^[[:space:]]+${key}:[[:space:]]*(.*)$ ]]; then
+                    local result="${BASH_REMATCH[1]}"
+                    result="${result#\"}"
+                    result="${result%\"}"
+                    result="${result#\'}"
+                    result="${result%\'}"
+                    echo "$result"
+                    return 0
+                fi
+            fi
+        done < "$file"
+    elif [[ $nesting_level -eq 2 ]]; then
+        # Three-level nesting (e.g., "hooks.post_iteration.enabled")
+        # YAML structure:
+        #   hooks:                    <- section (0 indent)
+        #     post_iteration:         <- subsection (2 spaces)
+        #       enabled: false        <- key (4 spaces)
+        #     timeout: 60             <- sibling subsection (2 spaces, exits post_iteration)
+        local section="${key_path%%.*}"
+        local remainder="${key_path#*.}"
+        local subsection="${remainder%%.*}"
+        local key="${remainder#*.}"
+
+        local in_section=0
+        local in_subsection=0
+
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Check if we're entering the top-level section
+            if [[ "$line" =~ ^${section}:$ ]] || [[ "$line" =~ ^${section}:[[:space:]]*$ ]]; then
+                in_section=1
+                in_subsection=0
+                continue
+            fi
+
+            # Check if we've exited the top-level section (new top-level key)
+            if [[ $in_section -eq 1 ]] && [[ "$line" =~ ^[a-zA-Z_] ]] && [[ ! "$line" =~ ^[[:space:]] ]]; then
+                in_section=0
+                in_subsection=0
+            fi
+
+            # If in section, check for subsection
+            if [[ $in_section -eq 1 ]]; then
+                # Check for subsection header (2 spaces of indentation)
+                # Pattern matches: "  post_iteration:" or "  post_iteration:  "
+                if [[ "$line" =~ ^[[:space:]]{2}${subsection}:$ ]] || [[ "$line" =~ ^[[:space:]]{2}${subsection}:[[:space:]]*$ ]]; then
+                    in_subsection=1
+                    continue
+                fi
+
+                # Check if we've exited the subsection (sibling subsection at same level)
+                # A line with exactly 2 spaces followed by a key indicates a sibling
+                # Must check this BEFORE looking for the key to avoid false exits
+                if [[ $in_subsection -eq 1 ]] && [[ "$line" =~ ^[[:space:]]{2}[a-zA-Z_][a-zA-Z0-9_]*: ]]; then
+                    # Sibling subsection - exit current subsection
+                    in_subsection=0
+                fi
+
+                # If in subsection, look for the key (4+ spaces of indentation)
+                if [[ $in_subsection -eq 1 ]]; then
+                    if [[ "$line" =~ ^[[:space:]]{4,}${key}:[[:space:]]*(.*)$ ]]; then
+                        local result="${BASH_REMATCH[1]}"
+                        result="${result#\"}"
+                        result="${result%\"}"
+                        result="${result#\'}"
+                        result="${result%\'}"
+                        echo "$result"
+                        return 0
+                    fi
+                fi
             fi
         done < "$file"
     fi

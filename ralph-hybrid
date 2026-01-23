@@ -1889,6 +1889,12 @@ _run_handle_completion() {
 
     case "$exit_signal" in
         complete)
+            # Run backpressure verification hook before accepting completion
+            if ! _run_backpressure_gate "$prd_file" "$passes_before"; then
+                # Backpressure verification failed - continue iteration
+                return 0
+            fi
+
             log_success "All stories complete!"
 
             # Execute on_completion hooks
@@ -1913,6 +1919,12 @@ _run_handle_completion() {
             return "$RALPH_HYBRID_EXIT_COMPLETE"  # Special code for completion
             ;;
         story_complete)
+            # Run backpressure verification hook before accepting story completion
+            if ! _run_backpressure_gate "$prd_file" "$passes_before"; then
+                # Backpressure verification failed - continue iteration
+                return 0
+            fi
+
             # One story completed successfully - continue to next iteration with fresh context
             log_success "Story completed! Starting fresh context for next story..."
             return 0  # Continue to next iteration
@@ -1942,6 +1954,121 @@ _run_handle_completion() {
     esac
 
     return 0
+}
+
+# Run backpressure verification gate (post_iteration hook)
+# This provides an additional verification layer on story completion.
+# Hooks can run tests, lint, or other checks to ensure quality.
+#
+# Arguments:
+#   $1 - Path to prd.json file
+#   $2 - passes_before state (for rollback on failure)
+#
+# Returns:
+#   0 - Verification passed (or hook not configured)
+#   1 - Verification failed (story completion blocked)
+#
+# On failure:
+#   - Rolls back story completion in prd.json
+#   - Increments circuit breaker for VERIFICATION_FAILED (exit 75)
+#   - Saves error feedback for next iteration
+_run_backpressure_gate() {
+    local prd_file="$1"
+    local passes_before="${2:-}"
+
+    # Check if hooks are enabled globally
+    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" != "true" ]]; then
+        log_debug "Hooks disabled globally, skipping backpressure gate"
+        return 0
+    fi
+
+    # Check if post_iteration hook is enabled in config
+    local post_iteration_enabled
+    post_iteration_enabled=$(cfg_get_value "hooks.post_iteration.enabled")
+    if [[ "$post_iteration_enabled" == "false" ]]; then
+        log_debug "Post-iteration hook disabled in config, skipping backpressure gate"
+        return 0
+    fi
+
+    # Derive context from available information
+    local feature_dir
+    feature_dir=$(dirname "$prd_file")
+
+    local iteration="${RALPH_HYBRID_ITERATION:-0}"
+    local log_file="${feature_dir}/logs/iteration-${iteration}.log"
+
+    # Get current story ID from prd.json (first incomplete story, or last story if all complete)
+    local story_id
+    story_id=$(jq -r '(.userStories[] | select(.passes == false) | .id) // (.userStories[-1].id) // "unknown"' "$prd_file" 2>/dev/null || echo "unknown")
+
+    # Check if hook exists before running
+    if ! hook_exists "post_iteration" "$feature_dir"; then
+        log_debug "No post_iteration hook found, skipping backpressure gate"
+        return 0
+    fi
+
+    # Load hook timeout from config if available
+    local hook_timeout
+    hook_timeout=$(cfg_get_value "hooks.timeout")
+    if [[ -n "$hook_timeout" ]]; then
+        export RALPH_HYBRID_HOOK_TIMEOUT="$hook_timeout"
+    fi
+
+    log_info "Running backpressure verification hook..."
+
+    # Run the post_iteration hook
+    local hook_exit_code=0
+    run_hook "post_iteration" "$story_id" "$iteration" "$feature_dir" "$log_file" || hook_exit_code=$?
+
+    if [[ $hook_exit_code -eq 0 ]]; then
+        log_info "Backpressure verification passed"
+        return 0
+    fi
+
+    # Hook failed - handle based on exit code
+    if [[ $hook_exit_code -eq 75 ]]; then
+        # VERIFICATION_FAILED - tests/lint/etc. failed
+        log_error "Backpressure verification FAILED (hook returned VERIFICATION_FAILED)"
+        log_error "Story completion blocked - Claude should fix issues and retry"
+
+        # Save error feedback for next iteration
+        cat > "${feature_dir}/last_error.txt" << 'EOF'
+Backpressure Verification Failed
+=================================
+
+The post-iteration verification hook failed. This typically means:
+- Tests did not pass
+- Linting checks failed
+- Type checking failed
+- Build failed
+
+Your implementation does not meet the project's quality standards.
+You MUST fix all issues before the story can be marked as complete.
+
+Review the hook output above for specific errors to fix.
+EOF
+        log_warn "Error feedback saved to ${feature_dir}/last_error.txt"
+
+        # Rollback story completion
+        if [[ -n "$passes_before" ]] && [[ -n "$prd_file" ]]; then
+            if declare -f prd_rollback_passes &>/dev/null; then
+                log_error "Rolling back story completion..."
+                prd_rollback_passes "$prd_file" "$passes_before"
+            fi
+        fi
+
+        # Increment circuit breaker - this is a verification failure
+        cb_record_no_progress
+        cb_save_state
+
+        return 1
+    else
+        # Other hook error (non-75)
+        log_warn "Backpressure hook failed with exit code $hook_exit_code (infrastructure error)"
+        log_warn "Allowing story completion despite hook failure"
+        # Infrastructure errors don't block completion - only VERIFICATION_FAILED does
+        return 0
+    fi
 }
 
 #=============================================================================
