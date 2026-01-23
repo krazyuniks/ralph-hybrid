@@ -216,12 +216,24 @@ ralph-hybrid help                      # Show help
 | `-r, --rate-limit` | 100 | Max API calls per hour |
 | `-p, --prompt` | default | Custom prompt file |
 | `-m, --model` | (none) | Claude model (opus, sonnet, or full name) |
+| `--profile` | balanced | Model profile (quality, balanced, budget, or custom) |
 | `-v, --verbose` | false | Detailed output |
 | `--no-archive` | false | Don't archive on completion |
 | `--dry-run` | false | Show what would happen |
 | `--monitor` | false | Launch with tmux monitoring dashboard |
 | `--skip-preflight` | false | Skip preflight validation (use with caution) |
 | `--dangerously-skip-permissions` | false | Pass to Claude Code |
+
+#### Model Selection Priority
+
+Models are selected with the following priority:
+
+1. **Story-level model** (from `prd.json` story's `model` field) - highest priority
+2. **CLI `--model` flag** - explicit model override
+3. **Profile's execution model** (from `--profile` or config) - cost optimization
+4. **Claude CLI default** - if nothing specified
+
+This allows fine-grained control: use profiles for cost optimization, but override specific stories that need a more capable model.
 
 > **Note:** The feature folder is automatically derived from the current git branch name. No `-f` flag is needed.
 
