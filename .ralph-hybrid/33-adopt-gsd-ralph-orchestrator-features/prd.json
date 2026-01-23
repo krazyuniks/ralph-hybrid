@@ -339,8 +339,8 @@
         "Unit tests pass"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": "Detects orphaned code and missing connections."
+      "passes": true,
+      "notes": "templates/integration-checker.md with five-phase verification: Export/Import Analysis, Route/Endpoint Analysis, Authentication Analysis, Data Flow Tracing, Dead Code Detection. Issue classifications: ORPHANED_EXPORT, ORPHANED_ROUTE, MISSING_AUTH, BROKEN_FLOW, DEAD_CODE, MISSING_CONNECTION. Verdicts: INTEGRATED/NEEDS_WIRING/BROKEN. Output format INTEGRATION.md. Quick check commands. Integration patterns (Frontend-Backend, Event-Driven, CLI). SPEC.md updated. 118 unit tests in test_integration_checker.bats."
     },
     {
       "id": "STORY-023",

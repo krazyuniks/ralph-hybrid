@@ -578,3 +578,31 @@ Verification:
 - 91 unit tests in test_incident_response.bats
 - All bash syntax checks pass
 - e2e tests pass (6 passed, 1 skipped for optional claude CLI)
+---
+Iteration: 7
+Started: 2026-01-23T09:54:22Z
+Story: STORY-022 - Integration Checker Agent
+Status: complete
+
+Changes made:
+- Created templates/integration-checker.md with five-phase integration verification
+- Phase 1: Export/Import Analysis - detects orphaned exports not imported anywhere
+- Phase 2: Route/Endpoint Analysis - detects orphaned routes without consumers
+- Phase 3: Authentication Analysis - verifies auth middleware on sensitive routes
+- Phase 4: Data Flow Tracing - traces end-to-end with break point identification
+- Phase 5: Dead Code Detection - finds unused imports, unreachable code, deprecated functions
+- Issue classifications: ORPHANED_EXPORT, ORPHANED_ROUTE, MISSING_AUTH,
+  BROKEN_FLOW, DEAD_CODE, MISSING_CONNECTION
+- Verdicts: INTEGRATED, NEEDS_WIRING, BROKEN
+- Output format: INTEGRATION.md with comprehensive structured sections
+- Detection patterns for JS/TS, Python, Go exports and routes
+- Quick integration check commands for exports, routes, auth
+- Common integration patterns documented (Frontend-Backend, Event-Driven, CLI)
+- Integration guidelines and verdict criteria
+- Updated SPEC.md with template in Template Library and pattern detection keywords
+- Created tests/unit/test_integration_checker.bats with 118 unit tests
+
+Verification:
+- All e2e tests pass (7 tests)
+- Bash syntax checks pass for all scripts
+- SPEC.md properly updated
