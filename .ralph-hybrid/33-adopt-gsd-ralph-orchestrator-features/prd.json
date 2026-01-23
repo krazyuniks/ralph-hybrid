@@ -354,8 +354,8 @@
         "Documentation updated"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": "Integrates with existing CLI structure."
+      "passes": true,
+      "notes": "cmd_integrate() with --profile, --model, --output, --verbose options. Exit codes: 0=INTEGRATED, 1=NEEDS_WIRING, 2=BROKEN. _integrate_build_prompt() assembles template with context. _integrate_display_summary() shows orphaned exports/routes, missing auth, broken flows, dead code, missing connections with fix recommendations. INTEGRATE_EXIT_* constants in lib/constants.sh. SPEC.md updated with Integrate Options section. 47 unit tests in test_integrate.bats."
     }
   ]
 }

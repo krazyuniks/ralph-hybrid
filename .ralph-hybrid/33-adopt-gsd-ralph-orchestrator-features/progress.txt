@@ -606,3 +606,34 @@ Verification:
 - All e2e tests pass (7 tests)
 - Bash syntax checks pass for all scripts
 - SPEC.md properly updated
+
+---
+Iteration: 8
+Started: 2026-01-23T10:01:16Z
+Story: STORY-023 - Integration Check Command
+Status: complete
+
+Changes made:
+- Added cmd_integrate() function to ralph-hybrid for on-demand integration checking
+- CLI options: --profile, --model/-m, --output/-o, --verbose/-v, --help/-h
+- _integrate_build_prompt() assembles integration-checker template with spec.md, prd.json, progress.txt
+- _integrate_extract_verdict() parses INTEGRATED/NEEDS_WIRING/BROKEN from output
+- _integrate_extract_markdown() extracts INTEGRATION.md content from Claude output
+- _integrate_display_summary() shows issue counts with colors:
+  - Orphaned exports/routes
+  - Missing auth
+  - Broken flows
+  - Dead code
+  - Missing connections
+- _integrate_display_recommendations() shows fix suggestions from output
+- Added INTEGRATE_EXIT_INTEGRATED=0, INTEGRATE_EXIT_NEEDS_WIRING=1, INTEGRATE_EXIT_BROKEN=2 constants
+- Added integrate command to main case statement
+- Updated show_help() with Integrate Options section
+- Updated SPEC.md with Integrate Options, exit codes, and process documentation
+
+Verification:
+- 47 new unit tests in tests/unit/test_integrate.bats
+- 1011 total unit tests pass
+- 37 integration tests pass
+- 7 e2e tests pass
+- Bash syntax checks pass for ralph-hybrid, lib/constants.sh
