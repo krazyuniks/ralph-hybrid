@@ -228,8 +228,8 @@
         "Unit tests pass"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": "Categories enable organized memory storage. Inheritance allows project + feature memories."
+      "passes": true,
+      "notes": "lib/memory.sh with load_memories(), memory_load_project(), memory_load_feature(), memory_get_token_budget(), memory_chars_to_tokens(), memory_tokens_to_chars(), memory_validate_category(), memory_fits_budget(), memory_create_template(), memory_init_project(), memory_init_feature(). Categories: Patterns, Decisions, Fixes, Context. Token budget calculation: 4 chars per token. Inheritance: project .ralph-hybrid/memories.md + feature-specific. 50 unit tests in test_memory.bats."
     },
     {
       "id": "STORY-016",

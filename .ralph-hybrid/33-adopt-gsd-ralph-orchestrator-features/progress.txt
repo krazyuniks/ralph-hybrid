@@ -390,3 +390,31 @@ Verification:
 - 50+ unit tests in tests/unit/test_debug.bats
 - Bash syntax checks pass for ralph-hybrid and lib/debug.sh
 - Debug command --help displays correctly
+
+---
+Iteration: 19
+Started: 2026-01-23T04:00:24Z
+Story: STORY-015 - Memory File Format and Loading
+Status: complete
+
+Changes made:
+- Created lib/memory.sh with memory management functions
+- Memory format with 4 categories: Patterns, Decisions, Fixes, Context
+- load_memories() combines project and feature memories with token budget
+- Inheritance: project-wide .ralph-hybrid/memories.md + feature-specific
+- Token budget calculation: ~4 chars per token (RALPH_HYBRID_CHARS_PER_TOKEN)
+- Default token budget: 2000 tokens (RALPH_HYBRID_DEFAULT_MEMORY_TOKEN_BUDGET)
+- memory_get_token_budget() from config or env var
+- memory_chars_to_tokens() and memory_tokens_to_chars() conversion
+- memory_validate_category() validates against RALPH_HYBRID_MEMORY_CATEGORIES
+- memory_fits_budget() checks if content within budget
+- memory_create_template() creates empty memory file with category sections
+- memory_init_project() and memory_init_feature() for initialization
+- Fixed test_debug.bats: grep -c behavior for hypothesis counting functions
+- Fixed test expectation for multiple hypotheses (4 matches, not 3)
+
+Verification:
+- 50 unit tests in test_memory.bats
+- 440 total unit tests pass
+- 37 integration tests pass
+- Bash syntax checks pass for all scripts
