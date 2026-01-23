@@ -13,6 +13,7 @@ Plan a new feature for Ralph Hybrid development. Guide the user through requirem
 | `--research` | Spawn research agents to investigate topics extracted from the description before spec generation |
 | `--regenerate` | Regenerate prd.json from existing spec.md |
 | `--no-issue` | Skip GitHub issue lookup |
+| `--skip-verify` | Skip plan verification phase (not recommended) |
 
 ## Workflow States
 
@@ -25,6 +26,7 @@ Phase 3: ANALYZE     → Detect patterns requiring skills/scripts/hooks
 Phase 4: DRAFT       → Generate spec.md document
 Phase 5: DECOMPOSE   → Break spec into properly-sized stories
 Phase 6: GENERATE    → Create prd.json for Ralph execution
+Phase 7: VERIFY      → Run plan checker and fix issues (unless --skip-verify)
 ```
 
 > **Note:** The RESEARCH phase is optional and triggered by `--research` flag.
@@ -705,17 +707,219 @@ For each story during decomposition:
    # If your folder doesn't match $EXPECTED, you made an error - fix it!
    ```
 
-6. Output summary:
+6. Output generation summary:
 
 ```
-Planning complete for branch: {exact branch name}
-Feature folder: .ralph-hybrid/{branch-with-slashes-as-dashes}/
-
-Created files:
+[GENERATE] Files created:
   .ralph-hybrid/{branch-with-slashes-as-dashes}/
   ├── spec.md          # Feature specification
   ├── prd.json         # {N} stories, all passes: false
   └── progress.txt     # Empty, ready for iterations
+
+Proceeding to plan verification...
+```
+
+---
+
+## Phase 7: VERIFY
+
+**Goal:** Verify the plan quality and fix issues before execution starts.
+
+> **Skip Condition:** If `--skip-verify` flag is provided, skip this phase entirely and proceed to completion.
+
+### Overview
+
+Plan verification uses the plan checker agent (templates/plan-checker.md) to analyze spec.md and prd.json across six dimensions: Coverage, Completeness, Dependencies, Links, Scope, and Verification.
+
+If BLOCKERs are found, the plan enters a revision loop (up to 3 iterations) to fix issues before the user commits to execution.
+
+### Actions:
+
+#### Step 1: Check Skip Flag
+
+```
+if --skip-verify flag provided:
+    Output: "[VERIFY] Skipping verification (--skip-verify flag)"
+    Proceed to completion summary
+```
+
+#### Step 2: Run Plan Checker Agent
+
+Load and execute the plan checker against the generated spec.md and prd.json:
+
+```
+[VERIFY] Running plan verification...
+
+Analyzing spec.md and prd.json across 6 dimensions:
+  ⏳ Coverage - Checking problem/solution alignment...
+  ⏳ Completeness - Checking story specifications...
+  ⏳ Dependencies - Checking story ordering...
+  ⏳ Links - Checking references...
+  ⏳ Scope - Checking story sizing...
+  ⏳ Verification - Checking test coverage...
+```
+
+The plan checker produces PLAN-REVIEW.md output with:
+- Verdict: READY, NEEDS_REVISION, or BLOCKED
+- Issue counts by severity (BLOCKER, WARNING, INFO)
+- Detailed issue descriptions and recommendations
+
+#### Step 3: Process Verdict
+
+**READY (0 BLOCKERs):**
+```
+[VERIFY] Plan verification PASSED ✓
+
+Verdict: READY
+  - 0 BLOCKERs
+  - {N} WARNINGs (documented trade-offs)
+  - {N} INFO suggestions
+
+The plan is ready for execution.
+```
+→ Proceed to completion summary
+
+**NEEDS_REVISION (fixable BLOCKERs):**
+```
+[VERIFY] Plan needs revision
+
+Verdict: NEEDS_REVISION
+  - {N} BLOCKERs found
+  - {N} WARNINGs
+  - {N} INFO
+
+BLOCKER issues that must be fixed:
+
+BLOCKER-001: {Issue Title}
+  Location: {story ID or spec section}
+  Problem: {description}
+  Fix: {recommendation}
+
+BLOCKER-002: {Issue Title}
+  ...
+
+Revision {current}/3 - Fixing BLOCKER issues...
+```
+→ Enter revision loop
+
+**BLOCKED (major issues):**
+```
+[VERIFY] Plan has significant issues
+
+Verdict: BLOCKED
+  - {N} BLOCKERs found (require major changes)
+
+The plan has issues that cannot be automatically fixed:
+  - {List major issues}
+
+Recommendations:
+  1. Review the BLOCKER issues in PLAN-REVIEW.md
+  2. Manually update spec.md to address the issues
+  3. Run /ralph-hybrid-plan --regenerate to update prd.json
+  4. Run verification again
+```
+→ Proceed to completion summary (user must fix manually)
+
+#### Step 4: Revision Loop (for NEEDS_REVISION)
+
+The revision loop attempts to fix BLOCKER issues automatically:
+
+```
+Maximum revisions: 3
+Current revision: 1
+
+for each revision:
+    1. Identify BLOCKER issues from PLAN-REVIEW.md
+    2. Apply fixes to spec.md and/or prd.json:
+       - Missing acceptance criteria → add them
+       - Vague criteria → make specific
+       - Missing dependencies → reorder stories
+       - Missing test requirements → add them
+    3. Regenerate prd.json if spec.md was modified
+    4. Re-run plan checker
+    5. If verdict is READY:
+       → Exit loop successfully
+    6. If still NEEDS_REVISION and revisions < 3:
+       → Continue to next revision
+    7. If revisions exhausted:
+       → Exit loop, report remaining issues
+```
+
+**Revision output:**
+```
+[VERIFY] Revision 1/3 - Applying fixes...
+
+Fixing BLOCKER-001: Missing acceptance criteria in STORY-003
+  → Added "Typecheck passes" and "Unit tests pass" criteria
+
+Fixing BLOCKER-002: Story ordering issue
+  → Moved STORY-004 after STORY-002 (dependency)
+
+Re-running verification...
+
+[VERIFY] Revision 1/3 complete
+  - Fixed: 2 BLOCKERs
+  - Remaining: 1 BLOCKER
+
+[VERIFY] Revision 2/3 - Applying fixes...
+...
+
+[VERIFY] Plan verification PASSED after 2 revisions ✓
+```
+
+**If revisions exhausted:**
+```
+[VERIFY] Revision limit reached (3/3)
+
+Remaining issues that could not be automatically fixed:
+  - BLOCKER-003: {description}
+
+Please review PLAN-REVIEW.md and manually address remaining issues.
+```
+
+#### Step 5: Save Plan Review
+
+Save the final PLAN-REVIEW.md to the feature folder:
+
+```
+.ralph-hybrid/{branch}/
+├── spec.md
+├── prd.json
+├── progress.txt
+└── PLAN-REVIEW.md     # Plan verification results
+```
+
+### Final Status Output
+
+After verification (or skip), show the final plan status:
+
+```
+═══════════════════════════════════════════════════════════════
+PLANNING COMPLETE
+═══════════════════════════════════════════════════════════════
+
+Branch: {exact branch name}
+Feature folder: .ralph-hybrid/{branch-with-slashes-as-dashes}/
+
+Files:
+  ├── spec.md          # Feature specification
+  ├── prd.json         # {N} stories, all passes: false
+  ├── progress.txt     # Ready for iterations
+  └── PLAN-REVIEW.md   # Verification: {READY|NEEDS_REVISION|BLOCKED|SKIPPED}
+
+Plan Status: {READY ✓ | NEEDS_REVISION ⚠ | BLOCKED ✗ | NOT_VERIFIED}
+
+{If READY:}
+  The plan has passed verification and is ready for execution.
+
+{If NEEDS_REVISION:}
+  Some issues remain. Review PLAN-REVIEW.md before proceeding.
+
+{If BLOCKED:}
+  Significant issues found. Manual intervention required.
+
+{If NOT_VERIFIED (--skip-verify):}
+  Verification was skipped. Consider running verification before execution.
 
 Next steps:
   1. Review spec.md and prd.json
@@ -726,6 +930,7 @@ project-specific commands like `/execute`, `npm run dev`, or any other
 command. The Ralph development loop is initiated with `ralph-hybrid run` only.
 
 To modify: Edit spec.md, then run /ralph-hybrid-plan --regenerate
+═══════════════════════════════════════════════════════════════
 ```
 
 ---

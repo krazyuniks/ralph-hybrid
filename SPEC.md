@@ -607,6 +607,7 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 | `/ralph-hybrid-plan <description>` | Interactive planning workflow |
 | `/ralph-hybrid-plan --research` | Planning with research agent investigation |
 | `/ralph-hybrid-plan --regenerate` | Generate prd.json from existing spec.md |
+| `/ralph-hybrid-plan --skip-verify` | Skip plan verification phase (not recommended) |
 
 ### Workflow States
 
@@ -648,8 +649,47 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
        ▼
 ┌─────────────┐
 │  GENERATE   │ ← Create prd.json + progress.txt
+└──────┬──────┘
+       │
+       ▼ (unless --skip-verify)
+┌─────────────┐
+│   VERIFY    │ ← Run plan checker, revision loop for BLOCKERs
 └─────────────┘
 ```
+
+### Plan Verification Phase
+
+After generating spec.md and prd.json, the planning workflow runs plan verification (unless `--skip-verify` is provided):
+
+**Plan Checker Agent:**
+- Uses `templates/plan-checker.md` to verify the plan across six dimensions:
+  - Coverage: Does the plan address all aspects of the stated problem?
+  - Completeness: Is each story fully specified and implementable?
+  - Dependencies: Are story ordering and dependencies correct?
+  - Links: Are references and connections valid?
+  - Scope: Is the plan appropriately scoped for iterative implementation?
+  - Verification: Is there an adequate verification approach?
+
+**Issue Classification:**
+- **BLOCKER**: Must be fixed before implementation can succeed
+- **WARNING**: Should be addressed but won't prevent basic implementation
+- **INFO**: Observations and suggestions for improvement
+
+**Verdict and Revision Loop:**
+- **READY**: Zero BLOCKERs, plan is ready for execution
+- **NEEDS_REVISION**: Fixable BLOCKERs, enters revision loop (up to 3 iterations)
+- **BLOCKED**: Significant issues requiring manual intervention
+
+**Revision Loop (up to 3 iterations):**
+1. Identify BLOCKER issues from PLAN-REVIEW.md
+2. Apply fixes to spec.md and/or prd.json
+3. Regenerate prd.json if spec.md was modified
+4. Re-run plan checker
+5. Repeat until READY or iteration limit reached
+
+**Output:**
+- `PLAN-REVIEW.md` saved to feature folder with verification results
+- Final plan status shown to user (READY/NEEDS_REVISION/BLOCKED/NOT_VERIFIED)
 
 ### Research Phase (Optional)
 
