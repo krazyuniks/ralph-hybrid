@@ -157,6 +157,10 @@ readonly RALPH_HYBRID_EXIT_TIMEOUT=124
 # Interrupt signal exit code (128 + SIGINT)
 readonly RALPH_HYBRID_EXIT_INTERRUPT=130
 
+# Verification failed exit code (for backpressure hooks)
+# Distinct from general errors to enable circuit breaker handling
+readonly RALPH_HYBRID_EXIT_VERIFICATION_FAILED=75
+
 #=============================================================================
 # File and Directory Names
 #=============================================================================
