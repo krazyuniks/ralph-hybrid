@@ -1,0 +1,189 @@
+#!/usr/bin/env bats
+# Unit tests for lib/hooks.sh run_hook() function
+# Tests the backpressure hook execution infrastructure
+
+setup() {
+    PROJECT_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
+    TEST_DIR=$(mktemp -d)
+
+    # Create minimal project structure
+    mkdir -p "$TEST_DIR/.ralph-hybrid/test-feature/hooks"
+    mkdir -p "$TEST_DIR/.ralph-hybrid/hooks"
+
+    cd "$TEST_DIR"
+
+    # Source the libraries
+    source "$PROJECT_ROOT/lib/constants.sh"
+    source "$PROJECT_ROOT/lib/logging.sh"
+    source "$PROJECT_ROOT/lib/hooks.sh"
+
+    # Set log level to suppress debug output
+    export RALPH_HYBRID_LOG_LEVEL="error"
+}
+
+teardown() {
+    if [[ -n "${TEST_DIR:-}" && -d "${TEST_DIR:-}" ]]; then
+        rm -rf "$TEST_DIR"
+    fi
+}
+
+@test "RALPH_HYBRID_EXIT_VERIFICATION_FAILED is defined as 75" {
+    [[ "${RALPH_HYBRID_EXIT_VERIFICATION_FAILED:-}" == "75" ]]
+}
+
+@test "run_hook returns 0 when no hook exists" {
+    run run_hook "post_iteration" "STORY-001" 1 ".ralph-hybrid/test-feature" "output.log"
+    [[ "$status" -eq 0 ]]
+}
+
+@test "run_hook returns 0 when hook exits 0" {
+    # Create a hook that exits 0
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << 'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+
+    run run_hook "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
+    [[ "$status" -eq 0 ]]
+}
+
+@test "run_hook returns 75 for VERIFICATION_FAILED" {
+    # Create a hook that exits 75 (VERIFICATION_FAILED)
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << 'EOF'
+#!/bin/bash
+exit 75
+EOF
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+
+    run run_hook "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
+    [[ "$status" -eq 75 ]]
+}
+
+@test "run_hook returns 1 for other failures" {
+    # Create a hook that exits with non-zero, non-75 code
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << 'EOF'
+#!/bin/bash
+exit 42
+EOF
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+
+    run run_hook "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
+    [[ "$status" -eq 1 ]]
+}
+
+@test "Hook receives JSON context file as argument" {
+    # Create output file to capture context
+    local captured_context="$TEST_DIR/captured_context.json"
+
+    # Create a hook that copies the JSON context
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << EOF
+#!/bin/bash
+cp "\$1" "$captured_context"
+exit 0
+EOF
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+
+    run run_hook "post_iteration" "STORY-001" 5 "$TEST_DIR/.ralph-hybrid/test-feature" "$TEST_DIR/output.log"
+    [[ "$status" -eq 0 ]]
+
+    # Verify JSON structure
+    [[ -f "$captured_context" ]]
+
+    local story_id iteration feature_dir output_file timestamp
+    story_id=$(jq -r '.story_id' "$captured_context" 2>/dev/null || echo "")
+    iteration=$(jq -r '.iteration' "$captured_context" 2>/dev/null || echo "")
+    feature_dir=$(jq -r '.feature_dir' "$captured_context" 2>/dev/null || echo "")
+    output_file=$(jq -r '.output_file' "$captured_context" 2>/dev/null || echo "")
+    timestamp=$(jq -r '.timestamp' "$captured_context" 2>/dev/null || echo "")
+
+    [[ "$story_id" == "STORY-001" ]]
+    [[ "$iteration" == "5" ]]
+    [[ "$feature_dir" == "$TEST_DIR/.ralph-hybrid/test-feature" ]]
+    [[ "$output_file" == "$TEST_DIR/output.log" ]]
+    [[ -n "$timestamp" ]]
+}
+
+@test "Project-wide hooks are found when no feature hook exists" {
+    # Create project-wide hook (not feature-specific)
+    cat > "$TEST_DIR/.ralph-hybrid/hooks/post_iteration.sh" << 'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$TEST_DIR/.ralph-hybrid/hooks/post_iteration.sh"
+
+    run run_hook "post_iteration" "STORY-001" 1 "" "output.log"
+    [[ "$status" -eq 0 ]]
+}
+
+@test "Feature-specific hooks override project-wide hooks" {
+    local marker_file="$TEST_DIR/hook_marker"
+
+    # Create project-wide hook that creates "project" marker
+    cat > "$TEST_DIR/.ralph-hybrid/hooks/post_iteration.sh" << EOF
+#!/bin/bash
+echo "project" > "$marker_file"
+exit 0
+EOF
+    chmod +x "$TEST_DIR/.ralph-hybrid/hooks/post_iteration.sh"
+
+    # Create feature-specific hook that creates "feature" marker
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << EOF
+#!/bin/bash
+echo "feature" > "$marker_file"
+exit 0
+EOF
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+
+    run run_hook "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
+    [[ "$status" -eq 0 ]]
+
+    [[ -f "$marker_file" ]]
+    local content
+    content=$(cat "$marker_file")
+    [[ "$content" == "feature" ]]
+}
+
+@test "run_hook fails with empty hook name" {
+    run run_hook "" "STORY-001" 1 ".ralph-hybrid/test-feature" "output.log"
+    [[ "$status" -ne 0 ]]
+}
+
+@test "hook_exists returns 0 when hook exists" {
+    # Create a hook
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << 'EOF'
+#!/bin/bash
+exit 0
+EOF
+
+    run hook_exists "post_iteration" "$TEST_DIR/.ralph-hybrid/test-feature"
+    [[ "$status" -eq 0 ]]
+}
+
+@test "hook_exists returns 1 when hook does not exist" {
+    run hook_exists "nonexistent_hook" "$TEST_DIR/.ralph-hybrid/test-feature"
+    [[ "$status" -ne 0 ]]
+}
+
+@test "Hook receives environment variables" {
+    local env_file="$TEST_DIR/hook_env"
+
+    # Create a hook that captures environment variables
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << EOF
+#!/bin/bash
+echo "RALPH_HYBRID_HOOK_POINT=\$RALPH_HYBRID_HOOK_POINT" >> "$env_file"
+echo "RALPH_HYBRID_STORY_ID=\$RALPH_HYBRID_STORY_ID" >> "$env_file"
+echo "RALPH_HYBRID_ITERATION=\$RALPH_HYBRID_ITERATION" >> "$env_file"
+echo "RALPH_HYBRID_FEATURE_DIR=\$RALPH_HYBRID_FEATURE_DIR" >> "$env_file"
+exit 0
+EOF
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+
+    run run_hook "post_iteration" "STORY-002" 3 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
+    [[ "$status" -eq 0 ]]
+
+    [[ -f "$env_file" ]]
+    grep -q "RALPH_HYBRID_HOOK_POINT=post_iteration" "$env_file"
+    grep -q "RALPH_HYBRID_STORY_ID=STORY-002" "$env_file"
+    grep -q "RALPH_HYBRID_ITERATION=3" "$env_file"
+}

@@ -32,7 +32,8 @@ RALPH_HYBRID_PROJECT_CONFIG="${RALPH_HYBRID_PROJECT_CONFIG:-.ralph-hybrid/config
 #=============================================================================
 
 # Extract a value from a YAML file by key path
-# Supports simple key: value and one level of nesting (e.g., "defaults.max_iterations")
+# Supports simple key: value and up to three levels of nesting
+# Examples: "model", "defaults.max_iterations", "hooks.post_iteration.enabled"
 # Usage: cfg_load_yaml_value "config.yaml" "defaults.max_iterations"
 cfg_load_yaml_value() {
     local file="$1"
@@ -42,72 +43,15 @@ cfg_load_yaml_value() {
         return 0
     fi
 
-    # Check if it's a nested key (contains a dot)
-    if [[ "$key_path" == *.* ]]; then
-        local section="${key_path%%.*}"
-        local key="${key_path#*.}"
+    # Count the number of dots to determine nesting level
+    local dot_count="${key_path//[^.]/}"
+    local nesting_level=${#dot_count}
 
-        # Find the section and extract the nested key
-        # Look for the section header, then find the key within it
-        local in_section=0
-        local result=""
-
-        while IFS= read -r line || [[ -n "$line" ]]; do
-            # Check if we're entering the target section
-            # Pattern: ^${section}:$ or ^${section}:[[:space:]]*$
-            # Matches: YAML section header (e.g., "defaults:" or "defaults:   ")
-            # Example: "defaults:" -> matches for section="defaults"
-            # Note: ${section} is interpolated, so "defaults" becomes ^defaults:$
-            #       [[:space:]]* allows trailing whitespace after colon
-            if [[ "$line" =~ ^${section}:$ ]] || [[ "$line" =~ ^${section}:[[:space:]]*$ ]]; then
-                in_section=1
-                continue
-            fi
-
-            # Check if we've exited the section (new top-level key)
-            # Pattern: ^[a-zA-Z_] (starts with letter or underscore, no leading space)
-            # Matches: New top-level YAML key (not indented)
-            # Example: "circuit_breaker:" after being in "defaults:" section
-            # Note: Combined with !^[[:space:]] to ensure no leading whitespace
-            if [[ $in_section -eq 1 ]] && [[ "$line" =~ ^[a-zA-Z_] ]] && [[ ! "$line" =~ ^[[:space:]] ]]; then
-                in_section=0
-            fi
-
-            # If in section, look for the key
-            if [[ $in_section -eq 1 ]]; then
-                # Pattern: ^[[:space:]]+${key}:[[:space:]]*(.*)$
-                # Matches: Indented YAML key-value pair
-                # Example: "  max_iterations: 20" -> captures "20" for key="max_iterations"
-                # Breakdown:
-                #   ^[[:space:]]+  - Required leading whitespace (indentation)
-                #   ${key}         - Interpolated key name to find
-                #   :              - Literal colon after key
-                #   [[:space:]]*   - Optional whitespace after colon
-                #   (.*)$          - Capture group: everything to end of line (the value)
-                if [[ "$line" =~ ^[[:space:]]+${key}:[[:space:]]*(.*)$ ]]; then
-                    result="${BASH_REMATCH[1]}"
-                    # Remove surrounding quotes if present
-                    result="${result#\"}"
-                    result="${result%\"}"
-                    result="${result#\'}"
-                    result="${result%\'}"
-                    echo "$result"
-                    return 0
-                fi
-            fi
-        done < "$file"
-    else
+    if [[ $nesting_level -eq 0 ]]; then
         # Simple top-level key (no dot in key_path)
         while IFS= read -r line || [[ -n "$line" ]]; do
             # Pattern: ^${key_path}:[[:space:]]*(.*)$
             # Matches: Top-level YAML key-value pair (no indentation)
-            # Example: "model: opus" -> captures "opus" for key_path="model"
-            # Breakdown:
-            #   ^              - Start of line (no leading whitespace)
-            #   ${key_path}    - Interpolated key name
-            #   :              - Literal colon
-            #   [[:space:]]*   - Optional whitespace after colon
-            #   (.*)$          - Capture group: the value to end of line
             if [[ "$line" =~ ^${key_path}:[[:space:]]*(.*)$ ]]; then
                 local result="${BASH_REMATCH[1]}"
                 # Remove surrounding quotes if present
@@ -117,6 +61,98 @@ cfg_load_yaml_value() {
                 result="${result%\'}"
                 echo "$result"
                 return 0
+            fi
+        done < "$file"
+    elif [[ $nesting_level -eq 1 ]]; then
+        # Two-level nesting (e.g., "defaults.max_iterations")
+        local section="${key_path%%.*}"
+        local key="${key_path#*.}"
+
+        local in_section=0
+
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Check if we're entering the target section
+            if [[ "$line" =~ ^${section}:$ ]] || [[ "$line" =~ ^${section}:[[:space:]]*$ ]]; then
+                in_section=1
+                continue
+            fi
+
+            # Check if we've exited the section (new top-level key)
+            if [[ $in_section -eq 1 ]] && [[ "$line" =~ ^[a-zA-Z_] ]] && [[ ! "$line" =~ ^[[:space:]] ]]; then
+                in_section=0
+            fi
+
+            # If in section, look for the key
+            if [[ $in_section -eq 1 ]]; then
+                if [[ "$line" =~ ^[[:space:]]+${key}:[[:space:]]*(.*)$ ]]; then
+                    local result="${BASH_REMATCH[1]}"
+                    result="${result#\"}"
+                    result="${result%\"}"
+                    result="${result#\'}"
+                    result="${result%\'}"
+                    echo "$result"
+                    return 0
+                fi
+            fi
+        done < "$file"
+    elif [[ $nesting_level -eq 2 ]]; then
+        # Three-level nesting (e.g., "hooks.post_iteration.enabled")
+        # YAML structure:
+        #   hooks:                    <- section (0 indent)
+        #     post_iteration:         <- subsection (2 spaces)
+        #       enabled: false        <- key (4 spaces)
+        #     timeout: 60             <- sibling subsection (2 spaces, exits post_iteration)
+        local section="${key_path%%.*}"
+        local remainder="${key_path#*.}"
+        local subsection="${remainder%%.*}"
+        local key="${remainder#*.}"
+
+        local in_section=0
+        local in_subsection=0
+
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Check if we're entering the top-level section
+            if [[ "$line" =~ ^${section}:$ ]] || [[ "$line" =~ ^${section}:[[:space:]]*$ ]]; then
+                in_section=1
+                in_subsection=0
+                continue
+            fi
+
+            # Check if we've exited the top-level section (new top-level key)
+            if [[ $in_section -eq 1 ]] && [[ "$line" =~ ^[a-zA-Z_] ]] && [[ ! "$line" =~ ^[[:space:]] ]]; then
+                in_section=0
+                in_subsection=0
+            fi
+
+            # If in section, check for subsection
+            if [[ $in_section -eq 1 ]]; then
+                # Check for subsection header (2 spaces of indentation)
+                # Pattern matches: "  post_iteration:" or "  post_iteration:  "
+                if [[ "$line" =~ ^[[:space:]]{2}${subsection}:$ ]] || [[ "$line" =~ ^[[:space:]]{2}${subsection}:[[:space:]]*$ ]]; then
+                    in_subsection=1
+                    continue
+                fi
+
+                # Check if we've exited the subsection (sibling subsection at same level)
+                # A line with exactly 2 spaces followed by a key indicates a sibling
+                # Must check this BEFORE looking for the key to avoid false exits
+                if [[ $in_subsection -eq 1 ]] && [[ "$line" =~ ^[[:space:]]{2}[a-zA-Z_][a-zA-Z0-9_]*: ]]; then
+                    # Sibling subsection - exit current subsection
+                    in_subsection=0
+                fi
+
+                # If in subsection, look for the key (4+ spaces of indentation)
+                if [[ $in_subsection -eq 1 ]]; then
+                    if [[ "$line" =~ ^[[:space:]]{4,}${key}:[[:space:]]*(.*)$ ]]; then
+                        local result="${BASH_REMATCH[1]}"
+                        result="${result#\"}"
+                        result="${result%\"}"
+                        result="${result#\'}"
+                        result="${result%\'}"
+                        echo "$result"
+                        return 0
+                    fi
+                fi
             fi
         done < "$file"
     fi
@@ -227,10 +263,144 @@ cfg_load() {
     export RALPH_HYBRID_LOG_VERBOSITY="${RALPH_HYBRID_LOG_VERBOSITY:-$(cfg_get_value "logging.verbosity")}"
     export RALPH_HYBRID_LOG_VERBOSITY="${RALPH_HYBRID_LOG_VERBOSITY:-$RALPH_HYBRID_DEFAULT_LOG_VERBOSITY}"
 
+    # Profile settings
+    _cfg_load_profile
+
     log_debug "Configuration loaded"
 }
 
 # Alias for backwards compatibility
 load_config() {
     cfg_load "$@"
+}
+
+#=============================================================================
+# Profile Functions
+#=============================================================================
+
+# Validate that a profile name is valid (built-in or custom)
+# Arguments:
+#   $1 - Profile name to validate
+# Returns:
+#   0 if valid, 1 if invalid
+cfg_validate_profile() {
+    local profile="${1:-}"
+
+    if [[ -z "$profile" ]]; then
+        return 1
+    fi
+
+    # Check built-in profiles
+    case "$profile" in
+        "$RALPH_HYBRID_PROFILE_QUALITY"|"$RALPH_HYBRID_PROFILE_BALANCED"|"$RALPH_HYBRID_PROFILE_BUDGET")
+            return 0
+            ;;
+    esac
+
+    # Check for custom profile in config
+    local custom_planning
+    custom_planning=$(cfg_get_value "profiles.${profile}.planning")
+    if [[ -n "$custom_planning" ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Validate that a model phase is valid
+# Arguments:
+#   $1 - Phase name to validate (planning, execution, research, verification)
+# Returns:
+#   0 if valid, 1 if invalid
+cfg_validate_model_phase() {
+    local phase="${1:-}"
+
+    if [[ -z "$phase" ]]; then
+        return 1
+    fi
+
+    case "$phase" in
+        planning|execution|research|verification)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+# Get the model for a profile and phase
+# Arguments:
+#   $1 - Profile name (quality, balanced, budget, or custom)
+#   $2 - Phase name (planning, execution, research, verification)
+# Returns:
+#   Model name (opus, sonnet, haiku) or empty if not found
+cfg_get_profile_model() {
+    local profile="${1:-}"
+    local phase="${2:-}"
+
+    if [[ -z "$profile" ]] || [[ -z "$phase" ]]; then
+        return 0
+    fi
+
+    # First try to get from config (allows overrides and custom profiles)
+    local config_model
+    config_model=$(cfg_get_value "profiles.${profile}.${phase}")
+    if [[ -n "$config_model" ]]; then
+        echo "$config_model"
+        return 0
+    fi
+
+    # Fall back to built-in defaults for standard profiles
+    case "$profile" in
+        "$RALPH_HYBRID_PROFILE_QUALITY")
+            case "$phase" in
+                planning)     echo "$RALPH_HYBRID_BUILTIN_QUALITY_PLANNING" ;;
+                execution)    echo "$RALPH_HYBRID_BUILTIN_QUALITY_EXECUTION" ;;
+                research)     echo "$RALPH_HYBRID_BUILTIN_QUALITY_RESEARCH" ;;
+                verification) echo "$RALPH_HYBRID_BUILTIN_QUALITY_VERIFICATION" ;;
+            esac
+            ;;
+        "$RALPH_HYBRID_PROFILE_BALANCED")
+            case "$phase" in
+                planning)     echo "$RALPH_HYBRID_BUILTIN_BALANCED_PLANNING" ;;
+                execution)    echo "$RALPH_HYBRID_BUILTIN_BALANCED_EXECUTION" ;;
+                research)     echo "$RALPH_HYBRID_BUILTIN_BALANCED_RESEARCH" ;;
+                verification) echo "$RALPH_HYBRID_BUILTIN_BALANCED_VERIFICATION" ;;
+            esac
+            ;;
+        "$RALPH_HYBRID_PROFILE_BUDGET")
+            case "$phase" in
+                planning)     echo "$RALPH_HYBRID_BUILTIN_BUDGET_PLANNING" ;;
+                execution)    echo "$RALPH_HYBRID_BUILTIN_BUDGET_EXECUTION" ;;
+                research)     echo "$RALPH_HYBRID_BUILTIN_BUDGET_RESEARCH" ;;
+                verification) echo "$RALPH_HYBRID_BUILTIN_BUDGET_VERIFICATION" ;;
+            esac
+            ;;
+    esac
+
+    return 0
+}
+
+# Get the current active profile
+# Returns the profile from config or default
+cfg_get_current_profile() {
+    local profile
+    profile="${RALPH_HYBRID_PROFILE:-}"
+
+    if [[ -z "$profile" ]]; then
+        profile=$(cfg_get_value "defaults.profile")
+    fi
+
+    if [[ -z "$profile" ]]; then
+        profile="$RALPH_HYBRID_DEFAULT_PROFILE"
+    fi
+
+    echo "$profile"
+}
+
+# Load profile setting into environment
+# Called by cfg_load to set RALPH_HYBRID_PROFILE
+_cfg_load_profile() {
+    export RALPH_HYBRID_PROFILE="${RALPH_HYBRID_PROFILE:-$(cfg_get_value "defaults.profile")}"
+    export RALPH_HYBRID_PROFILE="${RALPH_HYBRID_PROFILE:-$RALPH_HYBRID_DEFAULT_PROFILE}"
 }

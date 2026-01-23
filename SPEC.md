@@ -201,6 +201,9 @@ ralph-hybrid status                    # Show current state
 ralph-hybrid monitor                   # Launch tmux monitoring dashboard
 ralph-hybrid archive                   # Archive current feature
 ralph-hybrid validate                  # Run preflight checks without starting loop
+ralph-hybrid verify [options]          # Run goal-backward verification on current feature
+ralph-hybrid integrate [options]       # Run integration check on current feature
+ralph-hybrid debug [options] "desc"    # Start or continue scientific debugging session
 ralph-hybrid import <file> [options]   # Import PRD from Markdown or JSON file
 ralph-hybrid help                      # Show help
 ```
@@ -216,6 +219,7 @@ ralph-hybrid help                      # Show help
 | `-r, --rate-limit` | 100 | Max API calls per hour |
 | `-p, --prompt` | default | Custom prompt file |
 | `-m, --model` | (none) | Claude model (opus, sonnet, or full name) |
+| `--profile` | balanced | Model profile (quality, balanced, budget, or custom) |
 | `-v, --verbose` | false | Detailed output |
 | `--no-archive` | false | Don't archive on completion |
 | `--dry-run` | false | Show what would happen |
@@ -223,7 +227,88 @@ ralph-hybrid help                      # Show help
 | `--skip-preflight` | false | Skip preflight validation (use with caution) |
 | `--dangerously-skip-permissions` | false | Pass to Claude Code |
 
+#### Model Selection Priority
+
+Models are selected with the following priority:
+
+1. **Story-level model** (from `prd.json` story's `model` field) - highest priority
+2. **CLI `--model` flag** - explicit model override
+3. **Profile's execution model** (from `--profile` or config) - cost optimization
+4. **Claude CLI default** - if nothing specified
+
+This allows fine-grained control: use profiles for cost optimization, but override specific stories that need a more capable model.
+
 > **Note:** The feature folder is automatically derived from the current git branch name. No `-f` flag is needed.
+
+### Verify Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--profile` | (from config) | Model profile for verification (quality, balanced, budget) |
+| `-m, --model` | (profile default) | Specific model to use (overrides profile) |
+| `-o, --output` | .ralph-hybrid/{branch}/VERIFICATION.md | Output file for verification results |
+| `-v, --verbose` | false | Enable verbose output |
+
+#### Verification Exit Codes
+
+| Exit Code | Meaning | Description |
+|-----------|---------|-------------|
+| 0 | VERIFIED | All goals achieved, no issues found |
+| 1 | NEEDS_WORK | Issues found that need to be fixed |
+| 2 | BLOCKED | Critical issues preventing feature completion |
+
+#### Verification Process
+
+The `ralph-hybrid verify` command uses the goal-backward verification approach:
+
+1. **Goal Extraction** - Extracts concrete goals from spec.md
+2. **Deliverables Verification** - Verifies code exists, is accessible, and is integrated
+3. **Stub Detection** - Scans for placeholder implementations, TODO comments, empty functions
+4. **Wiring Verification** - Verifies components are connected (frontend→backend→database)
+5. **Human Testing Items** - Flags items requiring manual verification (UI/UX, user flows)
+
+Output is written to VERIFICATION.md with:
+- Goals verification table
+- Deliverables check (completed and incomplete)
+- Stub detection results
+- Wiring verification status
+- Human testing checklist
+- Issue summary and recommendations
+
+### Integrate Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--profile` | (from config) | Model profile for integration check (quality, balanced, budget) |
+| `-m, --model` | (profile default) | Specific model to use (overrides profile) |
+| `-o, --output` | .ralph-hybrid/{branch}/INTEGRATION.md | Output file for integration results |
+| `-v, --verbose` | false | Enable verbose output |
+
+#### Integration Exit Codes
+
+| Exit Code | Meaning | Description |
+|-----------|---------|-------------|
+| 0 | INTEGRATED | All components connected, no orphaned code |
+| 1 | NEEDS_WIRING | Components exist but connections missing |
+| 2 | BROKEN | Critical integration failures, major components disconnected |
+
+#### Integration Check Process
+
+The `ralph-hybrid integrate` command checks feature integration:
+
+1. **Export/Import Analysis** - Verifies all exports are imported and used somewhere
+2. **Route/Endpoint Analysis** - Verifies all routes have consumers (frontend calls, CLI commands)
+3. **Authentication Analysis** - Verifies sensitive routes have auth middleware
+4. **Data Flow Tracing** - Traces data from entry to destination, identifies break points
+5. **Dead Code Detection** - Finds unused imports, unreachable code, deprecated functions
+
+Output is written to INTEGRATION.md with:
+- Export/import verification table
+- Route consumer mapping
+- Auth coverage for sensitive routes
+- Data flow diagrams with break points
+- Dead code list with recommendations
+- Issue summary and fix suggestions
 
 ### Import Options
 
@@ -251,6 +336,63 @@ ralph-hybrid import requirements.json --output ./custom-prd.json
 
 # Override format detection
 ralph-hybrid import my-spec.txt --format markdown
+```
+
+### Debug Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--profile` | (from config) | Model profile for debugging (quality, balanced, budget) |
+| `-m, --model` | (profile default) | Specific model to use (overrides profile) |
+| `--continue` | false | Continue from previous debug state |
+| `--reset` | false | Start fresh, discarding previous debug state |
+| `-v, --verbose` | false | Enable verbose output |
+
+#### Debug Exit Codes
+
+| Exit Code | Meaning | Description |
+|-----------|---------|-------------|
+| 0 | ROOT_CAUSE_FOUND or DEBUG_COMPLETE | Root cause found or issue resolved |
+| 1 | ERROR | Error during debugging |
+| 10 | CHECKPOINT_REACHED | Progress saved, needs continuation |
+
+#### Debug Return States
+
+| State | Description |
+|-------|-------------|
+| ROOT_CAUSE_FOUND | Root cause identified with evidence; user chooses: fix now, plan solution, or handle manually |
+| DEBUG_COMPLETE | Issue fixed and verified |
+| CHECKPOINT_REACHED | Progress saved for multi-session debugging |
+
+#### Debug Process
+
+The `ralph-hybrid debug` command uses the scientific method:
+
+1. **Gather Symptoms** - Collect observable evidence before forming hypotheses
+2. **Form Hypotheses** - Propose ranked, testable explanations (H1, H2, H3...)
+3. **Test One Variable** - Change exactly one thing per test, revert if not fixed
+4. **Collect Evidence** - Record results: CONFIRMED, RULED_OUT, INCONCLUSIVE, PARTIAL
+5. **Iterate** - Refine hypotheses based on evidence
+
+State persists in `.ralph-hybrid/{branch}/debug-state.md` across sessions, enabling:
+- Multi-session debugging for complex issues
+- Handoff between context windows
+- Progress tracking with hypotheses, evidence, and findings
+
+#### Debug Examples
+
+```bash
+# Start new debug session
+ralph-hybrid debug "tests failing after refactor"
+
+# Continue previous debug session
+ralph-hybrid debug --continue
+
+# Start fresh (discard previous state)
+ralph-hybrid debug --reset "investigate from scratch"
+
+# Use quality profile for debugging
+ralph-hybrid debug --profile quality "complex race condition"
 ```
 
 ---
@@ -593,7 +735,10 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 | Command | Purpose |
 |---------|---------|
 | `/ralph-hybrid-plan <description>` | Interactive planning workflow |
+| `/ralph-hybrid-plan --list-assumptions` | Surface implicit assumptions before planning |
+| `/ralph-hybrid-plan --research` | Planning with research agent investigation |
 | `/ralph-hybrid-plan --regenerate` | Generate prd.json from existing spec.md |
+| `/ralph-hybrid-plan --skip-verify` | Skip plan verification phase (not recommended) |
 
 ### Workflow States
 
@@ -607,14 +752,29 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
 │  SUMMARIZE  │ ← Combine issue context + user input
 └──────┬──────┘
        │
+       ▼ (if --list-assumptions flag)
+┌─────────────┐
+│ ASSUMPTIONS │ ← [Optional] Surface implicit assumptions in feature description
+└──────┬──────┘
+       │
        ▼
 ┌─────────────┐
 │   CLARIFY   │ ← Ask 3-5 targeted questions (fewer if issue has details)
 └──────┬──────┘
        │
+       ▼ (if --research flag)
+┌─────────────┐
+│  RESEARCH   │ ← [Optional] Spawn research agents for topics
+└──────┬──────┘
+       │
        ▼
 ┌─────────────┐
-│    DRAFT    │ ← Generate spec.md
+│   ANALYZE   │ ← Detect patterns requiring skills/scripts/hooks
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│    DRAFT    │ ← Generate spec.md (with research context if available)
 └──────┬──────┘
        │
        ▼
@@ -625,7 +785,138 @@ Ralph Hybrid provides Claude Code commands for guided feature planning. This sep
        ▼
 ┌─────────────┐
 │  GENERATE   │ ← Create prd.json + progress.txt
+└──────┬──────┘
+       │
+       ▼ (unless --skip-verify)
+┌─────────────┐
+│   VERIFY    │ ← Run plan checker, revision loop for BLOCKERs
 └─────────────┘
+```
+
+### Plan Verification Phase
+
+After generating spec.md and prd.json, the planning workflow runs plan verification (unless `--skip-verify` is provided):
+
+**Plan Checker Agent:**
+- Uses `templates/plan-checker.md` to verify the plan across six dimensions:
+  - Coverage: Does the plan address all aspects of the stated problem?
+  - Completeness: Is each story fully specified and implementable?
+  - Dependencies: Are story ordering and dependencies correct?
+  - Links: Are references and connections valid?
+  - Scope: Is the plan appropriately scoped for iterative implementation?
+  - Verification: Is there an adequate verification approach?
+
+**Issue Classification:**
+- **BLOCKER**: Must be fixed before implementation can succeed
+- **WARNING**: Should be addressed but won't prevent basic implementation
+- **INFO**: Observations and suggestions for improvement
+
+**Verdict and Revision Loop:**
+- **READY**: Zero BLOCKERs, plan is ready for execution
+- **NEEDS_REVISION**: Fixable BLOCKERs, enters revision loop (up to 3 iterations)
+- **BLOCKED**: Significant issues requiring manual intervention
+
+**Revision Loop (up to 3 iterations):**
+1. Identify BLOCKER issues from PLAN-REVIEW.md
+2. Apply fixes to spec.md and/or prd.json
+3. Regenerate prd.json if spec.md was modified
+4. Re-run plan checker
+5. Repeat until READY or iteration limit reached
+
+**Output:**
+- `PLAN-REVIEW.md` saved to feature folder with verification results
+- Final plan status shown to user (READY/NEEDS_REVISION/BLOCKED/NOT_VERIFIED)
+
+### Assumption Lister (Optional)
+
+When the `--list-assumptions` flag is provided, assumptions are surfaced before planning proceeds:
+
+**Why Surface Assumptions?**
+Misaligned assumptions are a leading cause of planning failures:
+- Technical assumptions that don't match reality
+- Scope assumptions that lead to missed requirements
+- Order assumptions that create blocking dependencies
+- Risk assumptions that leave vulnerabilities unaddressed
+- Dependency assumptions that cause delays
+
+**Five Assumption Categories:**
+
+| Category | Description | Examples |
+|----------|-------------|----------|
+| Technical | Technologies, frameworks, infrastructure | "The database supports transactions" |
+| Order | What must happen before what | "Users must be logged in first" |
+| Scope | What's included or excluded | "Mobile support isn't needed" |
+| Risk | What could go wrong | "The API will always respond" |
+| Dependencies | External systems, teams, resources | "The design team will provide mockups" |
+
+**Confidence and Impact Levels:**
+
+Each assumption is rated for:
+- **Confidence**: HIGH (verified), MEDIUM (reasonable but unverified), LOW (uncertain)
+- **Impact**: CRITICAL (invalidates plan), HIGH (significant rework), MEDIUM (some adjustment), LOW (minor)
+
+Assumptions with HIGH impact AND (LOW or MEDIUM confidence) require validation before planning proceeds.
+
+**Assumption Lister Workflow:**
+1. Analyze feature description, GitHub issue, and clarifying answers
+2. Surface implicit assumptions across all five categories
+3. Rate each assumption for confidence and impact
+4. Present critical assumptions (high impact, low confidence) to user
+5. Guide validation of uncertain assumptions
+6. Update context and proceed to CLARIFY phase
+
+**Output:**
+- `ASSUMPTIONS.md` saved to feature folder with categorized assumptions
+- Questions to ask user derived from uncertain assumptions
+- Updated context informs CLARIFY phase questions
+
+**Output Location:**
+```
+.ralph-hybrid/{branch}/
+├── ASSUMPTIONS.md   # Assumption analysis results
+├── spec.md          # (created later, informed by assumptions)
+├── prd.json
+└── progress.txt
+```
+
+### Research Phase (Optional)
+
+When the `--research` flag is provided, research agents are spawned to investigate topics extracted from the description:
+
+**Topic Extraction:**
+1. Parse description, GitHub issue, and clarifying question answers
+2. Extract technical/domain terms (filtering common words)
+3. Deduplicate and limit to configurable max (default: 5 topics)
+
+**Research Agent Workflow:**
+1. Spawn parallel agents for each topic (max 3 concurrent by default)
+2. Each agent produces `RESEARCH-{topic}.md` with structured output:
+   - Summary (2-3 sentences)
+   - Key Findings (with evidence and impact)
+   - Confidence Level (HIGH/MEDIUM/LOW with criteria)
+   - Sources consulted
+   - Recommendations
+3. Synthesize findings into `RESEARCH-SUMMARY.md`
+4. Inject research context into spec generation
+
+**Research Output Location:**
+```
+.ralph-hybrid/{branch}/
+├── research/
+│   ├── RESEARCH-{topic1}.md
+│   ├── RESEARCH-{topic2}.md
+│   └── RESEARCH-SUMMARY.md
+├── spec.md          ← Uses research context
+├── prd.json
+└── progress.txt
+```
+
+**Configuration:**
+```yaml
+research:
+  max_topics: 5          # Max topics to research per planning session
+  max_agents: 3          # Max concurrent research agents
+  timeout: 600           # Per-agent timeout in seconds
 ```
 
 ### GitHub Issue Integration
@@ -1045,7 +1336,7 @@ The prd.json file is a **derived artifact** generated from spec.md by `/ralph-hy
 | `description` | string | Yes | High-level feature description |
 | `createdAt` | ISO-8601 | Yes | Creation timestamp |
 | `userStories` | array | Yes | List of stories |
-| `userStories[].id` | string | Yes | Unique identifier (e.g., STORY-001) |
+| `userStories[].id` | string | Yes | Unique identifier (e.g., STORY-001 or STORY-002.1 for inserted stories) |
 | `userStories[].title` | string | Yes | Short title |
 | `userStories[].description` | string | No | User story or description |
 | `userStories[].acceptanceCriteria` | array | Yes | Testable criteria |
@@ -1063,6 +1354,36 @@ The prd.json file is a **derived artifact** generated from spec.md by `/ralph-hy
 | `userStories[].amendment.changes` | object | No | For corrections: before/after values |
 
 *Required if `amendment` object is present
+
+### Decimal Story IDs
+
+Stories can have decimal IDs (e.g., `STORY-002.1`) to support insertion without renumbering:
+
+```
+STORY-001
+STORY-002
+STORY-002.1   ← Inserted after STORY-002
+STORY-002.2   ← Another insertion
+STORY-003
+```
+
+**Key Properties:**
+- Created via `/ralph-hybrid-amend add --insert-after STORY-002`
+- Decimal parts are treated as integers: STORY-002.9 < STORY-002.10
+- Existing story numbers are never changed
+- Stories automatically sort by their numeric value
+
+**ID Format:** `STORY-NNN` or `STORY-NNN.D` where:
+- `NNN` = one or more digits (e.g., 001, 12, 123)
+- `D` = optional decimal part, one or more digits (e.g., 1, 10, 99)
+
+**Functions (lib/prd.sh):**
+- `prd_validate_story_id()` - Validates ID format
+- `prd_parse_story_id()` - Extracts numeric value
+- `prd_compare_story_ids()` - Compares two IDs (-1, 0, 1)
+- `prd_sort_stories_by_id()` - Returns sorted story array
+- `prd_insert_story_after()` - Inserts with auto-generated decimal ID
+- `prd_get_next_decimal_id()` - Gets next available decimal ID
 
 ### Per-Story Model and MCP Configuration
 
@@ -1635,7 +1956,141 @@ Ralph enforces **one story per iteration** to ensure fresh context:
 **Why fresh context matters:**
 - Prevents context pollution from accumulated state
 - Ensures reliable, predictable execution
-- Memory persists via files (prd.json, progress.txt, git commits)
+- Memory persists via files (prd.json, progress.txt, git commits, memories.md)
+
+---
+
+## Memory System
+
+Ralph Hybrid includes a memory system for persisting learnings across context resets. Unlike progress.txt (which logs what happened), memories capture reusable knowledge.
+
+### Memory File Format
+
+Memory files use markdown with four standard categories:
+
+```markdown
+# Memories
+
+Accumulated learnings and context for this project/feature.
+
+## Patterns
+
+<!-- Code patterns, architectural decisions, project conventions -->
+- [2024-01-15T10:30:00Z] [tags: api,rest] Use dependency injection for all service classes
+- [2024-01-16T14:00:00Z] [tags: testing] Always mock external APIs in unit tests
+
+## Decisions
+
+<!-- Why certain approaches were chosen -->
+- [2024-01-15T11:00:00Z] [tags: architecture] Chose Redux over Context for state management due to devtools support
+
+## Fixes
+
+<!-- Common issues and their solutions -->
+- [2024-01-15T16:00:00Z] [tags: auth,bug] Fixed race condition in auth flow by adding mutex lock
+
+## Context
+
+<!-- Project-specific context and domain knowledge -->
+- [2024-01-15T09:00:00Z] [tags: domain] User accounts must be verified before placing orders
+```
+
+### Memory Inheritance
+
+Memories are loaded from two levels:
+
+| Level | File Location | Purpose |
+|-------|---------------|---------|
+| Project | `.ralph-hybrid/memories.md` | Cross-feature learnings |
+| Feature | `.ralph-hybrid/{branch}/memories.md` | Feature-specific context |
+
+When both exist, they are combined with feature memories taking priority if token budget is limited.
+
+### Memory Functions
+
+| Function | Purpose |
+|----------|---------|
+| `load_memories(feature_dir, token_budget)` | Load combined memories within budget |
+| `write_memory(dir, category, content, tags)` | Append entry to memory file |
+| `memory_filter_by_tags(content, tags)` | Filter memories by tag |
+| `memory_load_with_tags(dir, tags, budget)` | Load and filter in one call |
+| `memory_get_for_iteration(dir, tags)` | Get formatted memories for prompt |
+
+### Tag-based Filtering
+
+Memory entries can include tags for filtering:
+
+```markdown
+- [2024-01-15T10:30:00Z] [tags: api,auth,security] Always validate JWT tokens server-side
+```
+
+Filter by tags to include only relevant memories:
+
+```bash
+# Load only auth-related memories
+memories=$(memory_load_with_tags "$feature_dir" "auth,security" 2000)
+```
+
+### Token Budget
+
+Memories are automatically truncated to fit within the token budget:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `memory.token_budget` | 2000 | Max tokens (~8000 chars) for memory injection |
+
+Token calculation uses ~4 characters per token (conservative estimate).
+
+### Injection Modes
+
+Configure how memories are injected into iteration prompts:
+
+| Mode | Description |
+|------|-------------|
+| `auto` | Automatically inject memories (default) |
+| `manual` | Only inject when explicitly requested |
+| `none` | Never inject memories |
+
+Configuration in `config.yaml`:
+
+```yaml
+memory:
+  token_budget: 2000
+  injection: auto  # auto, manual, or none
+```
+
+Or via environment variable:
+
+```bash
+export RALPH_HYBRID_MEMORY_INJECTION=manual
+export RALPH_HYBRID_MEMORY_TOKEN_BUDGET=3000
+```
+
+### Memory vs Progress
+
+| Aspect | progress.txt | memories.md |
+|--------|--------------|-------------|
+| Purpose | Log what happened | Store reusable knowledge |
+| Format | Chronological log | Categorized entries |
+| Growth | Grows each iteration | Curated, may be pruned |
+| Injection | Always included | Configurable (auto/manual/none) |
+| Tags | No | Yes |
+| Budget | No limit | Token budget enforced |
+
+### Example Usage
+
+**Writing a memory after fixing a bug:**
+
+```bash
+write_memory "$FEATURE_DIR" "Fixes" "Fixed null pointer in auth by checking token existence first" "auth,bug"
+```
+
+**Loading memories for a story with specific tags:**
+
+```bash
+# In iteration prompt, filtered to story-relevant tags
+memories=$(memory_load_with_tags "$FEATURE_DIR" "auth,api" 2000)
+```
 
 ---
 
@@ -1799,6 +2254,10 @@ Ralph Hybrid includes a template library for skills, scripts, and hooks that can
 | Template | Use When | Description |
 |----------|----------|-------------|
 | `visual-parity-migration.md` | Migrating UI frameworks | Enforces verbatim class copying, CSS variable auditing, visual regression validation |
+| `adversarial-review.md` | Security-focused code review | Red team/blue team pattern for finding injection, auth bypass, data exposure, race conditions |
+| `code-archaeology.md` | Legacy code modification | Four-role pattern (Surveyor, Historian, Archaeologist, Careful Modifier) for safe legacy changes |
+| `incident-response.md` | Production incidents | OODA loop pattern (Observer, Mitigator, Investigator, Fixer) with speed vs thoroughness separation |
+| `integration-checker.md` | Feature completion validation | Verifies exports used, routes have consumers, auth on sensitive routes, end-to-end flow tracing |
 
 #### Scripts
 
@@ -1822,6 +2281,10 @@ Templates are copied and customized per-feature during planning:
 ```
 ralph-hybrid/templates/           ← Generic templates (this repo)
 ├── skills/visual-parity-migration.md
+├── skills/adversarial-review.md
+├── skills/code-archaeology.md
+├── skills/incident-response.md
+├── skills/integration-checker.md
 ├── scripts/css-audit.sh
 └── hooks/post-iteration-visual-diff.sh
 
@@ -1830,6 +2293,10 @@ ralph-hybrid/templates/           ← Generic templates (this repo)
 
 .ralph-hybrid/{feature}/          ← Customized per-feature
 ├── skills/visual-parity-migration.md   ← Customized for project
+├── skills/adversarial-review.md        ← Security review skill
+├── skills/code-archaeology.md          ← Legacy code investigation skill
+├── skills/incident-response.md         ← Production incident handling skill
+├── skills/integration-checker.md       ← Feature integration validation skill
 ├── scripts/css-audit.sh                ← Configured with project paths
 └── hooks/post-iteration-visual-diff.sh ← Configured with URLs
 ```
@@ -1844,6 +2311,10 @@ The `/ralph-hybrid-plan` command detects patterns in the epic description and pr
 | Visual Parity | match styling, same look, pixel perfect | visual-parity skill, visual-diff hook |
 | API Changes | endpoint, REST, routes | endpoint-validation script |
 | Large Codebase | many files, multiple subsystems | file-inventory script |
+| Security Review | auth, login, password, security, encrypt, token, session | adversarial-review skill |
+| Legacy Code | legacy, old, refactor, migrate, ancient, technical debt, modernize | code-archaeology skill |
+| Incident Response | incident, outage, down, production, alert, emergency, urgent, critical, SEV-1, SEV-2 | incident-response skill |
+| Feature Integration | integrate, wire, connect, orphan, dead code, complete feature, verify integration | integration-checker skill |
 
 ### Script Output Format
 

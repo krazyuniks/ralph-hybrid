@@ -60,7 +60,7 @@ readonly -a RALPH_HYBRID_HOOK_POINTS=(
 
 # Associative arrays for registered hooks (function names)
 # Each key is a hook point, value is a colon-separated list of function names
-declare -gA _RALPH_HYBRID_HOOKS_REGISTRY=()
+declare -A _RALPH_HYBRID_HOOKS_REGISTRY=()
 
 # Initialize registry if not already done
 _hk_init_registry() {
@@ -324,7 +324,7 @@ _hk_execute_directory_hooks() {
 #=============================================================================
 
 # Array for custom completion patterns (in addition to built-in)
-declare -ga _RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS=()
+declare -a _RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS=()
 
 # Built-in completion patterns
 readonly -a _RALPH_HYBRID_BUILTIN_COMPLETION_PATTERNS=(
@@ -575,4 +575,181 @@ hk_on_completion() {
 # Arguments passed to hooks
 hk_on_error() {
     hk_execute "on_error" "$@"
+}
+
+#=============================================================================
+# Backpressure Hook Execution (JSON Context)
+#=============================================================================
+
+# Default hook timeout in seconds
+: "${RALPH_HYBRID_HOOK_TIMEOUT:=300}"
+
+# Run a hook with JSON context file
+# This function provides structured context to hooks for backpressure verification.
+#
+# Arguments:
+#   $1 - Hook name (e.g., "post_iteration")
+#   $2 - Story ID (e.g., "STORY-001")
+#   $3 - Iteration number
+#   $4 - Feature directory path
+#   $5 - Output file path (where Claude's output was written)
+#
+# Returns:
+#   0 - Hook passed (or no hook found)
+#   75 (RALPH_HYBRID_EXIT_VERIFICATION_FAILED) - Verification failed
+#   1 - Other hook error
+#
+# Environment:
+#   RALPH_HYBRID_HOOK_TIMEOUT - Timeout in seconds (default: 300)
+#
+# Hook lookup order:
+#   1. .ralph-hybrid/{branch}/hooks/{hook_name}.sh
+#   2. .ralph-hybrid/hooks/{hook_name}.sh
+#
+# The hook receives a single argument: path to JSON context file
+# JSON context contains:
+#   {
+#     "story_id": "STORY-001",
+#     "iteration": 1,
+#     "feature_dir": "/path/to/.ralph-hybrid/feature",
+#     "output_file": "/path/to/output.log",
+#     "timestamp": "2026-01-23T01:58:26Z"
+#   }
+run_hook() {
+    local hook_name="${1:-}"
+    local story_id="${2:-}"
+    local iteration="${3:-0}"
+    local feature_dir="${4:-}"
+    local output_file="${5:-}"
+
+    if [[ -z "$hook_name" ]]; then
+        log_error "run_hook: hook name is required"
+        return 1
+    fi
+
+    # Find hook script
+    local hook_script=""
+    hook_script=$(_find_hook_script "$hook_name" "$feature_dir")
+
+    if [[ -z "$hook_script" ]]; then
+        log_debug "run_hook: No hook found for '$hook_name'"
+        return 0
+    fi
+
+    log_info "Running hook: $hook_name"
+
+    # Create temporary JSON context file (portable across BSD and GNU mktemp)
+    local context_file
+    context_file=$(mktemp "${TMPDIR:-/tmp}/ralph-context.XXXXXX") && mv "$context_file" "${context_file}.json" && context_file="${context_file}.json"
+
+    # Generate JSON context
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    cat > "$context_file" << EOF
+{
+  "story_id": "${story_id}",
+  "iteration": ${iteration},
+  "feature_dir": "${feature_dir}",
+  "output_file": "${output_file}",
+  "timestamp": "${timestamp}"
+}
+EOF
+
+    log_debug "Hook context file: $context_file"
+
+    # Execute hook with timeout
+    local exit_code=0
+    local timeout_cmd=""
+
+    # Use timeout if available
+    if command -v timeout &>/dev/null; then
+        timeout_cmd="timeout ${RALPH_HYBRID_HOOK_TIMEOUT}"
+    fi
+
+    # Execute the hook in a subshell
+    (
+        export RALPH_HYBRID_HOOK_POINT="$hook_name"
+        export RALPH_HYBRID_STORY_ID="$story_id"
+        export RALPH_HYBRID_ITERATION="$iteration"
+        export RALPH_HYBRID_FEATURE_DIR="$feature_dir"
+        export RALPH_HYBRID_OUTPUT_FILE="$output_file"
+
+        if [[ -n "$timeout_cmd" ]]; then
+            $timeout_cmd bash "$hook_script" "$context_file"
+        else
+            bash "$hook_script" "$context_file"
+        fi
+    )
+    exit_code=$?
+
+    # Clean up context file
+    rm -f "$context_file"
+
+    # Handle exit codes
+    if [[ $exit_code -eq 0 ]]; then
+        log_info "Hook '$hook_name' passed"
+        return 0
+    elif [[ $exit_code -eq 75 ]]; then
+        # VERIFICATION_FAILED - distinct exit code for circuit breaker
+        log_warn "Hook '$hook_name' returned VERIFICATION_FAILED (exit code 75)"
+        return 75
+    elif [[ $exit_code -eq 124 ]]; then
+        # Timeout
+        log_error "Hook '$hook_name' timed out after ${RALPH_HYBRID_HOOK_TIMEOUT}s"
+        return 1
+    else
+        log_error "Hook '$hook_name' failed with exit code $exit_code"
+        return 1
+    fi
+}
+
+# Find hook script by name
+# Looks in feature-specific hooks dir first, then project-wide hooks dir
+#
+# Arguments:
+#   $1 - Hook name
+#   $2 - Feature directory (optional, for feature-specific hooks)
+#
+# Returns:
+#   Prints path to hook script if found, empty string if not
+_find_hook_script() {
+    local hook_name="${1:-}"
+    local feature_dir="${2:-}"
+    local hook_filename="${hook_name}.sh"
+
+    # 1. Check feature-specific hooks dir
+    if [[ -n "$feature_dir" ]]; then
+        local feature_hook="${feature_dir}/hooks/${hook_filename}"
+        if [[ -f "$feature_hook" ]]; then
+            echo "$feature_hook"
+            return 0
+        fi
+    fi
+
+    # 2. Check project-wide hooks dir
+    local project_hook="${PWD}/.ralph-hybrid/hooks/${hook_filename}"
+    if [[ -f "$project_hook" ]]; then
+        echo "$project_hook"
+        return 0
+    fi
+
+    # Not found
+    return 0
+}
+
+# Check if a hook exists
+# Arguments:
+#   $1 - Hook name
+#   $2 - Feature directory (optional)
+# Returns:
+#   0 if hook exists, 1 if not
+hook_exists() {
+    local hook_name="${1:-}"
+    local feature_dir="${2:-}"
+
+    local hook_script
+    hook_script=$(_find_hook_script "$hook_name" "$feature_dir")
+
+    [[ -n "$hook_script" ]]
 }

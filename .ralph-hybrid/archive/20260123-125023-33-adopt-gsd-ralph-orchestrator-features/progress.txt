@@ -1,0 +1,639 @@
+# Progress Log
+# Branch: 33-adopt-gsd-ralph-orchestrator-features
+# Started: 2026-01-23T12:00:00Z
+# Spec: spec.md
+# GitHub Issue: #33
+
+---
+Iteration: 1
+Started: 2026-01-23T01:58:26Z
+Story: STORY-001 - Hook Execution Infrastructure
+Status: complete
+
+Changes made:
+- Added run_hook() function to lib/hooks.sh for backpressure verification
+- Added RALPH_HYBRID_EXIT_VERIFICATION_FAILED=75 constant to constants.sh
+- Hook receives JSON context file as argument with story_id, iteration, feature_dir, output_file, timestamp
+- Hook lookup: feature-specific hooks first (.ralph-hybrid/{branch}/hooks/), then project-wide (.ralph-hybrid/hooks/)
+- Configurable timeout via RALPH_HYBRID_HOOK_TIMEOUT (default: 300s)
+- Added _find_hook_script() helper function for hook discovery
+- Added hook_exists() utility function
+
+Verification:
+- Created tests/unit/test_hooks.sh with 12 unit tests covering all acceptance criteria
+- All 12 unit tests pass
+- e2e tests pass (7 tests, no regressions)
+
+---
+Iteration: 3
+Started: 2026-01-23T02:07:09Z
+Story: STORY-002 - Backpressure Hook Template
+Status: complete
+
+Changes made:
+- Created templates/hooks/post_iteration.sh backpressure verification hook template
+- Template parses JSON context with jq (with grep/sed fallback for systems without jq)
+- Template demonstrates test command execution via configurable TEST_COMMAND
+- Supports npm test, pytest, just test, go test, cargo test, make test patterns
+- Returns exit code 0 on pass, 75 (VERIFICATION_FAILED) on test failure
+- Added _setup_copy_hook_templates() function to ralph-hybrid for setup command
+- Converted unit tests from custom bash scripts to BATS format for CI compatibility
+- Created tests/integration/ directory for CI
+
+Verification:
+- 27 BATS unit tests pass (12 for hooks.sh, 15 for hook template)
+- e2e tests pass (7 tests, no regressions)
+- Tested ralph-hybrid setup copies hooks to project directory
+- Bash syntax checks pass for all scripts
+
+---
+Iteration: 4
+Started: 2026-01-23T02:14:33Z
+Story: STORY-003 - Integrate Backpressure into Iteration Loop
+Status: complete
+
+Changes made:
+- Added _run_backpressure_gate() function to ralph-hybrid script
+- Integrated backpressure verification into _run_handle_completion() for both story_complete and complete signals
+- Extended lib/config.sh YAML parser to support 3-level nesting (hooks.post_iteration.enabled)
+- Config schema supports hooks.post_iteration.enabled (default: true if hook exists)
+- Config supports hooks.timeout for hook execution timeout (default: 300s)
+- Backpressure gate checks hook_exists() before running (backward compatible)
+- VERIFICATION_FAILED (exit 75) triggers story rollback and circuit breaker increment
+- Updated templates/config.yaml.example with hooks section documentation
+- Created tests/integration/test_backpressure_integration.bats with 10 integration tests
+
+Verification:
+- 37 BATS tests pass (12 hooks.sh + 15 hook template + 10 integration)
+- e2e tests pass (7 tests, no regressions)
+- Bash syntax checks pass for ralph-hybrid, lib/config.sh, lib/hooks.sh
+
+---
+Iteration: 5
+Started: 2026-01-23T02:22:40Z
+Story: STORY-004 - Profile Schema and Configuration
+Status: complete
+
+Changes made:
+- Added model profile constants to lib/constants.sh (RALPH_HYBRID_PROFILE_*, RALPH_HYBRID_BUILTIN_*)
+- Added profile functions to lib/config.sh:
+  - cfg_get_profile_model(profile, phase) - returns model for profile/phase combo
+  - cfg_validate_profile(name) - validates profile exists (built-in or custom)
+  - cfg_validate_model_phase(name) - validates phase name
+  - _cfg_load_profile() - loads RALPH_HYBRID_PROFILE from config
+- Extended cfg_load() to set RALPH_HYBRID_PROFILE environment variable
+- Updated templates/config.yaml.example with profiles section documentation
+- Three built-in profiles: quality (opus all), balanced (opus/sonnet), budget (sonnet/haiku)
+- Support for custom profiles defined in config.yaml
+
+Verification:
+- 14 unit tests pass (tests/unit/test_profiles.bats)
+- Bash syntax checks pass for lib/constants.sh, lib/config.sh
+- e2e tests pass (7 tests, no regressions)
+
+---
+Iteration: 8
+Started: 2026-01-23T02:43:09Z
+Story: STORY-005 - Profile CLI Flag and Per-Story Override
+Status: complete
+
+Changes made:
+- Added --profile flag to parse_run_args() with validation via cfg_validate_profile()
+- Updated help text to document --profile flag (ralph-hybrid help)
+- Implemented model selection priority in _run_invoke_claude():
+  1. Story-level model (prd.json story.model field)
+  2. CLI --model flag
+  3. Profile's execution model (cfg_get_profile_model)
+  4. Claude CLI default
+- Updated _run_build_monitor_cmd() to pass --profile to monitor subprocess
+- Updated SPEC.md with Model Selection Priority documentation
+- Created tests/unit/test_profile_cli.bats with 17 unit tests
+
+Verification:
+- Manual function tests pass (prd_get_current_story_model, cfg_validate_profile, cfg_get_profile_model)
+- e2e tests pass (7 tests, no regressions)
+- Bash syntax checks pass for ralph-hybrid
+- --profile quality validated and accepted
+- --profile invalid rejected with appropriate error
+
+---
+Iteration: 9
+Started: 2026-01-23T02:47:17Z
+Story: STORY-006 - Research Agent Infrastructure
+Status: complete
+
+Changes made:
+- Created lib/research.sh with parallel research agent spawning
+- Implemented spawn_research_agent(topic, output_dir) - spawns Claude with --print
+- Implemented wait_for_research_agents() - collects all results
+- Implemented wait_for_any_research_agent() - blocks until one completes
+- Added research_can_spawn() to check against concurrent limit
+- Added research_get_max_agents() with config/env override support
+- Added research_get_timeout() for configurable research timeout
+- Added research_get_model() to get model from profile research phase
+- Added topic sanitization for safe filenames (_research_sanitize_topic)
+- Added research_get_output_file() and research_list_outputs() utilities
+- Added research_kill_all() and research_reset_state() cleanup functions
+- Default max concurrent agents: 3
+- Default research timeout: 600s (10 minutes)
+- Output pattern: RESEARCH-{sanitized-topic}.md
+- Fallback prompt generation when templates/research-agent.md not found
+
+Verification:
+- Created tests/unit/test_research.bats with 37 unit tests
+- e2e tests pass (7 tests, no regressions)
+- Bash syntax checks pass for lib/research.sh
+
+---
+Iteration: 10
+Started: 2026-01-23T02:54:51Z
+Story: STORY-007 - Research Agent Template and Synthesis
+Status: complete
+
+Changes made:
+- Created templates/research-agent.md with structured investigation prompt
+- Template sections: Summary, Key Findings, Confidence Level, Sources, Recommendations
+- Confidence criteria defined: HIGH (official docs), MEDIUM (community consensus), LOW (single source)
+- Added research_synthesize() function to lib/research.sh for combining findings
+- Added _research_build_synthesis_prompt() to build synthesis prompts with file contents
+- Added _research_get_synthesis_template() for synthesis output structure
+- Added research_get_summary_file() and research_has_summary() utility functions
+- Synthesis output: RESEARCH-SUMMARY.md with themes, conflicts, recommendations
+
+Verification:
+- 21 new unit tests added to tests/unit/test_research.bats (58 total)
+- e2e tests pass (7 tests, no regressions)
+- Bash syntax checks pass for lib/research.sh
+
+---
+Iteration: 11
+Started: 2026-01-23T02:59:47Z
+Story: STORY-008 - Research Flag in Planning Workflow
+Status: complete
+
+Changes made:
+- Added --research flag documentation to /ralph-hybrid-plan command
+- Added Phase 2.5: RESEARCH to planning workflow (optional phase)
+- Added topic extraction functions:
+  - research_extract_topics() - extracts technical terms from description
+  - research_filter_topics() - filters and limits topics
+  - RALPH_HYBRID_DEFAULT_MAX_RESEARCH_TOPICS constant (default: 5)
+  - _RESEARCH_STOPWORDS constant for filtering common words
+- Added research loading functions:
+  - research_load_findings() - loads RESEARCH-*.md files into context
+  - research_format_context() - formats findings for spec generation
+- Added research_for_planning() - integrated planning workflow function
+- Added research_get_default_max_topics() - configurable max topics
+- Updated SPEC.md with research phase documentation
+- Updated workflow states diagram with RESEARCH and ANALYZE phases
+
+Verification:
+- 17 new unit tests in tests/unit/test_research_planning.bats
+- All 129 unit tests pass
+- All 10 integration tests pass
+- All 7 e2e tests pass
+- Bash syntax checks pass for lib/research.sh
+
+---
+Iteration: 12
+Started: 2026-01-23T03:06:16Z
+Story: STORY-009 - Plan Checker Agent
+Status: complete
+
+Changes made:
+- Created templates/plan-checker.md with six-dimension verification
+- Six verification dimensions:
+  1. Coverage - verifies plan addresses all aspects of stated problem
+  2. Completeness - verifies each story is fully specified and implementable
+  3. Dependencies - verifies story ordering and dependencies are correct
+  4. Links - verifies references and connections are valid
+  5. Scope - verifies plan is appropriately scoped for iterative implementation
+  6. Verification - verifies adequate verification approach is defined
+- Issue classification with clear criteria:
+  - BLOCKER: Must be fixed before implementation can succeed
+  - WARNING: Should be addressed but won't prevent basic implementation
+  - INFO: Observations and suggestions for improvement
+- PLAN-REVIEW.md output format with:
+  - Summary and Verdict (READY/NEEDS_REVISION/BLOCKED)
+  - Issue Summary table with counts per severity
+  - Individual issue sections with Location, Description, Impact, Recommendation
+  - Dimension Summary table showing PASS/WARN/FAIL per dimension
+  - Recommendations section (Before/During/After implementation)
+- Verdict criteria:
+  - READY: Zero BLOCKERs
+  - NEEDS_REVISION: Fixable BLOCKERs
+  - BLOCKED: Significant issues requiring major changes
+
+Verification:
+- Created tests/unit/test_plan_checker.bats with 47 unit tests
+- All 176 unit tests pass
+- All 10 integration tests pass
+- All 7 e2e tests pass
+
+---
+Iteration: 13
+Started: 2026-01-23T03:10:58Z
+Story: STORY-010 - Plan Verification Integration
+Status: complete
+
+Changes made:
+- Added Phase 7: VERIFY to /ralph-hybrid-plan workflow
+- Added --skip-verify flag to bypass verification phase
+- Integrated plan checker agent (templates/plan-checker.md) into planning workflow
+- Implemented revision loop (up to 3 iterations) for BLOCKER issues
+- Added comprehensive status output showing verification results
+- Updated SPEC.md with plan verification documentation:
+  - New workflow diagram showing VERIFY phase
+  - Detailed verification phase documentation
+  - --skip-verify flag documented in commands table
+- Created tests/integration/test_plan_verification_integration.bats with 35 tests
+
+Implementation details:
+- Plan checker runs after GENERATE phase (Phase 6)
+- Verdicts: READY (0 BLOCKERs), NEEDS_REVISION (fixable BLOCKERs), BLOCKED (major issues)
+- Revision loop applies fixes and re-runs plan checker up to 3 times
+- PLAN-REVIEW.md saved to feature folder with verification results
+- Final status output shows READY/NEEDS_REVISION/BLOCKED/NOT_VERIFIED
+
+Verification:
+- All 7 e2e tests pass
+- Bash syntax checks pass for all scripts
+- 35 new integration tests for plan verification
+
+
+---
+Iteration: 14
+Started: 2026-01-23T03:19:03Z
+Story: Quality Check Fix
+Status: complete
+
+Changes made:
+- Fixed flaky unit test in test_research.bats: research_kill_all test had race condition
+  where process hadn't terminated before verification (added wait loop for SIGTERM delivery)
+- Fixed integration test in test_plan_verification_integration.bats: grep -A10 was
+  insufficient to capture Phase 7 in workflow states diagram (increased to -A15)
+
+Verification:
+- 176 unit tests pass
+- 37 integration tests pass
+- 7 e2e tests pass (6 passed, 1 skipped for optional claude CLI)
+- Bash syntax checks pass for all scripts
+
+---
+Iteration: 15
+Started: 2026-01-23T03:25:42Z
+Story: STORY-011 - Verifier Agent Template
+Status: complete
+
+Changes made:
+- Created templates/verifier.md with goal-backward verification approach
+- Five verification phases: Goal Extraction, Deliverables Verification, Stub Detection, Wiring Verification, Human Testing Items
+- Comprehensive stub detection patterns for Python/JS/TS:
+  - Placeholder returns (return None, return {}, return [], pass)
+  - TODO/FIXME/XXX/HACK comments
+  - NotImplementedError and throw new Error("Not implemented")
+  - Empty function bodies
+  - Mock/dummy/fake/placeholder patterns
+- Wiring verification checks frontend→backend, backend→database, backend→external services
+- Issue classifications: STUB_FOUND, WIRING_MISSING, DELIVERABLE_MISSING, PARTIAL_IMPLEMENTATION, HUMAN_TESTING_REQUIRED
+- Verdicts: VERIFIED (all good), NEEDS_WORK (fixable issues), BLOCKED (critical)
+- Human testing checklist for UI/UX, user flows, accessibility
+- Quick verification commands (grep patterns for common issues)
+- Output format: VERIFICATION.md with structured sections
+
+Verification:
+- Created tests/unit/test_verifier.bats with 69 unit tests
+- All 245 unit tests pass (176 existing + 69 new)
+- All 37 integration tests pass
+- All 7 e2e tests pass
+- Bash syntax checks pass for all scripts
+
+
+---
+Iteration: 16
+Started: 2026-01-23T03:31:25Z
+Story: STORY-012 - Verification Command Integration
+Status: complete
+
+Changes made:
+- Added cmd_verify() function to ralph-hybrid for goal-backward verification
+- CLI options: --profile, --model/-m, --output/-o, --verbose/-v, --help/-h
+- _verify_build_prompt() assembles verifier template with spec.md, prd.json, progress.txt
+- _verify_extract_verdict() parses VERIFIED/NEEDS_WORK/BLOCKED from output
+- _verify_extract_markdown() extracts VERIFICATION.md content from Claude output
+- _verify_display_summary() shows issue counts and verdict with colors
+- _verify_count_human_testing_items() counts checkbox items requiring manual testing
+- Exit codes: 0=VERIFIED, 1=NEEDS_WORK, 2=BLOCKED
+- Updated main help text with verify command and Verify Options section
+- Added verify to main case statement in main() function
+
+Verification:
+- 39 new unit tests in tests/unit/test_verify.bats
+- All 284 unit tests pass
+- All 37 integration tests pass
+- All 7 e2e tests pass
+- Bash syntax checks pass
+- SPEC.md updated with Verify Options section and exit codes
+
+---
+Iteration: 17
+Started: 2026-01-23T03:45:23Z
+Story: STORY-013 - Debug Agent Template
+Status: complete
+
+Changes made:
+- Created templates/debug-agent.md with scientific method for debugging
+- Five debugging phases: Gather Symptoms, Form Hypotheses, Test One Variable, Collect Evidence, Iterate
+- Return states: ROOT_CAUSE_FOUND (cause identified), DEBUG_COMPLETE (issue fixed), CHECKPOINT_REACHED (context handoff)
+- Hypothesis format with H1/H2/H3 structure and status tracking (UNTESTED, TESTING, CONFIRMED, RULED_OUT, PARTIAL)
+- Evidence categories: CONFIRMED, RULED_OUT, INCONCLUSIVE, PARTIAL
+- Output format: DEBUG-STATE.md with Problem Statement, Reproduction Steps, Environment, Symptoms, Hypotheses, Evidence Log, Current Focus, Root Cause, Fix, Session Summary
+- Debug state tags for machine parsing: <debug-state>STATE</debug-state>
+- Confidence levels for root cause (HIGH/MEDIUM/LOW)
+- Debugging best practices (DO/DON'T) and anti-patterns (shotgun debugging, blame game, printf frenzy, the rewrite)
+- Handoff protocol for multi-session debugging
+- Created tests/unit/test_debug_agent.bats with 66 unit tests
+
+Verification:
+- 350 unit tests pass (284 existing + 66 new)
+- 37 integration tests pass
+- 7 e2e tests pass
+- Bash syntax checks pass for all scripts
+
+---
+Iteration: 18
+Started: 2026-01-23T03:50:21Z
+Story: STORY-014 - Debug State Persistence
+Status: complete
+
+Changes made:
+- Created lib/debug.sh with debug state management functions:
+  - debug_get_state_file(), debug_state_exists(), debug_load_state(), debug_save_state()
+  - debug_extract_state_from_output(), debug_extract_status()
+  - debug_extract_hypotheses(), debug_count_tested_hypotheses(), debug_count_untested_hypotheses()
+  - debug_extract_root_cause(), debug_extract_current_focus()
+  - debug_get_next_session(), debug_needs_continuation()
+  - debug_prompt_user_action(), debug_build_fix_prompt(), debug_build_plan_prompt()
+- Added cmd_debug() to ralph-hybrid CLI with:
+  - --profile, --model/-m, --continue, --reset, --verbose/-v options
+  - Problem description as positional argument for new sessions
+  - Interactive session continuation when existing state found
+  - User choice after ROOT_CAUSE_FOUND: fix now, plan solution, handle manually
+  - Exit codes: 0=ROOT_CAUSE_FOUND/DEBUG_COMPLETE, 1=ERROR, 10=CHECKPOINT_REACHED
+- Added _debug_show_help(), _debug_build_prompt(), _debug_display_summary() helpers
+- State persists in .ralph-hybrid/{branch}/debug-state.md
+- Updated show_help() with Debug Options section
+- Added debug command to main() case statement
+- Updated SPEC.md with Debug Options, Exit Codes, Return States, Process, Examples
+
+Verification:
+- 50+ unit tests in tests/unit/test_debug.bats
+- Bash syntax checks pass for ralph-hybrid and lib/debug.sh
+- Debug command --help displays correctly
+
+---
+Iteration: 19
+Started: 2026-01-23T04:00:24Z
+Story: STORY-015 - Memory File Format and Loading
+Status: complete
+
+Changes made:
+- Created lib/memory.sh with memory management functions
+- Memory format with 4 categories: Patterns, Decisions, Fixes, Context
+- load_memories() combines project and feature memories with token budget
+- Inheritance: project-wide .ralph-hybrid/memories.md + feature-specific
+- Token budget calculation: ~4 chars per token (RALPH_HYBRID_CHARS_PER_TOKEN)
+- Default token budget: 2000 tokens (RALPH_HYBRID_DEFAULT_MEMORY_TOKEN_BUDGET)
+- memory_get_token_budget() from config or env var
+- memory_chars_to_tokens() and memory_tokens_to_chars() conversion
+- memory_validate_category() validates against RALPH_HYBRID_MEMORY_CATEGORIES
+- memory_fits_budget() checks if content within budget
+- memory_create_template() creates empty memory file with category sections
+- memory_init_project() and memory_init_feature() for initialization
+- Fixed test_debug.bats: grep -c behavior for hypothesis counting functions
+- Fixed test expectation for multiple hypotheses (4 matches, not 3)
+
+Verification:
+- 50 unit tests in test_memory.bats
+- 440 total unit tests pass
+- 37 integration tests pass
+- Bash syntax checks pass for all scripts
+
+---
+Iteration: 20
+Started: 2026-01-23T04:07:13Z
+Story: STORY-016 - Memory Writing and Injection
+Status: complete
+
+Changes made:
+- Added write_memory(dir, category, content, tags) to lib/memory.sh
+  - Creates memory file if doesn't exist via memory_create_template()
+  - Appends timestamped entries with optional tags: [timestamp] [tags: x,y] content
+  - Uses awk to insert into correct category section
+  - _memory_append_to_category() helper for fallback insertion
+- Added tag-based filtering functions:
+  - memory_filter_by_tags(content, tags) - filters entries by comma-separated tags
+  - memory_get_all_tags(content) - extracts unique tags from entries
+  - memory_load_with_tags(dir, tags, budget) - load and filter in one call
+- Added injection mode configuration:
+  - memory_get_injection_mode() - returns auto, manual, or none
+  - memory_injection_enabled() - true for auto or manual
+  - memory_injection_auto() - true only for auto mode
+  - Config: memory.injection or RALPH_HYBRID_MEMORY_INJECTION env var
+- Added prompt integration:
+  - memory_format_for_prompt(dir, tags, budget) - formats for prompt injection
+  - memory_get_for_iteration(dir, tags) - main entry point for auto injection
+- Integrated into ralph-hybrid main script:
+  - Source lib/memory.sh in source section
+  - Call memory_get_for_iteration() in build_prompt() function
+- Updated templates/config.yaml.example with memory section
+- Updated SPEC.md with comprehensive Memory System section
+
+Verification:
+- 55+ new unit tests in test_memory.bats (105 total)
+- e2e tests pass (7 tests)
+- Bash syntax checks pass for ralph-hybrid and lib/memory.sh
+
+---
+Iteration: 1
+Started: 2026-01-23T08:46:27Z
+Story: STORY-017 - Assumption Lister Agent
+Status: complete
+
+Changes made:
+- Created templates/assumption-lister.md with five-category assumption surfacing
+- Categories: Technical, Order, Scope, Risk, Dependencies
+- Confidence levels: HIGH, MEDIUM, LOW with clear criteria
+- Impact levels: CRITICAL, HIGH, MEDIUM, LOW for prioritization
+- Output format: ASSUMPTIONS.md with Executive Summary, Critical Assumptions,
+  Assumption Summary table, and Recommendations
+- Added --list-assumptions flag to /ralph-hybrid-plan command
+- Added Phase 1.5: ASSUMPTIONS to planning workflow (after SUMMARIZE, before CLARIFY)
+- Phase integrates validated assumptions into CLARIFY questions
+- Updated SPEC.md with Assumption Lister documentation (Commands table, Workflow States, new section)
+
+Verification:
+- 74 unit tests in test_assumption_lister.bats
+- All 552 unit tests pass
+- All 37 integration tests pass
+- All 7 e2e tests pass
+- Bash syntax checks pass for all scripts
+---
+Iteration: 3
+Started: 2026-01-23T09:14:33Z
+Story: STORY-018 - Decimal Story IDs
+Status: complete
+
+Changes made:
+- Added prd_parse_story_id() to extract numeric/decimal part from story IDs
+- Added prd_compare_story_ids() for proper decimal ordering (2.9 < 2.10)
+- Added prd_validate_story_id() for ID format validation
+- Added prd_generate_story_id_after() for generating next decimal ID
+- Added prd_generate_story_id_between() for midpoint generation
+- Added prd_get_next_decimal_id() to find available decimal ID
+- Added prd_sort_stories_by_id() for decimal-aware sorting
+- Added prd_insert_story_after() for inserting with auto-generated ID
+- Updated /ralph-hybrid-amend command with --insert-after flag documentation
+- Added Decimal Story IDs section to SPEC.md
+
+Verification:
+- 40 unit tests in test_decimal_ids.bats (all pass)
+- 592 total unit tests pass
+- 37 integration tests pass
+- Bash syntax checks pass for lib/prd.sh
+
+---
+Iteration: 4
+Started: 2026-01-23T09:26:12Z
+Story: STORY-019 - Adversarial Review Skill Template
+Status: complete
+
+Changes made:
+- Created templates/skills/adversarial-review.md with three-role security review pattern
+- Blue Team (Secure Implementation Analyst): identifies secure implementation requirements
+- Red Team (Penetration Tester): finds vulnerabilities via injection, auth bypass, data exposure, race conditions, logic flaws
+- Fixer (Security Engineer): proposes and validates remediations
+- Severity levels: CRITICAL, HIGH, MEDIUM, LOW
+- Output format: SECURITY-REVIEW.md with Executive Summary, Blue Team Analysis, Red Team Findings, Remediation Plan
+- Added _setup_copy_skill_templates() function to ralph-hybrid for copying skills during setup
+- Updated SPEC.md Template Library section with adversarial-review skill documentation
+- Added Security Review pattern to Pattern Detection table
+
+Verification:
+- 88 unit tests in tests/unit/test_adversarial_review.bats
+- All 717 tests pass (629 existing + 88 new)
+- Bash syntax checks pass for ralph-hybrid
+---
+Iteration: 5
+Started: 2026-01-23T09:34:57Z
+Story: STORY-020 - Code Archaeology Skill Template
+Status: complete
+
+Changes made:
+- Created templates/skills/code-archaeology.md with four-role pattern for safe legacy code modification
+- Role 1: Surveyor (Structural Analyst) - maps file structure, entry/exit points, complexity, test coverage
+- Role 2: Historian (Change Analyst) - reviews git history, tracks bugs, identifies authors, finds patterns
+- Role 3: Archaeologist (Deep Investigator) - finds hidden assumptions, magic values, defensive code, gotchas
+- Role 4: Careful Modifier (Safe Change Agent) - characterization tests, incremental changes, rollback plans
+- Output files: SURVEY.md, HISTORY.md, GOTCHAS.md with combined archaeology report
+- Quick archaeology commands for TODO/FIXME, magic numbers, null checks, broad exception catches
+- Integration guidance with adversarial review and incident response skills
+- Updated SPEC.md with code-archaeology skill in Template Library
+- Added legacy code pattern detection keywords (legacy, old, refactor, migrate, technical debt)
+
+Verification:
+- 85 unit tests in test_code_archaeology.bats
+- All 765 unit tests pass (680 existing + 85 new)
+- All 37 integration tests pass
+- All 7 e2e tests pass
+- Bash syntax checks pass for all scripts
+---
+Iteration: 6
+Started: 2026-01-23T09:46:33Z
+Story: STORY-021 - Incident Response Skill Template
+Status: complete
+
+Changes made:
+- Created templates/skills/incident-response.md with OODA loop pattern
+- Four-role pattern: Observer (Situation Analyst), Mitigator (Fast Response Agent),
+  Investigator (Root Cause Analyst), Fixer (Permanent Resolution Agent)
+- Speed vs Thoroughness matrix separates concerns:
+  - Observer: HIGH speed priority, MEDIUM thoroughness
+  - Mitigator: CRITICAL speed priority, LOW thoroughness (restore service fast!)
+  - Investigator: LOW speed priority, CRITICAL thoroughness (find root cause correctly)
+  - Fixer: MEDIUM speed priority, HIGH thoroughness
+- Severity classification SEV-1 through SEV-4 with response time criteria
+- Mitigation strategies: rollback, scale/restart, traffic management, workaround
+- Investigation framework: timeline reconstruction, log analysis, diff analysis,
+  hypothesis testing, 5 Whys analysis
+- Root cause categories: CODE_BUG, CONFIG_ERROR, INFRASTRUCTURE, EXTERNAL, HUMAN_ERROR
+- Output format: INCIDENT-RESPONSE.md with metrics
+- Quick incident commands for health checks, logs, resources
+- Communication templates: initial alert, status update, resolution notice
+- Post-incident checklist including post-mortem scheduling
+- Integration guidance with Code Archaeology, Adversarial Review, Debug Agent
+- Updated SPEC.md with skill in Template Library and pattern detection keywords
+
+Verification:
+- 91 unit tests in test_incident_response.bats
+- All bash syntax checks pass
+- e2e tests pass (6 passed, 1 skipped for optional claude CLI)
+---
+Iteration: 7
+Started: 2026-01-23T09:54:22Z
+Story: STORY-022 - Integration Checker Agent
+Status: complete
+
+Changes made:
+- Created templates/integration-checker.md with five-phase integration verification
+- Phase 1: Export/Import Analysis - detects orphaned exports not imported anywhere
+- Phase 2: Route/Endpoint Analysis - detects orphaned routes without consumers
+- Phase 3: Authentication Analysis - verifies auth middleware on sensitive routes
+- Phase 4: Data Flow Tracing - traces end-to-end with break point identification
+- Phase 5: Dead Code Detection - finds unused imports, unreachable code, deprecated functions
+- Issue classifications: ORPHANED_EXPORT, ORPHANED_ROUTE, MISSING_AUTH,
+  BROKEN_FLOW, DEAD_CODE, MISSING_CONNECTION
+- Verdicts: INTEGRATED, NEEDS_WIRING, BROKEN
+- Output format: INTEGRATION.md with comprehensive structured sections
+- Detection patterns for JS/TS, Python, Go exports and routes
+- Quick integration check commands for exports, routes, auth
+- Common integration patterns documented (Frontend-Backend, Event-Driven, CLI)
+- Integration guidelines and verdict criteria
+- Updated SPEC.md with template in Template Library and pattern detection keywords
+- Created tests/unit/test_integration_checker.bats with 118 unit tests
+
+Verification:
+- All e2e tests pass (7 tests)
+- Bash syntax checks pass for all scripts
+- SPEC.md properly updated
+
+---
+Iteration: 8
+Started: 2026-01-23T10:01:16Z
+Story: STORY-023 - Integration Check Command
+Status: complete
+
+Changes made:
+- Added cmd_integrate() function to ralph-hybrid for on-demand integration checking
+- CLI options: --profile, --model/-m, --output/-o, --verbose/-v, --help/-h
+- _integrate_build_prompt() assembles integration-checker template with spec.md, prd.json, progress.txt
+- _integrate_extract_verdict() parses INTEGRATED/NEEDS_WIRING/BROKEN from output
+- _integrate_extract_markdown() extracts INTEGRATION.md content from Claude output
+- _integrate_display_summary() shows issue counts with colors:
+  - Orphaned exports/routes
+  - Missing auth
+  - Broken flows
+  - Dead code
+  - Missing connections
+- _integrate_display_recommendations() shows fix suggestions from output
+- Added INTEGRATE_EXIT_INTEGRATED=0, INTEGRATE_EXIT_NEEDS_WIRING=1, INTEGRATE_EXIT_BROKEN=2 constants
+- Added integrate command to main case statement
+- Updated show_help() with Integrate Options section
+- Updated SPEC.md with Integrate Options, exit codes, and process documentation
+
+Verification:
+- 47 new unit tests in tests/unit/test_integrate.bats
+- 1011 total unit tests pass
+- 37 integration tests pass
+- 7 e2e tests pass
+- Bash syntax checks pass for ralph-hybrid, lib/constants.sh

@@ -314,3 +314,223 @@ prd_rollback_progress_txt() {
         return 1
     fi
 }
+
+#=============================================================================
+# Decimal Story ID Support (STORY-018)
+#=============================================================================
+
+# Parse story ID and extract the numeric/decimal portion
+# Usage: prd_parse_story_id "STORY-002.1"
+# Returns: "2.1" (the numeric part)
+prd_parse_story_id() {
+    local story_id="$1"
+    # Extract everything after "STORY-", removing leading zeros from integer part
+    local numeric_part="${story_id#STORY-}"
+    # Handle decimal vs integer
+    if [[ "$numeric_part" == *.* ]]; then
+        # Decimal ID: split into integer and decimal parts
+        local int_part="${numeric_part%%.*}"
+        local dec_part="${numeric_part#*.}"
+        # Remove leading zeros from integer part but preserve decimal part
+        int_part=$((10#$int_part))
+        echo "${int_part}.${dec_part}"
+    else
+        # Integer ID: remove leading zeros
+        echo "$((10#$numeric_part))"
+    fi
+}
+
+# Compare two story IDs
+# Returns: "0" if equal, "-1" if first < second, "1" if first > second
+# Usage: prd_compare_story_ids "STORY-001" "STORY-002"
+# Note: Decimal parts are compared as integers (2.9 < 2.10)
+prd_compare_story_ids() {
+    local id1="$1"
+    local id2="$2"
+
+    local num1 num2
+    num1=$(prd_parse_story_id "$id1")
+    num2=$(prd_parse_story_id "$id2")
+
+    # Use awk for comparison, treating decimal part as integer version
+    awk -v a="$num1" -v b="$num2" 'BEGIN {
+        # Split into integer and decimal parts
+        n = split(a, parts_a, ".")
+        int_a = parts_a[1] + 0
+        dec_a = (n > 1) ? parts_a[2] + 0 : 0
+
+        n = split(b, parts_b, ".")
+        int_b = parts_b[1] + 0
+        dec_b = (n > 1) ? parts_b[2] + 0 : 0
+
+        # Compare integer parts first
+        if (int_a < int_b) { print "-1"; exit }
+        if (int_a > int_b) { print "1"; exit }
+
+        # Integer parts equal, compare decimal parts as integers
+        if (dec_a < dec_b) { print "-1"; exit }
+        if (dec_a > dec_b) { print "1"; exit }
+
+        print "0"
+    }'
+}
+
+# Validate story ID format
+# Usage: prd_validate_story_id "STORY-002.1"
+# Returns: 0 if valid, 1 if invalid
+prd_validate_story_id() {
+    local story_id="$1"
+    # Valid formats: STORY-NNN or STORY-NNN.D (where N and D are digits)
+    # Must be uppercase, must have at least one digit after STORY-
+    # Optional decimal part must have at least one digit
+    if [[ "$story_id" =~ ^STORY-[0-9]+(\.[0-9]+)?$ ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Generate a story ID after the given ID
+# Usage: prd_generate_story_id_after "STORY-002"
+# Returns: "STORY-002.1" (or increments decimal if already decimal)
+prd_generate_story_id_after() {
+    local story_id="$1"
+    local numeric_part
+    numeric_part=$(prd_parse_story_id "$story_id")
+
+    if [[ "$numeric_part" == *.* ]]; then
+        # Already a decimal, increment the decimal part
+        local int_part="${numeric_part%%.*}"
+        local dec_part="${numeric_part#*.}"
+        # Increment decimal part
+        local new_dec=$((10#$dec_part + 1))
+        printf "STORY-%03d.%d\n" "$int_part" "$new_dec"
+    else
+        # Integer ID, add .1
+        printf "STORY-%03d.1\n" "$numeric_part"
+    fi
+}
+
+# Generate a story ID between two IDs
+# Usage: prd_generate_story_id_between "STORY-002" "STORY-003"
+# Returns: "STORY-002.5" (midpoint)
+prd_generate_story_id_between() {
+    local id1="$1"
+    local id2="$2"
+
+    local num1 num2
+    num1=$(prd_parse_story_id "$id1")
+    num2=$(prd_parse_story_id "$id2")
+
+    # Calculate midpoint
+    local midpoint
+    midpoint=$(awk -v a="$num1" -v b="$num2" 'BEGIN { printf "%.10g", (a + b) / 2 }')
+
+    # Format as story ID
+    if [[ "$midpoint" == *.* ]]; then
+        local int_part="${midpoint%%.*}"
+        local dec_part="${midpoint#*.}"
+        printf "STORY-%03d.%s\n" "$int_part" "$dec_part"
+    else
+        printf "STORY-%03d\n" "$midpoint"
+    fi
+}
+
+# Get the next available decimal ID after a given base ID
+# Examines existing stories to find the next available decimal
+# Usage: prd_get_next_decimal_id "prd.json" "STORY-002"
+# Returns: "STORY-002.1" or "STORY-002.2" etc
+prd_get_next_decimal_id() {
+    local file="$1"
+    local base_id="$2"
+
+    local base_num
+    base_num=$(prd_parse_story_id "$base_id")
+
+    # Get all existing IDs that start with the same base
+    local existing_decimals
+    existing_decimals=$(deps_jq -r '.userStories[].id' "$file" | while read -r id; do
+        local num
+        num=$(prd_parse_story_id "$id")
+        # Check if it's a decimal of our base
+        if [[ "$num" == "${base_num}."* ]]; then
+            echo "${num#*.}"  # Output just the decimal part
+        fi
+    done | sort -n | tail -1)
+
+    if [[ -z "$existing_decimals" ]]; then
+        # No existing decimals, start with .1
+        printf "STORY-%03d.1\n" "$base_num"
+    else
+        # Increment the highest decimal
+        local next_decimal=$((existing_decimals + 1))
+        printf "STORY-%03d.%d\n" "$base_num" "$next_decimal"
+    fi
+}
+
+# Sort stories by their ID (respecting decimal values)
+# Usage: prd_sort_stories_by_id "prd.json"
+# Returns: JSON array of sorted stories
+# Note: Decimal parts are compared as integers (2.9 < 2.10)
+prd_sort_stories_by_id() {
+    local file="$1"
+
+    # Use jq with a custom sort that handles decimals as version numbers
+    deps_jq '
+        def parse_id:
+            . | ltrimstr("STORY-") |
+            if test("[.]") then
+                # Split and create sortable array [int_part, dec_part]
+                split(".") | [(.[0] | tonumber), (.[1] | tonumber)]
+            else
+                # No decimal, use [int_part, 0]
+                [tonumber, 0]
+            end;
+        .userStories | sort_by(.id | parse_id)
+    ' "$file"
+}
+
+# Insert a new story after a specified story ID
+# Usage: prd_insert_story_after "prd.json" "STORY-002" "New Title" "Description"
+# Creates a new story with a decimal ID (e.g., STORY-002.1)
+prd_insert_story_after() {
+    local file="$1"
+    local after_id="$2"
+    local title="$3"
+    local description="${4:-}"
+
+    # Get the next available decimal ID
+    local new_id
+    new_id=$(prd_get_next_decimal_id "$file" "$after_id")
+
+    # Create the new story object
+    local new_story
+    new_story=$(deps_jq -n \
+        --arg id "$new_id" \
+        --arg title "$title" \
+        --arg desc "$description" \
+        '{
+            id: $id,
+            title: $title,
+            description: $desc,
+            acceptanceCriteria: [],
+            priority: 0,
+            passes: false,
+            notes: ""
+        }')
+
+    # Add the story and re-sort
+    deps_jq --argjson story "$new_story" '
+        def parse_id:
+            . | ltrimstr("STORY-") |
+            if test("[.]") then
+                # Split and create sortable array [int_part, dec_part]
+                split(".") | [(.[0] | tonumber), (.[1] | tonumber)]
+            else
+                # No decimal, use [int_part, 0]
+                [tonumber, 0]
+            end;
+        .userStories += [$story] |
+        .userStories |= sort_by(.id | parse_id)
+    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+}

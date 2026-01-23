@@ -157,6 +157,15 @@ readonly RALPH_HYBRID_EXIT_TIMEOUT=124
 # Interrupt signal exit code (128 + SIGINT)
 readonly RALPH_HYBRID_EXIT_INTERRUPT=130
 
+# Verification failed exit code (for backpressure hooks)
+# Distinct from general errors to enable circuit breaker handling
+readonly RALPH_HYBRID_EXIT_VERIFICATION_FAILED=75
+
+# Integration check exit codes
+readonly INTEGRATE_EXIT_INTEGRATED=0
+readonly INTEGRATE_EXIT_NEEDS_WIRING=1
+readonly INTEGRATE_EXIT_BROKEN=2
+
 #=============================================================================
 # File and Directory Names
 #=============================================================================
@@ -250,6 +259,40 @@ readonly RALPH_HYBRID_DEFAULT_LOG_VERBOSITY="full"
 
 # Threshold for truncating tool results in compact mode (characters)
 readonly _RALPH_HYBRID_COMPACT_TRUNCATE_THRESHOLD=500
+
+#=============================================================================
+# Model Profile Settings
+#=============================================================================
+
+# Valid profile names
+readonly RALPH_HYBRID_PROFILE_QUALITY="quality"
+readonly RALPH_HYBRID_PROFILE_BALANCED="balanced"
+readonly RALPH_HYBRID_PROFILE_BUDGET="budget"
+
+# Default profile
+readonly RALPH_HYBRID_DEFAULT_PROFILE="balanced"
+
+# Valid model phase names
+readonly -a RALPH_HYBRID_MODEL_PHASES=("planning" "execution" "research" "verification")
+
+# Built-in profile definitions (profile:phase -> model)
+# Quality profile: opus for all phases
+readonly RALPH_HYBRID_BUILTIN_QUALITY_PLANNING="opus"
+readonly RALPH_HYBRID_BUILTIN_QUALITY_EXECUTION="opus"
+readonly RALPH_HYBRID_BUILTIN_QUALITY_RESEARCH="opus"
+readonly RALPH_HYBRID_BUILTIN_QUALITY_VERIFICATION="opus"
+
+# Balanced profile: opus for planning, sonnet for execution/research/verification
+readonly RALPH_HYBRID_BUILTIN_BALANCED_PLANNING="opus"
+readonly RALPH_HYBRID_BUILTIN_BALANCED_EXECUTION="sonnet"
+readonly RALPH_HYBRID_BUILTIN_BALANCED_RESEARCH="sonnet"
+readonly RALPH_HYBRID_BUILTIN_BALANCED_VERIFICATION="sonnet"
+
+# Budget profile: sonnet for planning/execution, haiku for research/verification
+readonly RALPH_HYBRID_BUILTIN_BUDGET_PLANNING="sonnet"
+readonly RALPH_HYBRID_BUILTIN_BUDGET_EXECUTION="sonnet"
+readonly RALPH_HYBRID_BUILTIN_BUDGET_RESEARCH="haiku"
+readonly RALPH_HYBRID_BUILTIN_BUDGET_VERIFICATION="haiku"
 
 #=============================================================================
 # Claude CLI Settings

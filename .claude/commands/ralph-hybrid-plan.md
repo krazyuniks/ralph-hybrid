@@ -6,13 +6,33 @@ Plan a new feature for Ralph Hybrid development. Guide the user through requirem
 
 - `$ARGUMENTS` - Brief description of the feature to plan (optional, used if no GitHub issue found).
 
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--list-assumptions` | Surface implicit assumptions before planning begins |
+| `--research` | Spawn research agents to investigate topics extracted from the description before spec generation |
+| `--regenerate` | Regenerate prd.json from existing spec.md |
+| `--no-issue` | Skip GitHub issue lookup |
+| `--skip-verify` | Skip plan verification phase (not recommended) |
+
 ## Workflow States
 
 ```
-DISCOVER → SUMMARIZE → CLARIFY → ANALYZE → DRAFT → DECOMPOSE → GENERATE
+Phase 0: DISCOVER     → Extract context from GitHub issue
+Phase 1: SUMMARIZE    → Combine external context with user input
+Phase 1.5: ASSUMPTIONS → [Optional] Surface implicit assumptions (--list-assumptions flag)
+Phase 2: CLARIFY      → Ask targeted questions to fill gaps
+Phase 2.5: RESEARCH   → [Optional] Spawn research agents for topics (--research flag)
+Phase 3: ANALYZE      → Detect patterns requiring skills/scripts/hooks
+Phase 4: DRAFT        → Generate spec.md document
+Phase 5: DECOMPOSE    → Break spec into properly-sized stories
+Phase 6: GENERATE     → Create prd.json for Ralph execution
+Phase 7: VERIFY       → Run plan checker and fix issues (unless --skip-verify)
 ```
 
-> **Note:** The ANALYZE phase detects migration/visual parity patterns and proposes skills/scripts/hooks.
+> **Note:** The ASSUMPTIONS phase is optional and triggered by `--list-assumptions` flag.
+> **Note:** The RESEARCH phase is optional and triggered by `--research` flag.
 
 ---
 
@@ -111,6 +131,149 @@ Using provided description: "$ARGUMENTS"
 
 ---
 
+## Phase 1.5: ASSUMPTIONS (Optional)
+
+**Goal:** Surface implicit assumptions in the feature description before planning proceeds.
+
+> **Trigger:** This phase runs when `--list-assumptions` flag is provided, OR when the user explicitly requests assumption analysis during planning.
+
+### Why Surface Assumptions?
+
+Misaligned assumptions are a leading cause of planning failures:
+- Technical assumptions that don't match reality
+- Scope assumptions that lead to missed requirements
+- Order assumptions that create blocking dependencies
+- Risk assumptions that leave vulnerabilities unaddressed
+- Dependency assumptions that cause delays
+
+Catching these early saves significant rework later.
+
+### Actions:
+
+#### Step 1: Collect Context
+
+Gather all available context:
+- Feature description (`$ARGUMENTS`)
+- GitHub issue (if discovered)
+- Any clarifying answers from SUMMARIZE phase
+- Existing codebase patterns
+
+#### Step 2: Run Assumption Lister Agent
+
+Use the assumption lister template (templates/assumption-lister.md) to analyze the context:
+
+```
+[ASSUMPTIONS] Analyzing feature description for implicit assumptions...
+
+Checking for:
+  ⏳ Technical assumptions...
+  ⏳ Order assumptions...
+  ⏳ Scope assumptions...
+  ⏳ Risk assumptions...
+  ⏳ Dependency assumptions...
+```
+
+The assumption lister produces ASSUMPTIONS.md output with:
+- Categorized assumptions
+- Confidence levels (HIGH/MEDIUM/LOW)
+- Impact levels (CRITICAL/HIGH/MEDIUM/LOW)
+- Validation methods
+- Questions to ask
+
+#### Step 3: Present Assumptions to User
+
+```
+[ASSUMPTIONS] Analysis complete
+
+Found 8 assumptions (3 require validation):
+
+CRITICAL (must validate before planning):
+  ⚠️ ASM-001: Assumes database supports transactions
+     Confidence: MEDIUM, Impact: CRITICAL
+     Validation: Check if using SQLite (no concurrent transactions)
+
+  ⚠️ ASM-002: Assumes user auth is already implemented
+     Confidence: LOW, Impact: HIGH
+     Validation: Check for existing auth middleware
+
+  ⚠️ ASM-003: Assumes API follows REST conventions
+     Confidence: MEDIUM, Impact: HIGH
+     Validation: Review existing endpoints
+
+Other assumptions (8 total) documented in ASSUMPTIONS.md
+
+Would you like to:
+  A) Review and validate critical assumptions now
+  B) Proceed to CLARIFY phase (assumptions will guide questions)
+  C) Skip assumption handling (not recommended)
+```
+
+#### Step 4: Validate Critical Assumptions
+
+If user chooses to validate:
+
+```
+Let's validate the critical assumptions:
+
+ASM-001: Database supports transactions
+  → Checking database configuration...
+  [Reads config files, checks for database type]
+  ✓ VALIDATED: Using PostgreSQL, transactions supported
+
+ASM-002: User auth is already implemented
+  → Searching for auth middleware...
+  [Searches codebase for auth patterns]
+  ✗ NOT FOUND: No auth middleware detected
+  → This means we need to add auth stories to the plan
+
+ASM-003: API follows REST conventions
+  → Reviewing existing endpoints...
+  [Checks routes and API patterns]
+  ⚠️ PARTIAL: Some endpoints are REST, some are RPC-style
+  → Will need to decide on convention
+```
+
+#### Step 5: Update Context and Proceed
+
+Validated assumptions inform the rest of planning:
+
+```
+[ASSUMPTIONS] Updated planning context:
+
+Assumptions validated:
+  ✓ ASM-001: Database supports transactions (CONFIRMED)
+  ✗ ASM-002: No existing auth (PLAN IMPACT: Add auth stories)
+  ⚠️ ASM-003: Mixed API styles (CLARIFY: Decide convention)
+
+ASSUMPTIONS.md saved to .ralph-hybrid/{branch}/
+
+Proceeding to CLARIFY phase with updated context...
+```
+
+### Output Location:
+
+```
+.ralph-hybrid/{branch}/
+├── ASSUMPTIONS.md   # Assumption analysis results
+├── spec.md          # (created later)
+├── prd.json         # (created later)
+└── progress.txt     # (created later)
+```
+
+### Skip Conditions:
+- `--list-assumptions` flag not provided AND user doesn't request it
+- Feature is very simple (< 50 words, no technical terms)
+- User explicitly skips assumption handling
+
+### Integration with CLARIFY Phase
+
+If assumptions were surfaced, the CLARIFY phase uses them:
+- Questions focus on validating uncertain assumptions
+- Already-validated assumptions skip related questions
+- Invalidated assumptions trigger scope discussions
+
+---
+
 ## Phase 2: CLARIFY
 
 **Goal:** Ask 3-5 targeted questions to fill gaps.
@@ -160,7 +323,135 @@ Using provided description: "$ARGUMENTS"
 
 ---
 
-## Phase 2.5: ANALYZE
+## Phase 2.5: RESEARCH (Optional)
+
+**Goal:** Investigate topics to inform spec generation with factual research.
+
+> **Trigger:** This phase runs when `--research` flag is provided, OR when the user explicitly requests research during planning.
+
+### Topic Extraction
+
+Extract research topics from:
+1. GitHub issue title and body (if discovered)
+2. User-provided description (`$ARGUMENTS`)
+3. Answers to clarifying questions
+4. Technical terms mentioned in discussion
+
+#### Extraction Rules:
+- Convert to lowercase
+- Remove common words (a, the, and, or, is, are, etc.)
+- Filter to technical/domain terms only
+- Deduplicate
+- Limit to 5 topics by default (configurable via `research.max_topics` in config)
+
+#### Example Topic Extraction:
+```
+Input: "Add JWT authentication with OAuth2 and Redis session caching"
+Extracted topics:
+  - jwt
+  - authentication
+  - oauth2
+  - redis
+  - session
+  - caching
+Filtered (after dedup & limit): jwt, authentication, oauth2, redis, caching
+```
+
+### Actions:
+
+#### Step 1: Extract Topics
+```
+From the description and GitHub issue, I've identified these research topics:
+  1. jwt (JSON Web Tokens)
+  2. authentication
+  3. oauth2
+  4. redis
+  5. caching
+
+Should I research all of these, or would you like to modify the list?
+```
+
+Wait for user confirmation or modification.
+
+#### Step 2: Spawn Research Agents
+
+For each confirmed topic, spawn a parallel research agent:
+```bash
+# Research agents run in parallel with structured output
+# Output goes to .ralph-hybrid/{branch}/research/RESEARCH-{topic}.md
+```
+
+Show progress:
+```
+[RESEARCH] Starting research on 5 topics...
+  ⏳ jwt - researching...
+  ⏳ authentication - researching...
+  ⏳ oauth2 - researching...
+  ⏳ redis - researching...
+  ⏳ caching - researching...
+
+[3/5 complete]
+  ✓ jwt - HIGH confidence
+  ✓ authentication - HIGH confidence
+  ⏳ oauth2 - researching...
+  ⏳ redis - researching...
+  ✓ caching - MEDIUM confidence
+```
+
+#### Step 3: Synthesize Findings
+
+After all agents complete, synthesize findings:
+```
+[RESEARCH] Synthesizing findings from 5 topics...
+
+Research Summary:
+  - JWT + OAuth2: Recommend RS256 algorithm, 15-min access tokens, 7-day refresh
+  - Redis: Use for session storage, TTL-based expiry matches token expiry
+  - Caching: Redis doubles as cache layer, separate DB from session pool
+
+Confidence Levels:
+  - jwt: HIGH (official RFC, widespread adoption)
+  - oauth2: HIGH (RFC 6749, industry standard)
+  - redis: HIGH (official docs, proven patterns)
+  - authentication: MEDIUM (multiple valid approaches)
+  - caching: MEDIUM (depends on scale requirements)
+```
+
+#### Step 4: Load Into Context
+
+Research findings are automatically loaded for spec generation:
+```
+The research findings will inform the specification. Key insights:
+  - [Key point 1 from research]
+  - [Key point 2 from research]
+  - [Key point 3 from research]
+
+Proceeding to ANALYZE phase with research context...
+```
+
+### Research Output Location:
+```
+.ralph-hybrid/{branch}/
+├── research/
+│   ├── RESEARCH-jwt.md
+│   ├── RESEARCH-authentication.md
+│   ├── RESEARCH-oauth2.md
+│   ├── RESEARCH-redis.md
+│   ├── RESEARCH-caching.md
+│   └── RESEARCH-SUMMARY.md
+├── spec.md          # ← Uses research context
+├── prd.json
+└── progress.txt
+```
+
+### Skip Conditions:
+- `--research` flag not provided AND user doesn't request it
+- No technical topics extracted
+- User declines research
+
+---
+
+## Phase 3: ANALYZE
 
 **Goal:** Detect patterns in the epic that require specialized skills, scripts, or hooks.
 
@@ -277,7 +568,7 @@ visual_regression:
 
 ---
 
-## Phase 3: DRAFT
+## Phase 4: DRAFT
 
 **Goal:** Generate the spec.md document.
 
@@ -417,7 +708,7 @@ github_issue: {number or null}
 
 ---
 
-## Phase 4: DECOMPOSE
+## Phase 5: DECOMPOSE
 
 **Goal:** Break spec into properly-sized stories with appropriate infrastructure config.
 
@@ -504,7 +795,7 @@ For each story during decomposition:
 
 ---
 
-## Phase 5: GENERATE
+## Phase 6: GENERATE
 
 **Goal:** Create the prd.json file for Ralph execution.
 
@@ -562,17 +853,219 @@ For each story during decomposition:
    # If your folder doesn't match $EXPECTED, you made an error - fix it!
    ```
 
-6. Output summary:
+6. Output generation summary:
 
 ```
-Planning complete for branch: {exact branch name}
-Feature folder: .ralph-hybrid/{branch-with-slashes-as-dashes}/
-
-Created files:
+[GENERATE] Files created:
   .ralph-hybrid/{branch-with-slashes-as-dashes}/
   ├── spec.md          # Feature specification
   ├── prd.json         # {N} stories, all passes: false
   └── progress.txt     # Empty, ready for iterations
+
+Proceeding to plan verification...
+```
+
+---
+
+## Phase 7: VERIFY
+
+**Goal:** Verify the plan quality and fix issues before execution starts.
+
+> **Skip Condition:** If `--skip-verify` flag is provided, skip this phase entirely and proceed to completion.
+
+### Overview
+
+Plan verification uses the plan checker agent (templates/plan-checker.md) to analyze spec.md and prd.json across six dimensions: Coverage, Completeness, Dependencies, Links, Scope, and Verification.
+
+If BLOCKERs are found, the plan enters a revision loop (up to 3 iterations) to fix issues before the user commits to execution.
+
+### Actions:
+
+#### Step 1: Check Skip Flag
+
+```
+if --skip-verify flag provided:
+    Output: "[VERIFY] Skipping verification (--skip-verify flag)"
+    Proceed to completion summary
+```
+
+#### Step 2: Run Plan Checker Agent
+
+Load and execute the plan checker against the generated spec.md and prd.json:
+
+```
+[VERIFY] Running plan verification...
+
+Analyzing spec.md and prd.json across 6 dimensions:
+  ⏳ Coverage - Checking problem/solution alignment...
+  ⏳ Completeness - Checking story specifications...
+  ⏳ Dependencies - Checking story ordering...
+  ⏳ Links - Checking references...
+  ⏳ Scope - Checking story sizing...
+  ⏳ Verification - Checking test coverage...
+```
+
+The plan checker produces PLAN-REVIEW.md output with:
+- Verdict: READY, NEEDS_REVISION, or BLOCKED
+- Issue counts by severity (BLOCKER, WARNING, INFO)
+- Detailed issue descriptions and recommendations
+
+#### Step 3: Process Verdict
+
+**READY (0 BLOCKERs):**
+```
+[VERIFY] Plan verification PASSED ✓
+
+Verdict: READY
+  - 0 BLOCKERs
+  - {N} WARNINGs (documented trade-offs)
+  - {N} INFO suggestions
+
+The plan is ready for execution.
+```
+→ Proceed to completion summary
+
+**NEEDS_REVISION (fixable BLOCKERs):**
+```
+[VERIFY] Plan needs revision
+
+Verdict: NEEDS_REVISION
+  - {N} BLOCKERs found
+  - {N} WARNINGs
+  - {N} INFO
+
+BLOCKER issues that must be fixed:
+
+BLOCKER-001: {Issue Title}
+  Location: {story ID or spec section}
+  Problem: {description}
+  Fix: {recommendation}
+
+BLOCKER-002: {Issue Title}
+  ...
+
+Revision {current}/3 - Fixing BLOCKER issues...
+```
+→ Enter revision loop
+
+**BLOCKED (major issues):**
+```
+[VERIFY] Plan has significant issues
+
+Verdict: BLOCKED
+  - {N} BLOCKERs found (require major changes)
+
+The plan has issues that cannot be automatically fixed:
+  - {List major issues}
+
+Recommendations:
+  1. Review the BLOCKER issues in PLAN-REVIEW.md
+  2. Manually update spec.md to address the issues
+  3. Run /ralph-hybrid-plan --regenerate to update prd.json
+  4. Run verification again
+```
+→ Proceed to completion summary (user must fix manually)
+
+#### Step 4: Revision Loop (for NEEDS_REVISION)
+
+The revision loop attempts to fix BLOCKER issues automatically:
+
+```
+Maximum revisions: 3
+Current revision: 1
+
+for each revision:
+    1. Identify BLOCKER issues from PLAN-REVIEW.md
+    2. Apply fixes to spec.md and/or prd.json:
+       - Missing acceptance criteria → add them
+       - Vague criteria → make specific
+       - Missing dependencies → reorder stories
+       - Missing test requirements → add them
+    3. Regenerate prd.json if spec.md was modified
+    4. Re-run plan checker
+    5. If verdict is READY:
+       → Exit loop successfully
+    6. If still NEEDS_REVISION and revisions < 3:
+       → Continue to next revision
+    7. If revisions exhausted:
+       → Exit loop, report remaining issues
+```
+
+**Revision output:**
+```
+[VERIFY] Revision 1/3 - Applying fixes...
+
+Fixing BLOCKER-001: Missing acceptance criteria in STORY-003
+  → Added "Typecheck passes" and "Unit tests pass" criteria
+
+Fixing BLOCKER-002: Story ordering issue
+  → Moved STORY-004 after STORY-002 (dependency)
+
+Re-running verification...
+
+[VERIFY] Revision 1/3 complete
+  - Fixed: 2 BLOCKERs
+  - Remaining: 1 BLOCKER
+
+[VERIFY] Revision 2/3 - Applying fixes...
+...
+
+[VERIFY] Plan verification PASSED after 2 revisions ✓
+```
+
+**If revisions exhausted:**
+```
+[VERIFY] Revision limit reached (3/3)
+
+Remaining issues that could not be automatically fixed:
+  - BLOCKER-003: {description}
+
+Please review PLAN-REVIEW.md and manually address remaining issues.
+```
+
+#### Step 5: Save Plan Review
+
+Save the final PLAN-REVIEW.md to the feature folder:
+
+```
+.ralph-hybrid/{branch}/
+├── spec.md
+├── prd.json
+├── progress.txt
+└── PLAN-REVIEW.md     # Plan verification results
+```
+
+### Final Status Output
+
+After verification (or skip), show the final plan status:
+
+```
+═══════════════════════════════════════════════════════════════
+PLANNING COMPLETE
+═══════════════════════════════════════════════════════════════
+
+Branch: {exact branch name}
+Feature folder: .ralph-hybrid/{branch-with-slashes-as-dashes}/
+
+Files:
+  ├── spec.md          # Feature specification
+  ├── prd.json         # {N} stories, all passes: false
+  ├── progress.txt     # Ready for iterations
+  └── PLAN-REVIEW.md   # Verification: {READY|NEEDS_REVISION|BLOCKED|SKIPPED}
+
+Plan Status: {READY ✓ | NEEDS_REVISION ⚠ | BLOCKED ✗ | NOT_VERIFIED}
+
+{If READY:}
+  The plan has passed verification and is ready for execution.
+
+{If NEEDS_REVISION:}
+  Some issues remain. Review PLAN-REVIEW.md before proceeding.
+
+{If BLOCKED:}
+  Significant issues found. Manual intervention required.
+
+{If NOT_VERIFIED (--skip-verify):}
+  Verification was skipped. Consider running verification before execution.
 
 Next steps:
   1. Review spec.md and prd.json
@@ -583,6 +1076,7 @@ project-specific commands like `/execute`, `npm run dev`, or any other
 command. The Ralph development loop is initiated with `ralph-hybrid run` only.
 
 To modify: Edit spec.md, then run /ralph-hybrid-plan --regenerate
+═══════════════════════════════════════════════════════════════
 ```
 
 ---

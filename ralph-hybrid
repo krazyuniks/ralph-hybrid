@@ -33,6 +33,8 @@ source "${SCRIPT_DIR}/lib/import.sh"
 source "${SCRIPT_DIR}/lib/lockfile.sh"
 source "${SCRIPT_DIR}/lib/log_filter.sh"
 source "${SCRIPT_DIR}/lib/mcp.sh"
+source "${SCRIPT_DIR}/lib/debug.sh"
+source "${SCRIPT_DIR}/lib/memory.sh"
 
 #=============================================================================
 # Global Variables (set by parse_args or load_config)
@@ -68,6 +70,9 @@ Commands:
   archive                Archive a completed feature
   restore                Restore a feature from archive
   validate [--smoke]     Run preflight checks (--smoke adds HTTP health checks)
+  verify [options]       Run goal-backward verification on current feature
+  integrate [options]    Run integration check on current feature
+  debug [options]        Start or continue scientific debugging session
   setup                  Install Claude commands (/ralph-hybrid-plan, etc.) to project
   import <file>          Import PRD from Markdown or JSON file
   help                   Show this help message
@@ -88,6 +93,7 @@ Run Options:
   --dangerously-skip-permissions  Pass to Claude Code
   --monitor                  Launch with tmux monitoring dashboard
   -m, --model MODEL          Claude model (opus, sonnet, or full name)
+  --profile PROFILE          Model profile (quality, balanced, budget; default: balanced)
 
 Archive Options:
   -y, --yes                  Skip confirmation for deferred work warnings
@@ -96,12 +102,37 @@ Import Options:
   --format FORMAT          Override format detection (markdown, json)
   --output PATH            Output path (default: .ralph-hybrid/{branch}/prd.json)
 
+Verify Options:
+  --profile PROFILE        Model profile for verification (quality, balanced, budget)
+  -m, --model MODEL        Specific model to use (overrides profile)
+  -o, --output FILE        Output file (default: .ralph-hybrid/{branch}/VERIFICATION.md)
+  -v, --verbose            Enable verbose output
+
+Debug Options:
+  --profile PROFILE        Model profile for debugging (quality, balanced, budget)
+  -m, --model MODEL        Specific model to use (overrides profile)
+  --continue               Continue from previous debug state
+  --reset                  Start fresh, discarding previous debug state
+  -v, --verbose            Enable verbose output
+
+Integrate Options:
+  --profile PROFILE        Model profile for integration check (quality, balanced, budget)
+  -m, --model MODEL        Specific model to use (overrides profile)
+  -o, --output FILE        Output file (default: .ralph-hybrid/{branch}/INTEGRATION.md)
+  -v, --verbose            Enable verbose output
+
 Examples:
   ralph-hybrid run -n 30 -t 20
   ralph-hybrid status
   ralph-hybrid archive
   ralph-hybrid validate              # Preflight checks only
   ralph-hybrid validate --smoke      # Preflight + HTTP health checks
+  ralph-hybrid verify                # Run goal-backward verification
+  ralph-hybrid verify --profile quality
+  ralph-hybrid integrate             # Run integration check
+  ralph-hybrid integrate --profile quality
+  ralph-hybrid debug "tests failing after refactor"
+  ralph-hybrid debug --continue             # Continue previous debug session
   ralph-hybrid import spec.md
   ralph-hybrid import requirements.json --output ./prd.json
 
@@ -634,6 +665,1153 @@ cmd_restore() {
 }
 
 #=============================================================================
+# Verify Command - Run Goal-Backward Verification
+#=============================================================================
+
+# Exit codes for verification
+readonly VERIFY_EXIT_VERIFIED=0
+readonly VERIFY_EXIT_NEEDS_WORK=1
+readonly VERIFY_EXIT_BLOCKED=2
+
+# Run goal-backward verification on the current feature
+# Uses the verifier.md template with Claude to check:
+# - Goals achieved (not just tasks completed)
+# - Stub detection
+# - Wiring verification
+# - Human testing items flagged
+cmd_verify() {
+    local profile=""
+    local model=""
+    local output_file=""
+    local verbose=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile)
+                profile="$2"
+                shift 2
+                ;;
+            --model|-m)
+                model="$2"
+                shift 2
+                ;;
+            --output|-o)
+                output_file="$2"
+                shift 2
+                ;;
+            --verbose|-v)
+                verbose=true
+                shift
+                ;;
+            --help|-h)
+                _verify_show_help
+                return 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                _verify_show_help
+                return 1
+                ;;
+        esac
+    done
+
+    # Check git repo first
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Get feature directory
+    local feature_dir
+    if ! feature_dir=$(get_feature_dir 2>/dev/null); then
+        log_error "Not in a feature branch or feature not initialized"
+        log_info "Run 'ralph-hybrid setup' and create a feature using /ralph-hybrid-plan"
+        return 1
+    fi
+
+    # Check required files exist
+    local spec_file="${feature_dir}/spec.md"
+    local prd_file="${feature_dir}/prd.json"
+    local progress_file="${feature_dir}/progress.txt"
+
+    if [[ ! -f "$spec_file" ]]; then
+        log_error "spec.md not found at: $spec_file"
+        log_info "Create a spec using /ralph-hybrid-plan first"
+        return 1
+    fi
+
+    if [[ ! -f "$prd_file" ]]; then
+        log_error "prd.json not found at: $prd_file"
+        log_info "Create a PRD using /ralph-hybrid-plan first"
+        return 1
+    fi
+
+    # Set default output file
+    if [[ -z "$output_file" ]]; then
+        output_file="${feature_dir}/VERIFICATION.md"
+    fi
+
+    # Determine model to use
+    # Priority: CLI model > profile verification model > default
+    local effective_model=""
+    if [[ -n "$model" ]]; then
+        effective_model="$model"
+    elif [[ -n "$profile" ]]; then
+        if ! cfg_validate_profile "$profile"; then
+            log_error "Invalid profile: $profile"
+            log_info "Valid profiles: quality, balanced, budget (or custom from config)"
+            return 1
+        fi
+        effective_model=$(cfg_get_profile_model "$profile" "verification")
+    elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
+        effective_model=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "verification")
+    fi
+
+    log_info "Running goal-backward verification..."
+    log_info "Feature: $(basename "$feature_dir")"
+
+    # Build the verification prompt
+    local prompt
+    prompt=$(_verify_build_prompt "$feature_dir" "$spec_file" "$prd_file" "$progress_file")
+
+    # Build Claude command
+    local claude_args="--permission-mode bypassPermissions"
+    if [[ -n "$effective_model" ]]; then
+        claude_args+=" --model ${effective_model}"
+        log_debug "Using model: $effective_model"
+    fi
+
+    # Run Claude with the verifier prompt
+    log_info "Invoking verification agent..."
+
+    local temp_output
+    temp_output=$(mktemp)
+
+    set +e
+    echo "$prompt" | claude -p $claude_args 2>&1 | tee "$temp_output"
+    local claude_exit=$?
+    set -e
+
+    if [[ $claude_exit -ne 0 ]]; then
+        log_error "Claude verification failed with exit code: $claude_exit"
+        rm -f "$temp_output"
+        return 1
+    fi
+
+    # Extract VERIFICATION.md content from output
+    local verification_content
+    verification_content=$(_verify_extract_markdown "$temp_output")
+
+    if [[ -z "$verification_content" ]]; then
+        log_warn "Could not extract VERIFICATION.md from output"
+        log_info "Raw output saved to: $temp_output"
+        # Use the full output as verification content
+        verification_content=$(cat "$temp_output")
+    fi
+
+    # Save verification output
+    echo "$verification_content" > "$output_file"
+    log_success "Verification saved to: $output_file"
+    rm -f "$temp_output"
+
+    # Parse verdict and return appropriate exit code
+    local verdict
+    verdict=$(_verify_extract_verdict "$output_file")
+
+    # Display summary
+    echo ""
+    _verify_display_summary "$output_file" "$verdict"
+
+    # Flag human testing items
+    local human_items
+    human_items=$(_verify_count_human_testing_items "$output_file")
+    if [[ $human_items -gt 0 ]]; then
+        echo ""
+        log_warn "Human testing required: $human_items item(s) need manual verification"
+        log_info "See 'Human Testing Required' section in $output_file"
+    fi
+
+    # Return exit code based on verdict
+    case "$verdict" in
+        VERIFIED)
+            log_success "Verification complete: VERIFIED"
+            return $VERIFY_EXIT_VERIFIED
+            ;;
+        NEEDS_WORK)
+            log_warn "Verification complete: NEEDS_WORK"
+            return $VERIFY_EXIT_NEEDS_WORK
+            ;;
+        BLOCKED)
+            log_error "Verification complete: BLOCKED"
+            return $VERIFY_EXIT_BLOCKED
+            ;;
+        *)
+            log_warn "Could not determine verdict (defaulting to NEEDS_WORK)"
+            return $VERIFY_EXIT_NEEDS_WORK
+            ;;
+    esac
+}
+
+# Show help for verify command
+_verify_show_help() {
+    cat << EOF
+Ralph Hybrid - Verify Command
+
+Usage: ralph-hybrid verify [options]
+
+Run goal-backward verification on the current feature to ensure:
+- Goals are actually achieved (not just tasks completed)
+- No stub or placeholder code remains
+- Components are properly wired together
+- Human testing items are flagged
+
+Options:
+  --profile PROFILE    Model profile to use (quality, balanced, budget)
+  --model, -m MODEL    Specific model to use (overrides profile)
+  --output, -o FILE    Output file (default: .ralph-hybrid/{branch}/VERIFICATION.md)
+  --verbose, -v        Enable verbose output
+  --help, -h           Show this help message
+
+Exit Codes:
+  0 - VERIFIED: All goals achieved, no issues found
+  1 - NEEDS_WORK: Issues found that need to be fixed
+  2 - BLOCKED: Critical issues preventing feature completion
+
+Examples:
+  ralph-hybrid verify                    # Run with default settings
+  ralph-hybrid verify --profile quality  # Use quality profile (opus model)
+  ralph-hybrid verify -m sonnet          # Use specific model
+  ralph-hybrid verify -o custom.md       # Custom output file
+EOF
+}
+
+# Build the verification prompt with feature context
+_verify_build_prompt() {
+    local feature_dir="$1"
+    local spec_file="$2"
+    local prd_file="$3"
+    local progress_file="$4"
+
+    local template_file="${SCRIPT_DIR}/templates/verifier.md"
+    local branch_name
+    branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    local timestamp
+    timestamp=$(date -Iseconds)
+    local feature_name
+    feature_name=$(basename "$feature_dir")
+
+    # Start with template
+    local prompt=""
+    if [[ -f "$template_file" ]]; then
+        prompt=$(cat "$template_file")
+    else
+        log_error "Verifier template not found at: $template_file"
+        return 1
+    fi
+
+    # Replace placeholders
+    prompt="${prompt//\{\{FEATURE_NAME\}\}/$feature_name}"
+    prompt="${prompt//\{\{TIMESTAMP\}\}/$timestamp}"
+    prompt="${prompt//\{\{BRANCH_NAME\}\}/$branch_name}"
+
+    # Add context files
+    prompt+=$'\n\n---\n\n'
+    prompt+="# Verification Context"$'\n\n'
+
+    prompt+="## spec.md"$'\n\n'
+    prompt+='```markdown'$'\n'
+    prompt+=$(cat "$spec_file")
+    prompt+=$'\n```\n\n'
+
+    prompt+="## prd.json"$'\n\n'
+    prompt+='```json'$'\n'
+    prompt+=$(cat "$prd_file")
+    prompt+=$'\n```\n\n'
+
+    if [[ -f "$progress_file" ]]; then
+        prompt+="## progress.txt"$'\n\n'
+        prompt+='```'$'\n'
+        prompt+=$(cat "$progress_file")
+        prompt+=$'\n```\n\n'
+    fi
+
+    prompt+=$'\n---\n\n'
+    prompt+="Now perform the goal-backward verification and output a complete VERIFICATION.md file."
+
+    echo "$prompt"
+}
+
+# Extract markdown content from Claude output
+_verify_extract_markdown() {
+    local output_file="$1"
+
+    # Try to extract content between markdown code blocks
+    # or content that starts with "# Feature Verification"
+    local content
+    content=$(cat "$output_file")
+
+    # Look for VERIFICATION.md content markers
+    if echo "$content" | grep -q "^# Feature Verification"; then
+        # Content starts with the expected header, extract from there
+        echo "$content" | sed -n '/^# Feature Verification/,$p'
+        return 0
+    fi
+
+    # Try extracting from markdown code block
+    if echo "$content" | grep -q '```markdown'; then
+        echo "$content" | sed -n '/```markdown/,/```/p' | sed '1d;$d'
+        return 0
+    fi
+
+    # Return empty if no clear markdown found
+    echo ""
+}
+
+# Extract verdict from verification output
+_verify_extract_verdict() {
+    local output_file="$1"
+
+    # Look for "**Verdict:** XXXX" pattern
+    local verdict
+    verdict=$(grep -oE '\*\*Verdict:\*\*\s*(VERIFIED|NEEDS_WORK|BLOCKED)' "$output_file" | head -1 | grep -oE '(VERIFIED|NEEDS_WORK|BLOCKED)' || echo "")
+
+    if [[ -z "$verdict" ]]; then
+        # Try alternate patterns
+        verdict=$(grep -oE 'Verdict:\s*(VERIFIED|NEEDS_WORK|BLOCKED)' "$output_file" | head -1 | grep -oE '(VERIFIED|NEEDS_WORK|BLOCKED)' || echo "")
+    fi
+
+    echo "$verdict"
+}
+
+# Display verification summary
+_verify_display_summary() {
+    local output_file="$1"
+    local verdict="$2"
+
+    echo "━━━ Verification Summary ━━━"
+    echo ""
+
+    # Extract and display issue counts
+    local stub_count wiring_count deliverable_count partial_count human_count
+
+    stub_count=$(grep -c "STUB_FOUND" "$output_file" 2>/dev/null || echo "0")
+    wiring_count=$(grep -c "WIRING_MISSING" "$output_file" 2>/dev/null || echo "0")
+    deliverable_count=$(grep -c "DELIVERABLE_MISSING" "$output_file" 2>/dev/null || echo "0")
+    partial_count=$(grep -c "PARTIAL_IMPLEMENTATION" "$output_file" 2>/dev/null || echo "0")
+    human_count=$(_verify_count_human_testing_items "$output_file")
+
+    printf "  %-25s %s\n" "Stubs found:" "$stub_count"
+    printf "  %-25s %s\n" "Wiring issues:" "$wiring_count"
+    printf "  %-25s %s\n" "Missing deliverables:" "$deliverable_count"
+    printf "  %-25s %s\n" "Partial implementations:" "$partial_count"
+    printf "  %-25s %s\n" "Human testing items:" "$human_count"
+    echo ""
+
+    # Show verdict with color
+    case "$verdict" in
+        VERIFIED)
+            printf "  Verdict: ${UI_SUCCESS}%s${UI_RESET}\n" "$verdict"
+            ;;
+        NEEDS_WORK)
+            printf "  Verdict: ${UI_WARNING}%s${UI_RESET}\n" "$verdict"
+            ;;
+        BLOCKED)
+            printf "  Verdict: ${UI_ERROR}%s${UI_RESET}\n" "$verdict"
+            ;;
+        *)
+            printf "  Verdict: %s\n" "${verdict:-UNKNOWN}"
+            ;;
+    esac
+}
+
+# Count human testing items in verification output
+_verify_count_human_testing_items() {
+    local output_file="$1"
+
+    # Count checkbox items in Human Testing Required section
+    local count=0
+
+    # Extract human testing section and count checkboxes
+    # Pattern matches from "Human Testing Required" to next top-level ## section
+    if grep -q "Human Testing Required" "$output_file" 2>/dev/null; then
+        # grep -c returns 0 (and exit code 1) when no matches, so capture and handle
+        count=$(sed -n '/Human Testing Required/,/^## [^#]/p' "$output_file" | grep -c '^\s*- \[' 2>/dev/null) || count=0
+    fi
+
+    echo "$count"
+}
+
+#=============================================================================
+# Integrate Command - Check Feature Integration
+#=============================================================================
+
+cmd_integrate() {
+    local profile=""
+    local model=""
+    local output_file=""
+    local verbose=false
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile)
+                profile="$2"
+                shift 2
+                ;;
+            --model|-m)
+                model="$2"
+                shift 2
+                ;;
+            --output|-o)
+                output_file="$2"
+                shift 2
+                ;;
+            --verbose|-v)
+                verbose=true
+                shift
+                ;;
+            --help|-h)
+                _integrate_show_help
+                return 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                _integrate_show_help
+                return 1
+                ;;
+        esac
+    done
+
+    # Check git repo first
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Get feature directory
+    local feature_dir
+    if ! feature_dir=$(get_feature_dir 2>/dev/null); then
+        log_error "Not in a feature branch or feature not initialized"
+        log_info "Run 'ralph-hybrid setup' and create a feature using /ralph-hybrid-plan"
+        return 1
+    fi
+
+    # Check required files exist
+    local spec_file="${feature_dir}/spec.md"
+    local prd_file="${feature_dir}/prd.json"
+    local progress_file="${feature_dir}/progress.txt"
+
+    if [[ ! -f "$spec_file" ]]; then
+        log_error "spec.md not found at: $spec_file"
+        log_info "Create a spec using /ralph-hybrid-plan first"
+        return 1
+    fi
+
+    if [[ ! -f "$prd_file" ]]; then
+        log_error "prd.json not found at: $prd_file"
+        log_info "Create a PRD using /ralph-hybrid-plan first"
+        return 1
+    fi
+
+    # Set default output file
+    if [[ -z "$output_file" ]]; then
+        output_file="${feature_dir}/INTEGRATION.md"
+    fi
+
+    # Determine model to use
+    # Priority: CLI model > profile verification model > default
+    local effective_model=""
+    if [[ -n "$model" ]]; then
+        effective_model="$model"
+    elif [[ -n "$profile" ]]; then
+        if ! cfg_validate_profile "$profile"; then
+            log_error "Invalid profile: $profile"
+            log_info "Valid profiles: quality, balanced, budget (or custom from config)"
+            return 1
+        fi
+        effective_model=$(cfg_get_profile_model "$profile" "verification")
+    elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
+        effective_model=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "verification")
+    fi
+
+    log_info "Running integration check..."
+    log_info "Feature: $(basename "$feature_dir")"
+
+    # Build the integration prompt
+    local prompt
+    prompt=$(_integrate_build_prompt "$feature_dir" "$spec_file" "$prd_file" "$progress_file")
+
+    # Build Claude command
+    local claude_args="--permission-mode bypassPermissions"
+    if [[ -n "$effective_model" ]]; then
+        claude_args+=" --model ${effective_model}"
+        log_debug "Using model: $effective_model"
+    fi
+
+    # Run Claude with the integration checker prompt
+    log_info "Invoking integration checker agent..."
+
+    local temp_output
+    temp_output=$(mktemp)
+
+    set +e
+    echo "$prompt" | claude -p $claude_args 2>&1 | tee "$temp_output"
+    local claude_exit=$?
+    set -e
+
+    if [[ $claude_exit -ne 0 ]]; then
+        log_error "Claude integration check failed with exit code: $claude_exit"
+        rm -f "$temp_output"
+        return 1
+    fi
+
+    # Extract INTEGRATION.md content from output
+    local integration_content
+    integration_content=$(_integrate_extract_markdown "$temp_output")
+
+    if [[ -z "$integration_content" ]]; then
+        log_warn "Could not extract INTEGRATION.md from output"
+        log_info "Raw output saved to: $temp_output"
+        # Use the full output as integration content
+        integration_content=$(cat "$temp_output")
+    fi
+
+    # Save integration output
+    echo "$integration_content" > "$output_file"
+    log_success "Integration check saved to: $output_file"
+    rm -f "$temp_output"
+
+    # Parse verdict and return appropriate exit code
+    local verdict
+    verdict=$(_integrate_extract_verdict "$output_file")
+
+    # Display summary
+    echo ""
+    _integrate_display_summary "$output_file" "$verdict"
+
+    # Return exit code based on verdict
+    case "$verdict" in
+        INTEGRATED)
+            log_success "Integration check complete: INTEGRATED"
+            return $INTEGRATE_EXIT_INTEGRATED
+            ;;
+        NEEDS_WIRING)
+            log_warn "Integration check complete: NEEDS_WIRING"
+            _integrate_display_recommendations "$output_file"
+            return $INTEGRATE_EXIT_NEEDS_WIRING
+            ;;
+        BROKEN)
+            log_error "Integration check complete: BROKEN"
+            _integrate_display_recommendations "$output_file"
+            return $INTEGRATE_EXIT_BROKEN
+            ;;
+        *)
+            log_warn "Could not determine verdict (defaulting to NEEDS_WIRING)"
+            return $INTEGRATE_EXIT_NEEDS_WIRING
+            ;;
+    esac
+}
+
+# Show help for integrate command
+_integrate_show_help() {
+    cat << EOF
+Ralph Hybrid - Integrate Command
+
+Usage: ralph-hybrid integrate [options]
+
+Run integration check on the current feature to ensure:
+- All exports are imported and used somewhere
+- All routes have consumers (frontend calls, CLI commands, etc.)
+- Sensitive routes have authentication/authorization
+- Data flows completely from input to output without breaks
+
+Options:
+  --profile PROFILE    Model profile to use (quality, balanced, budget)
+  --model, -m MODEL    Specific model to use (overrides profile)
+  --output, -o FILE    Output file (default: .ralph-hybrid/{branch}/INTEGRATION.md)
+  --verbose, -v        Enable verbose output
+  --help, -h           Show this help message
+
+Exit Codes:
+  0 - INTEGRATED: All components connected, no orphaned code
+  1 - NEEDS_WIRING: Components exist but connections missing
+  2 - BROKEN: Critical integration failures, major components disconnected
+
+Examples:
+  ralph-hybrid integrate                    # Run with default settings
+  ralph-hybrid integrate --profile quality  # Use quality profile (opus model)
+  ralph-hybrid integrate -m sonnet          # Use specific model
+  ralph-hybrid integrate -o custom.md       # Custom output file
+EOF
+}
+
+# Build the integration prompt with feature context
+_integrate_build_prompt() {
+    local feature_dir="$1"
+    local spec_file="$2"
+    local prd_file="$3"
+    local progress_file="$4"
+
+    local template_file="${SCRIPT_DIR}/templates/integration-checker.md"
+    local branch_name
+    branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    local timestamp
+    timestamp=$(date -Iseconds)
+    local feature_name
+    feature_name=$(basename "$feature_dir")
+
+    # Start with template
+    local prompt=""
+    if [[ -f "$template_file" ]]; then
+        prompt=$(cat "$template_file")
+    else
+        log_error "Integration checker template not found at: $template_file"
+        return 1
+    fi
+
+    # Replace placeholders
+    prompt="${prompt//\{\{FEATURE_NAME\}\}/$feature_name}"
+    prompt="${prompt//\{\{TIMESTAMP\}\}/$timestamp}"
+    prompt="${prompt//\{\{BRANCH_NAME\}\}/$branch_name}"
+
+    # Add context files
+    prompt+=$'\n\n---\n\n'
+    prompt+="# Integration Check Context"$'\n\n'
+
+    prompt+="## spec.md"$'\n\n'
+    prompt+='```markdown'$'\n'
+    prompt+=$(cat "$spec_file")
+    prompt+=$'\n```\n\n'
+
+    prompt+="## prd.json"$'\n\n'
+    prompt+='```json'$'\n'
+    prompt+=$(cat "$prd_file")
+    prompt+=$'\n```\n\n'
+
+    if [[ -f "$progress_file" ]]; then
+        prompt+="## progress.txt"$'\n\n'
+        prompt+='```'$'\n'
+        prompt+=$(cat "$progress_file")
+        prompt+=$'\n```\n\n'
+    fi
+
+    prompt+=$'\n---\n\n'
+    prompt+="Now perform the integration check and output a complete INTEGRATION.md file."
+
+    echo "$prompt"
+}
+
+# Extract markdown content from Claude output
+_integrate_extract_markdown() {
+    local output_file="$1"
+
+    # Try to extract content between markdown code blocks
+    # or content that starts with "# Integration Check"
+    local content
+    content=$(cat "$output_file")
+
+    # Look for INTEGRATION.md content markers
+    if echo "$content" | grep -q "^# Integration Check"; then
+        # Content starts with the expected header, extract from there
+        echo "$content" | sed -n '/^# Integration Check/,$p'
+        return 0
+    fi
+
+    # Try extracting from markdown code block
+    if echo "$content" | grep -q '```markdown'; then
+        echo "$content" | sed -n '/```markdown/,/```/p' | sed '1d;$d'
+        return 0
+    fi
+
+    # Return empty if no clear markdown found
+    echo ""
+}
+
+# Extract verdict from integration output
+_integrate_extract_verdict() {
+    local output_file="$1"
+
+    # Look for "**Verdict:** XXXX" pattern
+    local verdict
+    verdict=$(grep -oE '\*\*Verdict:\*\*\s*(INTEGRATED|NEEDS_WIRING|BROKEN)' "$output_file" | head -1 | grep -oE '(INTEGRATED|NEEDS_WIRING|BROKEN)' || echo "")
+
+    if [[ -z "$verdict" ]]; then
+        # Try alternate patterns
+        verdict=$(grep -oE 'Verdict:\s*(INTEGRATED|NEEDS_WIRING|BROKEN)' "$output_file" | head -1 | grep -oE '(INTEGRATED|NEEDS_WIRING|BROKEN)' || echo "")
+    fi
+
+    echo "$verdict"
+}
+
+# Display integration summary
+_integrate_display_summary() {
+    local output_file="$1"
+    local verdict="$2"
+
+    echo "━━━ Integration Summary ━━━"
+    echo ""
+
+    # Extract and display issue counts
+    local orphan_export_count orphan_route_count missing_auth_count broken_flow_count dead_code_count missing_conn_count
+
+    orphan_export_count=$(grep -c "ORPHANED_EXPORT\|ORPHAN-[0-9]" "$output_file" 2>/dev/null || echo "0")
+    orphan_route_count=$(grep -c "ORPHANED_ROUTE\|ROUTE-[0-9]" "$output_file" 2>/dev/null || echo "0")
+    missing_auth_count=$(grep -c "MISSING_AUTH\|AUTH-[0-9]" "$output_file" 2>/dev/null || echo "0")
+    broken_flow_count=$(grep -c "BROKEN_FLOW\|FLOW-[0-9]" "$output_file" 2>/dev/null || echo "0")
+    dead_code_count=$(grep -c "DEAD_CODE\|DEAD-[0-9]" "$output_file" 2>/dev/null || echo "0")
+    missing_conn_count=$(grep -c "MISSING_CONNECTION\|CONN-[0-9]" "$output_file" 2>/dev/null || echo "0")
+
+    printf "  %-25s %s\n" "Orphaned exports:" "$orphan_export_count"
+    printf "  %-25s %s\n" "Orphaned routes:" "$orphan_route_count"
+    printf "  %-25s %s\n" "Missing auth:" "$missing_auth_count"
+    printf "  %-25s %s\n" "Broken flows:" "$broken_flow_count"
+    printf "  %-25s %s\n" "Dead code:" "$dead_code_count"
+    printf "  %-25s %s\n" "Missing connections:" "$missing_conn_count"
+    echo ""
+
+    # Show verdict with color
+    case "$verdict" in
+        INTEGRATED)
+            printf "  Verdict: ${UI_SUCCESS}%s${UI_RESET}\n" "$verdict"
+            ;;
+        NEEDS_WIRING)
+            printf "  Verdict: ${UI_WARNING}%s${UI_RESET}\n" "$verdict"
+            ;;
+        BROKEN)
+            printf "  Verdict: ${UI_ERROR}%s${UI_RESET}\n" "$verdict"
+            ;;
+        *)
+            printf "  Verdict: %s\n" "${verdict:-UNKNOWN}"
+            ;;
+    esac
+}
+
+# Display recommendations from integration output
+_integrate_display_recommendations() {
+    local output_file="$1"
+
+    # Check if there's a Recommendations section
+    if grep -q "## Recommendations" "$output_file" 2>/dev/null; then
+        echo ""
+        log_info "See 'Recommendations' section in $output_file for fix suggestions"
+
+        # Count critical recommendations
+        local critical_count
+        critical_count=$(sed -n '/### Critical/,/### /p' "$output_file" | grep -c '^\s*[0-9]*\.' 2>/dev/null) || critical_count=0
+
+        if [[ $critical_count -gt 0 ]]; then
+            log_warn "Critical issues requiring immediate fix: $critical_count"
+        fi
+    fi
+}
+
+#=============================================================================
+# Debug Command - Scientific Debugging with State Persistence
+#=============================================================================
+
+cmd_debug() {
+    local profile=""
+    local model=""
+    local verbose=false
+    local do_continue=false
+    local do_reset=false
+    local problem_description=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --profile)
+                profile="$2"
+                shift 2
+                ;;
+            --model|-m)
+                model="$2"
+                shift 2
+                ;;
+            --verbose|-v)
+                verbose=true
+                shift
+                ;;
+            --continue)
+                do_continue=true
+                shift
+                ;;
+            --reset)
+                do_reset=true
+                shift
+                ;;
+            --help|-h)
+                _debug_show_help
+                return 0
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                _debug_show_help
+                return 1
+                ;;
+            *)
+                # Non-option argument is the problem description
+                problem_description="$1"
+                shift
+                ;;
+        esac
+    done
+
+    # Check git repo first
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Get feature directory
+    local feature_dir
+    if ! feature_dir=$(get_feature_dir 2>/dev/null); then
+        log_error "Not in a feature branch or feature not initialized"
+        log_info "Run 'ralph-hybrid setup' and create a feature using /ralph-hybrid-plan"
+        return 1
+    fi
+
+    local state_file
+    state_file=$(debug_get_state_file "$feature_dir")
+
+    # Handle reset flag
+    if [[ "$do_reset" == true ]] && [[ -f "$state_file" ]]; then
+        log_warn "Removing existing debug state..."
+        rm -f "$state_file"
+    fi
+
+    # Check for existing state
+    local existing_state=""
+    local session_num=1
+
+    if debug_state_exists "$feature_dir"; then
+        existing_state=$(debug_load_state "$feature_dir")
+        local existing_status
+        existing_status=$(debug_extract_status "$existing_state")
+
+        if [[ "$do_continue" != true ]] && [[ "$existing_status" =~ ^(CHECKPOINT_REACHED|IN_PROGRESS)$ ]]; then
+            log_info "Existing debug session found (Status: $existing_status)"
+            echo ""
+            echo "Previous session is in progress. Would you like to:"
+            echo "  1) Continue from where you left off"
+            echo "  2) Start fresh (discard previous state)"
+            echo ""
+            local choice
+            read -r -p "Choice [1/2]: " choice
+            case "$choice" in
+                2)
+                    existing_state=""
+                    rm -f "$state_file"
+                    log_info "Starting fresh debug session"
+                    ;;
+                *)
+                    do_continue=true
+                    log_info "Continuing previous debug session"
+                    ;;
+            esac
+        elif [[ "$do_continue" == true ]]; then
+            log_info "Continuing debug session (Status: $existing_status)"
+        fi
+
+        if [[ -n "$existing_state" ]]; then
+            session_num=$(debug_get_next_session "$existing_state")
+        fi
+    fi
+
+    # Require problem description for new sessions
+    if [[ -z "$existing_state" ]] && [[ -z "$problem_description" ]]; then
+        log_error "Problem description required for new debug session"
+        echo ""
+        echo "Usage: ralph-hybrid debug \"description of the problem\""
+        echo ""
+        echo "Example:"
+        echo "  ralph-hybrid debug \"tests failing after refactor\""
+        echo "  ralph-hybrid debug \"users can't log in after password reset\""
+        return 1
+    fi
+
+    # Determine model to use
+    local effective_model=""
+    if [[ -n "$model" ]]; then
+        effective_model="$model"
+    elif [[ -n "$profile" ]]; then
+        if ! cfg_validate_profile "$profile"; then
+            log_error "Invalid profile: $profile"
+            log_info "Valid profiles: quality, balanced, budget (or custom from config)"
+            return 1
+        fi
+        effective_model=$(cfg_get_profile_model "$profile" "execution")
+    elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
+        effective_model=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "execution")
+    fi
+
+    log_info "Starting scientific debug session #${session_num}..."
+    log_info "Feature: $(basename "$feature_dir")"
+
+    # Build the debug prompt
+    local prompt
+    prompt=$(_debug_build_prompt "$feature_dir" "$problem_description" "$existing_state" "$session_num")
+
+    # Build Claude command
+    local claude_args="--permission-mode bypassPermissions"
+    if [[ -n "$effective_model" ]]; then
+        claude_args+=" --model ${effective_model}"
+        log_debug "Using model: $effective_model"
+    fi
+
+    # Run Claude with the debug prompt
+    log_info "Invoking debug agent..."
+    if [[ "$verbose" == true ]]; then
+        log_debug "Problem: ${problem_description:-'(continuing previous session)'}"
+    fi
+
+    local temp_output
+    temp_output=$(mktemp)
+
+    set +e
+    echo "$prompt" | claude -p $claude_args 2>&1 | tee "$temp_output"
+    local claude_exit=$?
+    set -e
+
+    if [[ $claude_exit -ne 0 ]]; then
+        log_error "Claude debugging failed with exit code: $claude_exit"
+        rm -f "$temp_output"
+        return 1
+    fi
+
+    # Extract and save debug state
+    local debug_state
+    debug_state=$(debug_extract_state_from_output "$temp_output")
+
+    if [[ -z "$debug_state" ]]; then
+        log_warn "Could not extract debug state from output"
+        log_info "Raw output saved to: $temp_output"
+        debug_state=$(cat "$temp_output")
+    fi
+
+    # Save debug state
+    debug_save_state "$feature_dir" "$debug_state"
+    log_success "Debug state saved to: $state_file"
+    rm -f "$temp_output"
+
+    # Parse the debug status
+    local status
+    status=$(debug_extract_status "$debug_state")
+
+    # Display summary
+    echo ""
+    _debug_display_summary "$debug_state" "$status"
+
+    # Handle post-debug actions based on status
+    case "$status" in
+        ROOT_CAUSE_FOUND)
+            echo ""
+            local action
+            action=$(debug_prompt_user_action "$(debug_extract_root_cause "$debug_state")")
+
+            case "$action" in
+                fix)
+                    log_info "Starting fix implementation..."
+                    local fix_prompt
+                    fix_prompt=$(debug_build_fix_prompt "$feature_dir" "$debug_state")
+                    echo "$fix_prompt" | claude -p $claude_args
+                    ;;
+                plan)
+                    log_info "Creating solution plan..."
+                    local plan_prompt
+                    plan_prompt=$(debug_build_plan_prompt "$feature_dir" "$debug_state")
+                    echo "$plan_prompt" | claude -p $claude_args
+                    ;;
+                manual)
+                    log_info "Exiting for manual handling"
+                    log_info "Debug state saved to: $state_file"
+                    ;;
+            esac
+            return $DEBUG_EXIT_ROOT_CAUSE_FOUND
+            ;;
+        DEBUG_COMPLETE)
+            log_success "Debugging complete - issue resolved!"
+            return $DEBUG_EXIT_DEBUG_COMPLETE
+            ;;
+        CHECKPOINT_REACHED)
+            log_warn "Debug session reached checkpoint"
+            log_info "Run 'ralph-hybrid debug --continue' to continue"
+            return $DEBUG_EXIT_CHECKPOINT_REACHED
+            ;;
+        *)
+            log_warn "Debug session ended with status: $status"
+            return $DEBUG_EXIT_ERROR
+            ;;
+    esac
+}
+
+# Show help for debug command
+_debug_show_help() {
+    cat << EOF
+Ralph Hybrid - Debug Command
+
+Usage: ralph-hybrid debug [options] "problem description"
+       ralph-hybrid debug --continue
+
+Start or continue a scientific debugging session using hypothesis-driven
+investigation to find root causes systematically.
+
+Options:
+  --profile PROFILE    Model profile to use (quality, balanced, budget)
+  --model, -m MODEL    Specific model to use (overrides profile)
+  --continue           Continue from previous debug state
+  --reset              Start fresh, discarding previous debug state
+  --verbose, -v        Enable verbose output
+  --help, -h           Show this help message
+
+Exit Codes:
+  0  - ROOT_CAUSE_FOUND or DEBUG_COMPLETE
+  1  - Error during debugging
+  10 - CHECKPOINT_REACHED (needs continuation)
+
+Debug States:
+  ROOT_CAUSE_FOUND   - Root cause identified, user chooses next action
+  DEBUG_COMPLETE     - Issue fixed and verified
+  CHECKPOINT_REACHED - Progress saved, needs continuation
+
+Examples:
+  ralph-hybrid debug "tests failing after refactor"
+  ralph-hybrid debug --profile quality "users can't log in"
+  ralph-hybrid debug --continue
+  ralph-hybrid debug --reset "start fresh investigation"
+EOF
+}
+
+# Build the debug prompt with problem and previous state
+_debug_build_prompt() {
+    local feature_dir="$1"
+    local problem_description="$2"
+    local existing_state="$3"
+    local session_num="$4"
+
+    local template_file="${SCRIPT_DIR}/templates/debug-agent.md"
+    local branch_name
+    branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    local timestamp
+    timestamp=$(date -Iseconds)
+
+    # Start with template
+    local prompt=""
+    if [[ -f "$template_file" ]]; then
+        prompt=$(cat "$template_file")
+    else
+        log_error "Debug agent template not found at: $template_file"
+        return 1
+    fi
+
+    # Add context section
+    prompt+=$'\n\n---\n\n'
+    prompt+="# Debug Session Context"$'\n\n'
+    prompt+="**Session:** ${session_num}"$'\n'
+    prompt+="**Branch:** ${branch_name}"$'\n'
+    prompt+="**Timestamp:** ${timestamp}"$'\n\n'
+
+    # Add problem description for new sessions
+    if [[ -n "$problem_description" ]]; then
+        prompt+="## Problem to Debug"$'\n\n'
+        prompt+="${problem_description}"$'\n\n'
+    fi
+
+    # Add previous state for continuation
+    if [[ -n "$existing_state" ]]; then
+        prompt+="## Previous Debug State"$'\n\n'
+        prompt+="Continue from this state. Do NOT restart from scratch."$'\n\n'
+        prompt+='```markdown'$'\n'
+        prompt+="${existing_state}"
+        prompt+=$'\n```\n\n'
+
+        local current_focus
+        current_focus=$(debug_extract_current_focus "$existing_state")
+        if [[ -n "$current_focus" ]]; then
+            prompt+="**Continue from:** ${current_focus}"$'\n\n'
+        fi
+    fi
+
+    # Add feature context files if they exist
+    local spec_file="${feature_dir}/spec.md"
+    local prd_file="${feature_dir}/prd.json"
+    local progress_file="${feature_dir}/progress.txt"
+
+    if [[ -f "$spec_file" ]]; then
+        prompt+="## Feature Specification (spec.md)"$'\n\n'
+        prompt+='```markdown'$'\n'
+        prompt+=$(cat "$spec_file")
+        prompt+=$'\n```\n\n'
+    fi
+
+    if [[ -f "$progress_file" ]]; then
+        prompt+="## Recent Progress (progress.txt)"$'\n\n'
+        prompt+='```'$'\n'
+        prompt+=$(tail -100 "$progress_file")
+        prompt+=$'\n```\n\n'
+    fi
+
+    prompt+=$'\n---\n\n'
+    prompt+="Now begin debugging using the scientific method. "
+    if [[ -n "$existing_state" ]]; then
+        prompt+="Continue from the previous state - do not restart."
+    else
+        prompt+="Start by gathering symptoms, then form hypotheses."
+    fi
+    prompt+=$'\n\n'
+    prompt+="Output a complete DEBUG-STATE.md file with your findings."
+
+    echo "$prompt"
+}
+
+# Display debug summary
+_debug_display_summary() {
+    local debug_state="$1"
+    local status="$2"
+
+    echo "━━━ Debug Summary ━━━"
+    echo ""
+
+    # Extract and display hypothesis counts
+    local tested untested
+    tested=$(debug_count_tested_hypotheses "$debug_state")
+    untested=$(debug_count_untested_hypotheses "$debug_state")
+
+    printf "  %-25s %s\n" "Hypotheses tested:" "$tested"
+    printf "  %-25s %s\n" "Hypotheses remaining:" "$untested"
+
+    # Show current focus
+    local focus
+    focus=$(debug_extract_current_focus "$debug_state")
+    if [[ -n "$focus" ]]; then
+        printf "  %-25s %s\n" "Current focus:" "$focus"
+    fi
+
+    echo ""
+
+    # Show status with color
+    case "$status" in
+        ROOT_CAUSE_FOUND)
+            printf "  Status: ${UI_SUCCESS}%s${UI_RESET}\n" "$status"
+            local root_cause
+            root_cause=$(debug_extract_root_cause "$debug_state")
+            if [[ -n "$root_cause" ]]; then
+                echo ""
+                echo "  Root Cause:"
+                echo "$root_cause" | head -5 | sed 's/^/    /'
+            fi
+            ;;
+        DEBUG_COMPLETE)
+            printf "  Status: ${UI_SUCCESS}%s${UI_RESET}\n" "$status"
+            ;;
+        CHECKPOINT_REACHED)
+            printf "  Status: ${UI_WARNING}%s${UI_RESET}\n" "$status"
+            ;;
+        *)
+            printf "  Status: %s\n" "${status:-IN_PROGRESS}"
+            ;;
+    esac
+}
+
+#=============================================================================
 # Setup Command - Install Claude Commands to Project
 #=============================================================================
 
@@ -781,6 +1959,111 @@ _setup_update_claude_md() {
     return 0
 }
 
+#-----------------------------------------------------------------------------
+# Setup: Copy hook templates to project
+#-----------------------------------------------------------------------------
+
+_setup_copy_hook_templates() {
+    local project_dir="$1"
+    local ralph_home="${HOME}/.ralph-hybrid"
+    local hooks_src="${ralph_home}/templates/hooks"
+    local hooks_dest="${project_dir}/.ralph-hybrid/hooks"
+
+    # Check if hook templates exist in ralph home
+    if [[ ! -d "$hooks_src" ]]; then
+        log_debug "No hook templates found in ${hooks_src}"
+        return 0
+    fi
+
+    # Create project-wide hooks directory
+    mkdir -p "$hooks_dest"
+
+    # Copy hook templates (but don't overwrite existing)
+    local copied=0
+    local skipped=0
+    for hook_file in "${hooks_src}"/*.sh; do
+        if [[ -f "$hook_file" ]]; then
+            local filename
+            filename=$(basename "$hook_file")
+            if [[ -f "${hooks_dest}/${filename}" ]]; then
+                skipped=$((skipped + 1))
+            else
+                cp "$hook_file" "${hooks_dest}/${filename}"
+                chmod +x "${hooks_dest}/${filename}"
+                copied=$((copied + 1))
+            fi
+        fi
+    done
+
+    if [[ $copied -gt 0 ]]; then
+        log_info "Installed ${copied} hook template(s) to ${hooks_dest}/"
+    fi
+    if [[ $skipped -gt 0 ]]; then
+        log_debug "Skipped ${skipped} existing hook(s)"
+    fi
+
+    return 0
+}
+
+#-----------------------------------------------------------------------------
+# Setup: Copy skill templates to project
+#-----------------------------------------------------------------------------
+
+_setup_copy_skill_templates() {
+    local project_dir="$1"
+    local ralph_home="${HOME}/.ralph-hybrid"
+    local skills_src="${ralph_home}/templates/skills"
+    local skills_dest="${project_dir}/.ralph-hybrid/skills"
+
+    # Check if skill templates exist in ralph home
+    if [[ ! -d "$skills_src" ]]; then
+        log_debug "No skill templates found in ${skills_src}"
+        return 0
+    fi
+
+    # Check if there are any .md files
+    local has_skills=0
+    for skill_file in "${skills_src}"/*.md; do
+        if [[ -f "$skill_file" ]]; then
+            has_skills=1
+            break
+        fi
+    done
+
+    if [[ $has_skills -eq 0 ]]; then
+        log_debug "No skill templates (*.md) found in ${skills_src}"
+        return 0
+    fi
+
+    # Create project-wide skills directory
+    mkdir -p "$skills_dest"
+
+    # Copy skill templates (but don't overwrite existing)
+    local copied=0
+    local skipped=0
+    for skill_file in "${skills_src}"/*.md; do
+        if [[ -f "$skill_file" ]]; then
+            local filename
+            filename=$(basename "$skill_file")
+            if [[ -f "${skills_dest}/${filename}" ]]; then
+                skipped=$((skipped + 1))
+            else
+                cp "$skill_file" "${skills_dest}/${filename}"
+                copied=$((copied + 1))
+            fi
+        fi
+    done
+
+    if [[ $copied -gt 0 ]]; then
+        log_info "Installed ${copied} skill template(s) to ${skills_dest}/"
+    fi
+    if [[ $skipped -gt 0 ]]; then
+        log_debug "Skipped ${skipped} existing skill(s)"
+    fi
+
+    return 0
+}
+
 cmd_setup() {
     local ralph_home="${HOME}/.ralph-hybrid"
     local commands_src="${ralph_home}/commands"
@@ -842,6 +2125,12 @@ cmd_setup() {
 
     # Update .gitignore with ephemeral state files
     _setup_update_gitignore "$project_dir"
+
+    # Copy hook templates to project
+    _setup_copy_hook_templates "$project_dir"
+
+    # Copy skill templates to project
+    _setup_copy_skill_templates "$project_dir"
 
     echo ""
     log_info "Quick start:"
@@ -1088,6 +2377,20 @@ parse_run_args() {
                 RALPH_HYBRID_MODEL="${2:-}"
                 shift 2
                 ;;
+            --profile)
+                RALPH_HYBRID_PROFILE="${2:-}"
+                if [[ -z "$RALPH_HYBRID_PROFILE" ]]; then
+                    log_error "Profile name required for --profile"
+                    return 1
+                fi
+                # Validate profile name (built-in or custom in config)
+                if ! cfg_validate_profile "$RALPH_HYBRID_PROFILE"; then
+                    log_error "Invalid profile: $RALPH_HYBRID_PROFILE (valid: quality, balanced, budget, or custom profiles in config)"
+                    return 1
+                fi
+                export RALPH_HYBRID_PROFILE
+                shift 2
+                ;;
             -*)
                 log_error "Unknown option: $1"
                 return 1
@@ -1226,6 +2529,11 @@ $(
 )
 
 ---
+
+$(
+    # Include memories from previous sessions (if auto injection is enabled)
+    memory_get_for_iteration "$feature_dir" ""
+)
 
 $(
     # Include last error feedback if it exists
@@ -1628,13 +2936,27 @@ _run_invoke_claude() {
         story_mcp_servers=$(prd_get_current_story_mcp_servers "$RUN_PRD_FILE")
     fi
 
-    # Model: story-level overrides CLI arg
-    local effective_model="${story_model:-${RALPH_HYBRID_MODEL:-}}"
+    # Model selection priority:
+    # 1. Story-level model (from prd.json story.model field)
+    # 2. CLI --model flag
+    # 3. Profile's execution model (from --profile or config)
+    # 4. None (let Claude CLI use its default)
+    local effective_model=""
+    if [[ -n "$story_model" ]]; then
+        effective_model="$story_model"
+        log_debug "Using story-level model: $story_model"
+    elif [[ -n "${RALPH_HYBRID_MODEL:-}" ]]; then
+        effective_model="$RALPH_HYBRID_MODEL"
+        log_debug "Using CLI model: $RALPH_HYBRID_MODEL"
+    elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
+        effective_model=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "execution")
+        if [[ -n "$effective_model" ]]; then
+            log_debug "Using profile '$RALPH_HYBRID_PROFILE' execution model: $effective_model"
+        fi
+    fi
+
     if [[ -n "$effective_model" ]]; then
         claude_args+=" --model ${effective_model}"
-        if [[ -n "$story_model" ]]; then
-            log_debug "Using story-level model: $story_model"
-        fi
     fi
 
     # MCP: if story specifies servers, use strict mode with only those servers
@@ -1855,6 +3177,12 @@ _run_handle_completion() {
 
     case "$exit_signal" in
         complete)
+            # Run backpressure verification hook before accepting completion
+            if ! _run_backpressure_gate "$prd_file" "$passes_before"; then
+                # Backpressure verification failed - continue iteration
+                return 0
+            fi
+
             log_success "All stories complete!"
 
             # Execute on_completion hooks
@@ -1879,6 +3207,12 @@ _run_handle_completion() {
             return "$RALPH_HYBRID_EXIT_COMPLETE"  # Special code for completion
             ;;
         story_complete)
+            # Run backpressure verification hook before accepting story completion
+            if ! _run_backpressure_gate "$prd_file" "$passes_before"; then
+                # Backpressure verification failed - continue iteration
+                return 0
+            fi
+
             # One story completed successfully - continue to next iteration with fresh context
             log_success "Story completed! Starting fresh context for next story..."
             return 0  # Continue to next iteration
@@ -1908,6 +3242,121 @@ _run_handle_completion() {
     esac
 
     return 0
+}
+
+# Run backpressure verification gate (post_iteration hook)
+# This provides an additional verification layer on story completion.
+# Hooks can run tests, lint, or other checks to ensure quality.
+#
+# Arguments:
+#   $1 - Path to prd.json file
+#   $2 - passes_before state (for rollback on failure)
+#
+# Returns:
+#   0 - Verification passed (or hook not configured)
+#   1 - Verification failed (story completion blocked)
+#
+# On failure:
+#   - Rolls back story completion in prd.json
+#   - Increments circuit breaker for VERIFICATION_FAILED (exit 75)
+#   - Saves error feedback for next iteration
+_run_backpressure_gate() {
+    local prd_file="$1"
+    local passes_before="${2:-}"
+
+    # Check if hooks are enabled globally
+    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" != "true" ]]; then
+        log_debug "Hooks disabled globally, skipping backpressure gate"
+        return 0
+    fi
+
+    # Check if post_iteration hook is enabled in config
+    local post_iteration_enabled
+    post_iteration_enabled=$(cfg_get_value "hooks.post_iteration.enabled")
+    if [[ "$post_iteration_enabled" == "false" ]]; then
+        log_debug "Post-iteration hook disabled in config, skipping backpressure gate"
+        return 0
+    fi
+
+    # Derive context from available information
+    local feature_dir
+    feature_dir=$(dirname "$prd_file")
+
+    local iteration="${RALPH_HYBRID_ITERATION:-0}"
+    local log_file="${feature_dir}/logs/iteration-${iteration}.log"
+
+    # Get current story ID from prd.json (first incomplete story, or last story if all complete)
+    local story_id
+    story_id=$(jq -r '(.userStories[] | select(.passes == false) | .id) // (.userStories[-1].id) // "unknown"' "$prd_file" 2>/dev/null || echo "unknown")
+
+    # Check if hook exists before running
+    if ! hook_exists "post_iteration" "$feature_dir"; then
+        log_debug "No post_iteration hook found, skipping backpressure gate"
+        return 0
+    fi
+
+    # Load hook timeout from config if available
+    local hook_timeout
+    hook_timeout=$(cfg_get_value "hooks.timeout")
+    if [[ -n "$hook_timeout" ]]; then
+        export RALPH_HYBRID_HOOK_TIMEOUT="$hook_timeout"
+    fi
+
+    log_info "Running backpressure verification hook..."
+
+    # Run the post_iteration hook
+    local hook_exit_code=0
+    run_hook "post_iteration" "$story_id" "$iteration" "$feature_dir" "$log_file" || hook_exit_code=$?
+
+    if [[ $hook_exit_code -eq 0 ]]; then
+        log_info "Backpressure verification passed"
+        return 0
+    fi
+
+    # Hook failed - handle based on exit code
+    if [[ $hook_exit_code -eq 75 ]]; then
+        # VERIFICATION_FAILED - tests/lint/etc. failed
+        log_error "Backpressure verification FAILED (hook returned VERIFICATION_FAILED)"
+        log_error "Story completion blocked - Claude should fix issues and retry"
+
+        # Save error feedback for next iteration
+        cat > "${feature_dir}/last_error.txt" << 'EOF'
+Backpressure Verification Failed
+=================================
+
+The post-iteration verification hook failed. This typically means:
+- Tests did not pass
+- Linting checks failed
+- Type checking failed
+- Build failed
+
+Your implementation does not meet the project's quality standards.
+You MUST fix all issues before the story can be marked as complete.
+
+Review the hook output above for specific errors to fix.
+EOF
+        log_warn "Error feedback saved to ${feature_dir}/last_error.txt"
+
+        # Rollback story completion
+        if [[ -n "$passes_before" ]] && [[ -n "$prd_file" ]]; then
+            if declare -f prd_rollback_passes &>/dev/null; then
+                log_error "Rolling back story completion..."
+                prd_rollback_passes "$prd_file" "$passes_before"
+            fi
+        fi
+
+        # Increment circuit breaker - this is a verification failure
+        cb_record_no_progress
+        cb_save_state
+
+        return 1
+    else
+        # Other hook error (non-75)
+        log_warn "Backpressure hook failed with exit code $hook_exit_code (infrastructure error)"
+        log_warn "Allowing story completion despite hook failure"
+        # Infrastructure errors don't block completion - only VERIFICATION_FAILED does
+        return 0
+    fi
 }
 
 #=============================================================================
@@ -2133,6 +3582,7 @@ _run_build_monitor_cmd() {
     [[ "$RALPH_HYBRID_SKIP_PREFLIGHT" == true ]] && run_cmd+=" --skip-preflight"
     [[ "$RALPH_HYBRID_DANGEROUSLY_SKIP_PERMISSIONS" == true ]] && run_cmd+=" --dangerously-skip-permissions"
     [[ -n "${RALPH_HYBRID_MODEL:-}" ]] && run_cmd+=" -m $RALPH_HYBRID_MODEL"
+    [[ -n "${RALPH_HYBRID_PROFILE:-}" ]] && run_cmd+=" --profile $RALPH_HYBRID_PROFILE"
     echo "$run_cmd"
 }
 
@@ -2355,6 +3805,18 @@ main() {
             ;;
         validate)
             cmd_validate "$@"
+            return $?
+            ;;
+        verify)
+            cmd_verify "$@"
+            return $?
+            ;;
+        integrate)
+            cmd_integrate "$@"
+            return $?
+            ;;
+        debug)
+            cmd_debug "$@"
             return $?
             ;;
         setup)

@@ -406,7 +406,7 @@ ar_get_latest_archive() {
 
     # Find archives matching the feature name, sorted by timestamp (descending)
     # Pattern: YYYYMMDD-HHMMSS-feature-name
-    # shellcheck disable=SC2012
+    # shellcheck disable=SC2010,SC2012
     ls -1 "$archive_dir" 2>/dev/null | grep -- "-${feature_name}$" | sort -r | head -1
     return 0
 }

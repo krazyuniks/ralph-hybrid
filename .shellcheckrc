@@ -1,0 +1,31 @@
+# ShellCheck configuration for ralph-hybrid
+
+# SC2034: Ignore "unused variable" warnings for:
+# - Constants defined for export/sourcing
+# - Color variables defined for library use
+# - Variables used in subshells or eval contexts
+disable=SC2034
+
+# SC2155: Ignore "declare and assign separately" warnings
+# These are stylistic and the codebase consistently uses combined declaration
+disable=SC2155
+
+# SC2120: Ignore "function references arguments but none passed"
+# This is a false positive for functions that have optional arguments
+disable=SC2120
+
+# SC2178: Ignore "Variable was used as an array but is now assigned a string"
+# This is a false positive for bash nameref (local -n) patterns
+disable=SC2178
+
+# SC2115: Ignore "Use ${var:?} to ensure this never expands to /* path"
+# The code handles empty variables appropriately
+disable=SC2115
+
+# SC2128: Ignore "Expanding an array without an index only gives first element"
+# Some scripts intentionally use this behavior
+disable=SC2128
+
+# SC2064: Ignore "Use single quotes for trap" warnings
+# These traps intentionally expand at definition time
+disable=SC2064

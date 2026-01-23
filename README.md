@@ -11,11 +11,12 @@
 1. [What is Ralph Wiggum?](#what-is-ralph-wiggum)
 2. [Architecture](#architecture)
 3. [Key Benefits](#key-benefits)
-4. [Architectural Evolution](#architectural-evolution)
-5. [Sources and Inspiration](#sources-and-inspiration)
-6. [Getting Started](#getting-started)
-7. [Documentation](#documentation)
-8. [Contributing](#contributing)
+4. [Features](#features)
+5. [Architectural Evolution](#architectural-evolution)
+6. [Sources and Inspiration](#sources-and-inspiration)
+7. [Getting Started](#getting-started)
+8. [Documentation](#documentation)
+9. [Contributing](#contributing)
 
 ---
 
@@ -324,6 +325,243 @@ Context: Discovered during STORY-002 that users need export for reporting
 5. **Learning data** - Amendments show where initial planning fell short
 
 > **Key insight:** The quality of your planning improves over time as you learn from amendments. They're data points, not failures.
+
+---
+
+## Features
+
+Ralph Hybrid includes a comprehensive set of features adopted from [GSD](https://github.com/glittercowboy/get-shit-done) and [Ralph Orchestrator](https://github.com/mikeyobrien/ralph-orchestrator).
+
+### Backpressure Gates
+
+**Problem solved**: Stories marked complete based on AI self-assessment, not actual test results.
+
+Hooks execute after each iteration to verify quality gates before marking stories complete.
+
+```bash
+# Project hook at .ralph-hybrid/hooks/post_iteration.sh
+#!/bin/bash
+CONTEXT_FILE="$1"  # JSON with story_id, iteration, feature_dir
+
+npm test || exit 75  # Exit 75 = VERIFICATION_FAILED
+npm run lint || exit 75
+exit 0
+```
+
+**Configuration**:
+```yaml
+hooks:
+  post_iteration:
+    enabled: true   # Default: true if hook exists
+  timeout: 300      # Seconds (default: 300)
+```
+
+### Model Profiles
+
+Cost optimization through task-appropriate model selection.
+
+```yaml
+profiles:
+  quality:    # All opus
+    planning: opus
+    execution: opus
+    research: opus
+    verification: opus
+  balanced:   # Default - opus for planning, sonnet for execution
+    planning: opus
+    execution: sonnet
+    research: sonnet
+    verification: sonnet
+  budget:     # Cost-optimized
+    planning: sonnet
+    execution: sonnet
+    research: haiku
+    verification: haiku
+```
+
+**Usage**:
+```bash
+ralph-hybrid run --profile balanced
+ralph-hybrid run --profile budget
+```
+
+Per-story override in prd.json:
+```json
+{
+  "id": "STORY-001",
+  "model": "opus"  // Override profile for complex story
+}
+```
+
+### Research Agents
+
+Parallel investigation during planning with structured output.
+
+```bash
+/ralph-hybrid-plan --research "Add OAuth authentication"
+```
+
+Spawns research agents per topic, outputs:
+- `RESEARCH-{topic}.md` per agent
+- `RESEARCH-SUMMARY.md` synthesized findings
+- Confidence levels: HIGH (official docs), MEDIUM (community), LOW (single source)
+
+### Plan Verification
+
+Six-dimension verification before execution:
+
+| Dimension | Checks |
+|-----------|--------|
+| Coverage | Every requirement addressed? |
+| Completeness | Required fields present? |
+| Dependencies | Valid and acyclic? |
+| Links | Artifacts connected? |
+| Scope | Completable within context budget? |
+| Verification | Criteria trace to goals? |
+
+Issues classified as BLOCKER, WARNING, or INFO. Up to 3 revision iterations on blockers.
+
+```bash
+/ralph-hybrid-plan              # Includes verification
+/ralph-hybrid-plan --skip-verify # Bypass if needed
+```
+
+### Goal-Backward Verification
+
+Verifies goals achieved, not just tasks completed.
+
+```bash
+ralph-hybrid verify
+```
+
+Checks:
+- Deliverables exist AND function
+- Hidden stubs detected (placeholder returns, TODO comments)
+- Component wiring verified
+- Human testing items flagged separately
+
+### Memory System
+
+Cross-session learning with token-budgeted injection.
+
+**Project memories** (`.ralph-hybrid/memories.md`):
+```markdown
+## Patterns
+- [auth, security] Always use bcrypt for password hashing
+
+## Decisions
+- [arch] Chose PostgreSQL over SQLite for concurrent writes
+
+## Fixes
+- [bug, api] Rate limit errors need exponential backoff
+
+## Context
+- [domain] User roles: admin, editor, viewer
+```
+
+**Feature memories** (`.ralph-hybrid/{branch}/memories.md`) inherit from project.
+
+**Configuration**:
+```yaml
+memory:
+  injection: auto    # auto, manual, none
+  token_budget: 2000 # ~8000 characters
+```
+
+### Scientific Debugging
+
+Hypothesis-driven debugging that persists across context resets.
+
+```bash
+ralph-hybrid debug
+```
+
+Pattern:
+1. Gather symptoms
+2. Form falsifiable hypotheses
+3. Test one variable at a time
+4. Collect evidence
+
+State persists in `.ralph-hybrid/{branch}/debug-state.md`. Returns: `ROOT_CAUSE_FOUND`, `DEBUG_COMPLETE`, or `CHECKPOINT_REACHED`.
+
+### Assumption Surfacing
+
+Surface assumptions before planning begins.
+
+```bash
+/ralph-hybrid-plan --list-assumptions
+```
+
+Five categories:
+- **Technical**: Technology choices, patterns
+- **Order**: Implementation sequence
+- **Scope**: Boundaries, exclusions
+- **Risk**: Potential issues
+- **Dependencies**: External requirements
+
+### Decimal Story IDs
+
+Insert urgent work without renumbering.
+
+```bash
+/ralph-hybrid-amend --insert-after STORY-002 "Hotfix for auth"
+# Creates STORY-002.1
+```
+
+Ordering respects decimal values. Existing stories unaffected.
+
+### Skills
+
+Skill templates copied to projects via `ralph-hybrid setup`.
+
+#### Adversarial Review
+
+Security-focused code review with red team / blue team pattern.
+
+```bash
+# In project: .claude/skills/adversarial-review.md
+```
+
+Checks: injection attacks, auth bypass, data exposure, race conditions.
+Severity levels: CRITICAL, HIGH, MEDIUM, LOW.
+
+#### Code Archaeology
+
+Safe legacy code investigation.
+
+Four roles:
+1. **Surveyor**: Map codebase structure
+2. **Historian**: Git history analysis
+3. **Archaeologist**: Identify gotchas
+4. **Careful Modifier**: Tests-first approach
+
+Outputs: SURVEY.md, HISTORY.md, GOTCHAS.md
+
+#### Incident Response
+
+OODA loop for production issues.
+
+Four roles:
+1. **Observer**: Assess situation
+2. **Mitigator**: Stop the bleeding (fast)
+3. **Investigator**: Root cause (thorough)
+4. **Fixer**: Permanent solution
+
+### Integration Checker
+
+Verify feature integration before merge.
+
+```bash
+ralph-hybrid integrate
+```
+
+Checks:
+- Exports used across features
+- API routes have consumers
+- Auth protection on sensitive routes
+- End-to-end flows for breaks
+
+Outputs: INTEGRATION.md with orphaned code, missing connections, broken flows.
 
 ---
 
