@@ -161,6 +161,11 @@ readonly RALPH_HYBRID_EXIT_INTERRUPT=130
 # Distinct from general errors to enable circuit breaker handling
 readonly RALPH_HYBRID_EXIT_VERIFICATION_FAILED=75
 
+# Integration check exit codes
+readonly INTEGRATE_EXIT_INTEGRATED=0
+readonly INTEGRATE_EXIT_NEEDS_WIRING=1
+readonly INTEGRATE_EXIT_BROKEN=2
+
 #=============================================================================
 # File and Directory Names
 #=============================================================================

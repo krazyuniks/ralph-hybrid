@@ -202,6 +202,7 @@ ralph-hybrid monitor                   # Launch tmux monitoring dashboard
 ralph-hybrid archive                   # Archive current feature
 ralph-hybrid validate                  # Run preflight checks without starting loop
 ralph-hybrid verify [options]          # Run goal-backward verification on current feature
+ralph-hybrid integrate [options]       # Run integration check on current feature
 ralph-hybrid debug [options] "desc"    # Start or continue scientific debugging session
 ralph-hybrid import <file> [options]   # Import PRD from Markdown or JSON file
 ralph-hybrid help                      # Show help
@@ -273,6 +274,41 @@ Output is written to VERIFICATION.md with:
 - Wiring verification status
 - Human testing checklist
 - Issue summary and recommendations
+
+### Integrate Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--profile` | (from config) | Model profile for integration check (quality, balanced, budget) |
+| `-m, --model` | (profile default) | Specific model to use (overrides profile) |
+| `-o, --output` | .ralph-hybrid/{branch}/INTEGRATION.md | Output file for integration results |
+| `-v, --verbose` | false | Enable verbose output |
+
+#### Integration Exit Codes
+
+| Exit Code | Meaning | Description |
+|-----------|---------|-------------|
+| 0 | INTEGRATED | All components connected, no orphaned code |
+| 1 | NEEDS_WIRING | Components exist but connections missing |
+| 2 | BROKEN | Critical integration failures, major components disconnected |
+
+#### Integration Check Process
+
+The `ralph-hybrid integrate` command checks feature integration:
+
+1. **Export/Import Analysis** - Verifies all exports are imported and used somewhere
+2. **Route/Endpoint Analysis** - Verifies all routes have consumers (frontend calls, CLI commands)
+3. **Authentication Analysis** - Verifies sensitive routes have auth middleware
+4. **Data Flow Tracing** - Traces data from entry to destination, identifies break points
+5. **Dead Code Detection** - Finds unused imports, unreachable code, deprecated functions
+
+Output is written to INTEGRATION.md with:
+- Export/import verification table
+- Route consumer mapping
+- Auth coverage for sensitive routes
+- Data flow diagrams with break points
+- Dead code list with recommendations
+- Issue summary and fix suggestions
 
 ### Import Options
 
