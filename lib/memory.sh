@@ -581,7 +581,7 @@ _memory_append_to_category() {
             # Reached next section, insert before it
             if [[ "$inserted" -eq 0 ]]; then
                 # Remove the last line (the new section header) and insert entry
-                head -n -1 "$temp_file" > "${temp_file}.tmp"
+                sed '$d' "$temp_file" > "${temp_file}.tmp"
                 echo "$entry" >> "${temp_file}.tmp"
                 echo "" >> "${temp_file}.tmp"
                 echo "$line" >> "${temp_file}.tmp"
@@ -592,7 +592,7 @@ _memory_append_to_category() {
         elif [[ "$in_category" -eq 1 ]] && [[ -z "$line" ]] && [[ "$inserted" -eq 0 ]]; then
             # Empty line in category section - good place to insert
             # Insert before the empty line
-            head -n -1 "$temp_file" > "${temp_file}.tmp"
+            sed '$d' "$temp_file" > "${temp_file}.tmp"
             echo "$entry" >> "${temp_file}.tmp"
             echo "" >> "${temp_file}.tmp"
             mv "${temp_file}.tmp" "$temp_file"
