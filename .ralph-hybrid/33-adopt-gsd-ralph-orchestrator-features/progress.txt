@@ -502,3 +502,24 @@ Verification:
 - 37 integration tests pass
 - Bash syntax checks pass for lib/prd.sh
 
+---
+Iteration: 4
+Started: 2026-01-23T09:26:12Z
+Story: STORY-019 - Adversarial Review Skill Template
+Status: complete
+
+Changes made:
+- Created templates/skills/adversarial-review.md with three-role security review pattern
+- Blue Team (Secure Implementation Analyst): identifies secure implementation requirements
+- Red Team (Penetration Tester): finds vulnerabilities via injection, auth bypass, data exposure, race conditions, logic flaws
+- Fixer (Security Engineer): proposes and validates remediations
+- Severity levels: CRITICAL, HIGH, MEDIUM, LOW
+- Output format: SECURITY-REVIEW.md with Executive Summary, Blue Team Analysis, Red Team Findings, Remediation Plan
+- Added _setup_copy_skill_templates() function to ralph-hybrid for copying skills during setup
+- Updated SPEC.md Template Library section with adversarial-review skill documentation
+- Added Security Review pattern to Pattern Detection table
+
+Verification:
+- 88 unit tests in tests/unit/test_adversarial_review.bats
+- All 717 tests pass (629 existing + 88 new)
+- Bash syntax checks pass for ralph-hybrid
