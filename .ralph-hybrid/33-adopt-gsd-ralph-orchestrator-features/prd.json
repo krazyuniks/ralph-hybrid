@@ -167,8 +167,8 @@
         "Unit tests pass"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "Goal-backward verifies outcomes, not just task completion."
+      "passes": true,
+      "notes": "templates/verifier.md with 5-phase goal-backward verification: Goal Extraction, Deliverables Verification, Stub Detection, Wiring Verification, Human Testing Items. Stub detection patterns for Python/JS/TS including placeholder returns, TODO/FIXME/XXX/HACK comments, NotImplementedError, empty implementations, mock/dummy/fake patterns. Issue classifications: STUB_FOUND, WIRING_MISSING, DELIVERABLE_MISSING, PARTIAL_IMPLEMENTATION, HUMAN_TESTING_REQUIRED. Verdicts: VERIFIED/NEEDS_WORK/BLOCKED. Output format VERIFICATION.md. 69 unit tests in test_verifier.bats."
     },
     {
       "id": "STORY-012",

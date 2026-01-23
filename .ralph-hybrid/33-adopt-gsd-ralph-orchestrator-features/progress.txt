@@ -278,3 +278,33 @@ Verification:
 - 37 integration tests pass
 - 7 e2e tests pass (6 passed, 1 skipped for optional claude CLI)
 - Bash syntax checks pass for all scripts
+
+---
+Iteration: 15
+Started: 2026-01-23T03:25:42Z
+Story: STORY-011 - Verifier Agent Template
+Status: complete
+
+Changes made:
+- Created templates/verifier.md with goal-backward verification approach
+- Five verification phases: Goal Extraction, Deliverables Verification, Stub Detection, Wiring Verification, Human Testing Items
+- Comprehensive stub detection patterns for Python/JS/TS:
+  - Placeholder returns (return None, return {}, return [], pass)
+  - TODO/FIXME/XXX/HACK comments
+  - NotImplementedError and throw new Error("Not implemented")
+  - Empty function bodies
+  - Mock/dummy/fake/placeholder patterns
+- Wiring verification checks frontend→backend, backend→database, backend→external services
+- Issue classifications: STUB_FOUND, WIRING_MISSING, DELIVERABLE_MISSING, PARTIAL_IMPLEMENTATION, HUMAN_TESTING_REQUIRED
+- Verdicts: VERIFIED (all good), NEEDS_WORK (fixable issues), BLOCKED (critical)
+- Human testing checklist for UI/UX, user flows, accessibility
+- Quick verification commands (grep patterns for common issues)
+- Output format: VERIFICATION.md with structured sections
+
+Verification:
+- Created tests/unit/test_verifier.bats with 69 unit tests
+- All 245 unit tests pass (176 existing + 69 new)
+- All 37 integration tests pass
+- All 7 e2e tests pass
+- Bash syntax checks pass for all scripts
+
