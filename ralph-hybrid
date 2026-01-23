@@ -275,6 +275,21 @@ cmd_archive() {
     ar_cleanup_feature "$feature_name" "$ralph_dir" || return 1
 
     log_success "Feature archived to: ${archive_path}"
+
+    # Commit the archive to preserve it in git history
+    # This ensures the archive data (for retrospective analysis) is not accidentally deleted
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        log_info "Committing archive to git..."
+        git add "${ralph_dir}/archive/" 2>/dev/null || true
+        # Also stage the deletion of the working feature folder
+        git add -A "${ralph_dir}/" 2>/dev/null || true
+        if ! git diff --cached --quiet 2>/dev/null; then
+            git commit -m "chore: Archive completed feature ${feature_name}" >/dev/null 2>&1 || {
+                log_warn "Could not commit archive (may need manual commit)"
+            }
+        fi
+    fi
+
     return 0
 }
 
