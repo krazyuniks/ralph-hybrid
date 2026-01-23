@@ -245,8 +245,8 @@
         "Documentation updated"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": "Tag filtering enables relevant memory retrieval without context overflow."
+      "passes": true,
+      "notes": "write_memory() appends timestamped entries with optional tags. Tag-based filtering via memory_filter_by_tags(), memory_get_all_tags(), memory_load_with_tags(). Injection modes: auto (default), manual, none via config or RALPH_HYBRID_MEMORY_INJECTION. memory_get_for_iteration() integrated into build_prompt(). 55+ new unit tests. SPEC.md Memory System section added. templates/config.yaml.example updated."
     },
     {
       "id": "STORY-017",

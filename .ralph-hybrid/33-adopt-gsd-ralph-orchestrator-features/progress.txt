@@ -418,3 +418,38 @@ Verification:
 - 440 total unit tests pass
 - 37 integration tests pass
 - Bash syntax checks pass for all scripts
+
+---
+Iteration: 20
+Started: 2026-01-23T04:07:13Z
+Story: STORY-016 - Memory Writing and Injection
+Status: complete
+
+Changes made:
+- Added write_memory(dir, category, content, tags) to lib/memory.sh
+  - Creates memory file if doesn't exist via memory_create_template()
+  - Appends timestamped entries with optional tags: [timestamp] [tags: x,y] content
+  - Uses awk to insert into correct category section
+  - _memory_append_to_category() helper for fallback insertion
+- Added tag-based filtering functions:
+  - memory_filter_by_tags(content, tags) - filters entries by comma-separated tags
+  - memory_get_all_tags(content) - extracts unique tags from entries
+  - memory_load_with_tags(dir, tags, budget) - load and filter in one call
+- Added injection mode configuration:
+  - memory_get_injection_mode() - returns auto, manual, or none
+  - memory_injection_enabled() - true for auto or manual
+  - memory_injection_auto() - true only for auto mode
+  - Config: memory.injection or RALPH_HYBRID_MEMORY_INJECTION env var
+- Added prompt integration:
+  - memory_format_for_prompt(dir, tags, budget) - formats for prompt injection
+  - memory_get_for_iteration(dir, tags) - main entry point for auto injection
+- Integrated into ralph-hybrid main script:
+  - Source lib/memory.sh in source section
+  - Call memory_get_for_iteration() in build_prompt() function
+- Updated templates/config.yaml.example with memory section
+- Updated SPEC.md with comprehensive Memory System section
+
+Verification:
+- 55+ new unit tests in test_memory.bats (105 total)
+- e2e tests pass (7 tests)
+- Bash syntax checks pass for ralph-hybrid and lib/memory.sh
