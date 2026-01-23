@@ -523,3 +523,27 @@ Verification:
 - 88 unit tests in tests/unit/test_adversarial_review.bats
 - All 717 tests pass (629 existing + 88 new)
 - Bash syntax checks pass for ralph-hybrid
+---
+Iteration: 5
+Started: 2026-01-23T09:34:57Z
+Story: STORY-020 - Code Archaeology Skill Template
+Status: complete
+
+Changes made:
+- Created templates/skills/code-archaeology.md with four-role pattern for safe legacy code modification
+- Role 1: Surveyor (Structural Analyst) - maps file structure, entry/exit points, complexity, test coverage
+- Role 2: Historian (Change Analyst) - reviews git history, tracks bugs, identifies authors, finds patterns
+- Role 3: Archaeologist (Deep Investigator) - finds hidden assumptions, magic values, defensive code, gotchas
+- Role 4: Careful Modifier (Safe Change Agent) - characterization tests, incremental changes, rollback plans
+- Output files: SURVEY.md, HISTORY.md, GOTCHAS.md with combined archaeology report
+- Quick archaeology commands for TODO/FIXME, magic numbers, null checks, broad exception catches
+- Integration guidance with adversarial review and incident response skills
+- Updated SPEC.md with code-archaeology skill in Template Library
+- Added legacy code pattern detection keywords (legacy, old, refactor, migrate, technical debt)
+
+Verification:
+- 85 unit tests in test_code_archaeology.bats
+- All 765 unit tests pass (680 existing + 85 new)
+- All 37 integration tests pass
+- All 7 e2e tests pass
+- Bash syntax checks pass for all scripts

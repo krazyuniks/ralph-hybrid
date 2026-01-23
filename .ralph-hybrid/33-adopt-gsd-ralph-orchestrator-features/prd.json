@@ -309,8 +309,8 @@
         "Documentation updated"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": "Tests-first approach for legacy modifications."
+      "passes": true,
+      "notes": "templates/skills/code-archaeology.md with four-role pattern: Surveyor (Structural Analyst), Historian (Change Analyst), Archaeologist (Deep Investigator), Careful Modifier (Safe Change Agent). Output files: SURVEY.md, HISTORY.md, GOTCHAS.md. Quick archaeology commands for TODO/FIXME, magic numbers, null checks. Integration with adversarial review and incident response skills. SPEC.md updated with skill in Template Library and legacy code pattern detection. 85 unit tests in test_code_archaeology.bats."
     },
     {
       "id": "STORY-021",
