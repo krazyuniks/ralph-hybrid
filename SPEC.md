@@ -2221,6 +2221,7 @@ Ralph Hybrid includes a template library for skills, scripts, and hooks that can
 | `adversarial-review.md` | Security-focused code review | Red team/blue team pattern for finding injection, auth bypass, data exposure, race conditions |
 | `code-archaeology.md` | Legacy code modification | Four-role pattern (Surveyor, Historian, Archaeologist, Careful Modifier) for safe legacy changes |
 | `incident-response.md` | Production incidents | OODA loop pattern (Observer, Mitigator, Investigator, Fixer) with speed vs thoroughness separation |
+| `integration-checker.md` | Feature completion validation | Verifies exports used, routes have consumers, auth on sensitive routes, end-to-end flow tracing |
 
 #### Scripts
 
@@ -2247,6 +2248,7 @@ ralph-hybrid/templates/           ← Generic templates (this repo)
 ├── skills/adversarial-review.md
 ├── skills/code-archaeology.md
 ├── skills/incident-response.md
+├── skills/integration-checker.md
 ├── scripts/css-audit.sh
 └── hooks/post-iteration-visual-diff.sh
 
@@ -2258,6 +2260,7 @@ ralph-hybrid/templates/           ← Generic templates (this repo)
 ├── skills/adversarial-review.md        ← Security review skill
 ├── skills/code-archaeology.md          ← Legacy code investigation skill
 ├── skills/incident-response.md         ← Production incident handling skill
+├── skills/integration-checker.md       ← Feature integration validation skill
 ├── scripts/css-audit.sh                ← Configured with project paths
 └── hooks/post-iteration-visual-diff.sh ← Configured with URLs
 ```
@@ -2275,6 +2278,7 @@ The `/ralph-hybrid-plan` command detects patterns in the epic description and pr
 | Security Review | auth, login, password, security, encrypt, token, session | adversarial-review skill |
 | Legacy Code | legacy, old, refactor, migrate, ancient, technical debt, modernize | code-archaeology skill |
 | Incident Response | incident, outage, down, production, alert, emergency, urgent, critical, SEV-1, SEV-2 | incident-response skill |
+| Feature Integration | integrate, wire, connect, orphan, dead code, complete feature, verify integration | integration-checker skill |
 
 ### Script Output Format
 
