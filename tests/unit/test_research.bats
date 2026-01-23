@@ -330,6 +330,14 @@ EOF
 
     research_kill_all
 
+    # Wait for the process to actually terminate (race condition fix)
+    # The kill sends SIGTERM, but process needs time to exit
+    local wait_count=0
+    while kill -0 $pid 2>/dev/null && [[ $wait_count -lt 10 ]]; do
+        sleep 0.1
+        ((wait_count++))
+    done
+
     # Check the process is no longer running
     run kill -0 $pid
     [[ "$status" -ne 0 ]]

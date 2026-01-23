@@ -143,7 +143,8 @@ setup() {
 
 @test "Workflow states diagram includes VERIFY phase" {
     # Check the ASCII diagram includes Phase 7
-    grep -A10 "Workflow States" "$COMMAND_FILE" | grep -q "VERIFY"
+    # Using -A15 to capture all phases (there are more than 10 lines in the diagram)
+    grep -A15 "Workflow States" "$COMMAND_FILE" | grep -q "VERIFY"
 }
 
 @test "Phase numbering is consecutive (no gaps)" {
