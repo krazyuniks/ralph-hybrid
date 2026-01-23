@@ -19,7 +19,7 @@ All changes are tracked, auditable, and preserve completed work.
 ## Arguments
 
 ```
-/ralph-hybrid-amend <mode> [target] [description]
+/ralph-hybrid-amend <mode> [target] [description] [--insert-after STORY-ID]
 ```
 
 | Argument | Required | Description |
@@ -27,11 +27,13 @@ All changes are tracked, auditable, and preserve completed work.
 | `mode` | Yes | `add`, `correct`, `remove`, or `status` |
 | `target` | For correct/remove | Story ID (e.g., `STORY-003`) |
 | `description` | For add/correct | Brief description of change |
+| `--insert-after` | Optional | Insert new story after specified story ID (uses decimal ID) |
 
 ### Examples
 
 ```bash
 /ralph-hybrid-amend add "Users need CSV export for reporting"
+/ralph-hybrid-amend add "Urgent fix needed" --insert-after STORY-002
 /ralph-hybrid-amend correct STORY-003 "Email validation should use RFC 5322"
 /ralph-hybrid-amend remove STORY-005 "Moved to separate issue #47"
 /ralph-hybrid-amend status
@@ -147,7 +149,28 @@ Split into multiple stories? (Y/n)
 
 ### Phase 5: INTEGRATE
 
-Update all relevant files:
+Update all relevant files.
+
+#### Using `--insert-after` for Urgent Stories
+
+When you need to insert a story immediately after a specific story (rather than appending to the end), use the `--insert-after` flag:
+
+```bash
+/ralph-hybrid-amend add "Critical security fix" --insert-after STORY-002
+```
+
+This creates a **decimal story ID** (e.g., `STORY-002.1`) that:
+- Inserts logically after STORY-002 but before STORY-003
+- Preserves existing story numbering (no renumbering needed)
+- Allows multiple insertions: STORY-002.1, STORY-002.2, STORY-002.3, etc.
+- Supports nested insertions: STORY-002.1, then STORY-002.2 between .1 and .3
+
+**Decimal ID Ordering:**
+- Decimal parts are treated as integers: STORY-002.9 < STORY-002.10
+- Stories sort automatically: 001, 002, 002.1, 002.2, 003, 003.1, 004
+- No limit on decimal values: STORY-002.99 is valid
+
+**Example with --insert-after:**
 
 **spec.md** - Append to Amendments section:
 

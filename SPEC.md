@@ -1300,7 +1300,7 @@ The prd.json file is a **derived artifact** generated from spec.md by `/ralph-hy
 | `description` | string | Yes | High-level feature description |
 | `createdAt` | ISO-8601 | Yes | Creation timestamp |
 | `userStories` | array | Yes | List of stories |
-| `userStories[].id` | string | Yes | Unique identifier (e.g., STORY-001) |
+| `userStories[].id` | string | Yes | Unique identifier (e.g., STORY-001 or STORY-002.1 for inserted stories) |
 | `userStories[].title` | string | Yes | Short title |
 | `userStories[].description` | string | No | User story or description |
 | `userStories[].acceptanceCriteria` | array | Yes | Testable criteria |
@@ -1318,6 +1318,36 @@ The prd.json file is a **derived artifact** generated from spec.md by `/ralph-hy
 | `userStories[].amendment.changes` | object | No | For corrections: before/after values |
 
 *Required if `amendment` object is present
+
+### Decimal Story IDs
+
+Stories can have decimal IDs (e.g., `STORY-002.1`) to support insertion without renumbering:
+
+```
+STORY-001
+STORY-002
+STORY-002.1   ← Inserted after STORY-002
+STORY-002.2   ← Another insertion
+STORY-003
+```
+
+**Key Properties:**
+- Created via `/ralph-hybrid-amend add --insert-after STORY-002`
+- Decimal parts are treated as integers: STORY-002.9 < STORY-002.10
+- Existing story numbers are never changed
+- Stories automatically sort by their numeric value
+
+**ID Format:** `STORY-NNN` or `STORY-NNN.D` where:
+- `NNN` = one or more digits (e.g., 001, 12, 123)
+- `D` = optional decimal part, one or more digits (e.g., 1, 10, 99)
+
+**Functions (lib/prd.sh):**
+- `prd_validate_story_id()` - Validates ID format
+- `prd_parse_story_id()` - Extracts numeric value
+- `prd_compare_story_ids()` - Compares two IDs (-1, 0, 1)
+- `prd_sort_stories_by_id()` - Returns sorted story array
+- `prd_insert_story_after()` - Inserts with auto-generated decimal ID
+- `prd_get_next_decimal_id()` - Gets next available decimal ID
 
 ### Per-Story Model and MCP Configuration
 
