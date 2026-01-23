@@ -334,3 +334,174 @@ EOF
     run kill -0 $pid
     [[ "$status" -ne 0 ]]
 }
+
+#=============================================================================
+# Research Template Tests (STORY-007)
+#=============================================================================
+
+@test "templates/research-agent.md exists with required sections" {
+    local template="$PROJECT_ROOT/templates/research-agent.md"
+    [[ -f "$template" ]]
+
+    # Check required sections
+    run cat "$template"
+    [[ "$output" == *"{{TOPIC}}"* ]]
+    [[ "$output" == *"## Summary"* ]]
+    [[ "$output" == *"## Key Findings"* ]]
+    [[ "$output" == *"## Confidence Level"* ]]
+    [[ "$output" == *"## Sources"* ]]
+}
+
+@test "research template contains confidence criteria HIGH" {
+    local template="$PROJECT_ROOT/templates/research-agent.md"
+    run cat "$template"
+    [[ "$output" == *"HIGH"* ]]
+    [[ "$output" == *"official documentation"* ]]
+}
+
+@test "research template contains confidence criteria MEDIUM" {
+    local template="$PROJECT_ROOT/templates/research-agent.md"
+    run cat "$template"
+    [[ "$output" == *"MEDIUM"* ]]
+    [[ "$output" == *"community consensus"* ]]
+}
+
+@test "research template contains confidence criteria LOW" {
+    local template="$PROJECT_ROOT/templates/research-agent.md"
+    run cat "$template"
+    [[ "$output" == *"LOW"* ]]
+    [[ "$output" == *"single source"* ]]
+}
+
+@test "_research_get_prompt uses template when available" {
+    local template="$PROJECT_ROOT/templates/research-agent.md"
+    run _research_get_prompt "test topic" "$template"
+    [[ "$status" -eq 0 ]]
+    # Should have topic substituted
+    [[ "$output" == *"test topic"* ]]
+    # Should have structured sections from template
+    [[ "$output" == *"Key Findings"* ]]
+    [[ "$output" == *"Confidence Level"* ]]
+}
+
+#=============================================================================
+# Synthesis Function Tests (STORY-007)
+#=============================================================================
+
+@test "_research_get_synthesis_template returns template with placeholders" {
+    run _research_get_synthesis_template
+    [[ "$status" -eq 0 ]]
+    [[ "$output" == *"{{RESEARCH_FILES}}"* ]]
+    [[ "$output" == *"{{TIMESTAMP}}"* ]]
+    [[ "$output" == *"Research Synthesis Task"* ]]
+}
+
+@test "_research_get_synthesis_template includes theme structure" {
+    run _research_get_synthesis_template
+    [[ "$status" -eq 0 ]]
+    [[ "$output" == *"Theme 1"* ]]
+    [[ "$output" == *"Confidence"* ]]
+    [[ "$output" == *"Sources"* ]]
+}
+
+@test "_research_get_synthesis_template includes conflicts section" {
+    run _research_get_synthesis_template
+    [[ "$status" -eq 0 ]]
+    [[ "$output" == *"Conflicts and Uncertainties"* ]]
+}
+
+@test "_research_build_synthesis_prompt returns empty when no files" {
+    mkdir -p "$TEST_DIR/empty"
+    run _research_build_synthesis_prompt "$TEST_DIR/empty"
+    [[ "$status" -ne 0 ]]
+    [[ -z "$output" ]]
+}
+
+@test "_research_build_synthesis_prompt includes research file list" {
+    mkdir -p "$TEST_DIR/research"
+    echo "# Research on Auth" > "$TEST_DIR/research/RESEARCH-auth.md"
+    echo "## Summary" >> "$TEST_DIR/research/RESEARCH-auth.md"
+    echo "Auth findings here" >> "$TEST_DIR/research/RESEARCH-auth.md"
+
+    run _research_build_synthesis_prompt "$TEST_DIR/research"
+    [[ "$status" -eq 0 ]]
+    [[ "$output" == *"RESEARCH-auth.md"* ]]
+    [[ "$output" == *"Auth findings here"* ]]
+}
+
+@test "_research_build_synthesis_prompt includes timestamp" {
+    mkdir -p "$TEST_DIR/research"
+    echo "Test content" > "$TEST_DIR/research/RESEARCH-test.md"
+
+    run _research_build_synthesis_prompt "$TEST_DIR/research"
+    [[ "$status" -eq 0 ]]
+    # Should include a timestamp (ISO format)
+    [[ "$output" == *"20"*"-"*"T"* ]]
+}
+
+@test "_research_build_synthesis_prompt handles multiple files" {
+    mkdir -p "$TEST_DIR/research"
+    echo "Auth content" > "$TEST_DIR/research/RESEARCH-auth.md"
+    echo "Database content" > "$TEST_DIR/research/RESEARCH-database.md"
+    echo "API content" > "$TEST_DIR/research/RESEARCH-api.md"
+
+    run _research_build_synthesis_prompt "$TEST_DIR/research"
+    [[ "$status" -eq 0 ]]
+    [[ "$output" == *"RESEARCH-auth.md"* ]]
+    [[ "$output" == *"RESEARCH-database.md"* ]]
+    [[ "$output" == *"RESEARCH-api.md"* ]]
+    [[ "$output" == *"Auth content"* ]]
+    [[ "$output" == *"Database content"* ]]
+    [[ "$output" == *"API content"* ]]
+}
+
+@test "research_synthesize fails with empty directory argument" {
+    run research_synthesize ""
+    [[ "$status" -eq 1 ]]
+    [[ "$output" == *"Output directory is required"* ]]
+}
+
+@test "research_synthesize fails with nonexistent directory" {
+    run research_synthesize "/nonexistent/path"
+    [[ "$status" -eq 1 ]]
+    [[ "$output" == *"Directory does not exist"* ]]
+}
+
+@test "research_synthesize fails when no research files found" {
+    mkdir -p "$TEST_DIR/empty"
+    run research_synthesize "$TEST_DIR/empty"
+    [[ "$status" -eq 1 ]]
+    [[ "$output" == *"No research files found"* ]]
+}
+
+@test "research_get_summary_file returns correct path" {
+    run research_get_summary_file "/tmp/research"
+    [[ "$status" -eq 0 ]]
+    [[ "$output" == "/tmp/research/RESEARCH-SUMMARY.md" ]]
+}
+
+@test "research_has_summary returns 1 when no summary exists" {
+    mkdir -p "$TEST_DIR/research"
+    run research_has_summary "$TEST_DIR/research"
+    [[ "$status" -ne 0 ]]
+}
+
+@test "research_has_summary returns 0 when summary exists" {
+    mkdir -p "$TEST_DIR/research"
+    echo "Summary content" > "$TEST_DIR/research/RESEARCH-SUMMARY.md"
+
+    run research_has_summary "$TEST_DIR/research"
+    [[ "$status" -eq 0 ]]
+}
+
+@test "research_has_summary returns 1 for empty summary file" {
+    mkdir -p "$TEST_DIR/research"
+    touch "$TEST_DIR/research/RESEARCH-SUMMARY.md"  # Empty file
+
+    run research_has_summary "$TEST_DIR/research"
+    [[ "$status" -ne 0 ]]
+}
+
+@test "RALPH_HYBRID_RESEARCH_SUMMARY_FILE constant is defined" {
+    [[ "${RALPH_HYBRID_RESEARCH_SUMMARY_FILE:-}" == "RESEARCH-SUMMARY.md" ]]
+}

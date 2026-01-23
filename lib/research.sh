@@ -477,3 +477,215 @@ research_is_running() {
 
     [[ $active -gt 0 ]]
 }
+
+#=============================================================================
+# Synthesis Functions
+#=============================================================================
+
+# Get the synthesis template
+# Returns: Template content for synthesis prompt
+_research_get_synthesis_template() {
+    cat << 'EOF'
+# Research Synthesis Task
+
+You are synthesizing research findings from multiple research agents into a cohesive summary.
+
+## Research Files
+
+The following research files have been provided:
+
+{{RESEARCH_FILES}}
+
+## Your Task
+
+1. Read and analyze all research findings
+2. Identify common themes and patterns
+3. Resolve any conflicting information
+4. Produce a unified summary
+
+## Required Output Format
+
+---
+
+# Research Summary
+
+## Overview
+A 3-5 sentence executive summary covering the most important findings across all research topics.
+
+## Synthesized Findings
+
+### Theme 1: [Name]
+- **Summary**: [Unified understanding from multiple sources]
+- **Confidence**: [HIGH|MEDIUM|LOW]
+- **Sources**: [Which research files contributed]
+
+### Theme 2: [Name]
+- **Summary**: [Unified understanding from multiple sources]
+- **Confidence**: [HIGH|MEDIUM|LOW]
+- **Sources**: [Which research files contributed]
+
+(Add more themes as appropriate)
+
+## Conflicts and Uncertainties
+
+List any conflicting findings between research agents:
+- [Topic]: [Source A says X, Source B says Y]
+- Resolution or recommendation for further investigation
+
+## Recommendations
+
+Based on the synthesized research:
+
+1. **Primary recommendation**: [What to do first]
+2. **Secondary considerations**: [Other factors to keep in mind]
+3. **Open questions**: [What still needs investigation]
+
+## Individual Research Confidence
+
+| Topic | Confidence | Key Contribution |
+|-------|------------|------------------|
+| [Topic 1] | [HIGH/MEDIUM/LOW] | [Main finding] |
+| [Topic 2] | [HIGH/MEDIUM/LOW] | [Main finding] |
+
+---
+
+**Synthesis completed: {{TIMESTAMP}}**
+EOF
+}
+
+# Build the synthesis prompt with research file contents
+# Arguments:
+#   $1 - Output directory containing research files
+# Returns: Complete synthesis prompt with file contents
+_research_build_synthesis_prompt() {
+    local output_dir="${1:-}"
+    local template files_content file_list=""
+
+    template=$(_research_get_synthesis_template)
+
+    # Build list of research files and their contents
+    while IFS= read -r file; do
+        if [[ -n "$file" ]] && [[ -f "$file" ]]; then
+            local filename
+            filename=$(basename "$file")
+            file_list+="- $filename"$'\n'
+            files_content+="## $filename"$'\n'
+            files_content+=$'\n'
+            files_content+=$(cat "$file")
+            files_content+=$'\n\n---\n\n'
+        fi
+    done < <(research_list_outputs "$output_dir")
+
+    # If no files found, return empty
+    if [[ -z "$file_list" ]]; then
+        echo ""
+        return 1
+    fi
+
+    # Get timestamp
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Substitute placeholders
+    template="${template//\{\{RESEARCH_FILES\}\}/$file_list}"
+    template="${template//\{\{TIMESTAMP\}\}/$timestamp}"
+
+    # Append file contents after the template
+    echo "$template"
+    echo ""
+    echo "---"
+    echo ""
+    echo "# Research File Contents"
+    echo ""
+    echo "$files_content"
+}
+
+# Synthesize research findings into a summary file
+# Arguments:
+#   $1 - Output directory containing research files
+# Returns:
+#   0 on success, creates RESEARCH-SUMMARY.md
+#   1 on failure (no files, synthesis failed)
+research_synthesize() {
+    local output_dir="${1:-}"
+
+    # Validate arguments
+    if [[ -z "$output_dir" ]]; then
+        log_error "research_synthesize: Output directory is required"
+        return 1
+    fi
+
+    if [[ ! -d "$output_dir" ]]; then
+        log_error "research_synthesize: Directory does not exist: $output_dir"
+        return 1
+    fi
+
+    # Check for research files
+    local file_count
+    file_count=$(research_list_outputs "$output_dir" | wc -l)
+
+    if [[ $file_count -eq 0 ]]; then
+        log_warn "research_synthesize: No research files found in $output_dir"
+        return 1
+    fi
+
+    log_info "Synthesizing $file_count research file(s)..."
+
+    # Build the synthesis prompt
+    local prompt
+    prompt=$(_research_build_synthesis_prompt "$output_dir")
+
+    if [[ -z "$prompt" ]]; then
+        log_error "research_synthesize: Failed to build synthesis prompt"
+        return 1
+    fi
+
+    # Get configuration
+    local model timeout
+    model=$(research_get_model)
+    timeout=$(research_get_timeout)
+
+    # Output file path
+    local summary_file="$output_dir/$RALPH_HYBRID_RESEARCH_SUMMARY_FILE"
+
+    log_info "Running synthesis agent..."
+    log_debug "  Model: $model"
+    log_debug "  Output: $summary_file"
+
+    # Run Claude for synthesis
+    if timeout "$timeout" claude --model "$model" --print "$prompt" > "$summary_file" 2>&1; then
+        log_success "Research synthesis complete: $summary_file"
+        return 0
+    else
+        local exit_code=$?
+        if [[ $exit_code -eq 124 ]]; then
+            log_error "research_synthesize: Synthesis timed out after ${timeout}s"
+            echo "" >> "$summary_file"
+            echo "---" >> "$summary_file"
+            echo "WARNING: Synthesis agent timed out after ${timeout}s" >> "$summary_file"
+        else
+            log_error "research_synthesize: Synthesis failed with exit code $exit_code"
+        fi
+        return 1
+    fi
+}
+
+# Get the path to the research summary file
+# Arguments:
+#   $1 - Output directory
+# Returns: Full path to RESEARCH-SUMMARY.md
+research_get_summary_file() {
+    local output_dir="${1:-}"
+    echo "$output_dir/$RALPH_HYBRID_RESEARCH_SUMMARY_FILE"
+}
+
+# Check if synthesis has been completed
+# Arguments:
+#   $1 - Output directory
+# Returns: 0 if summary exists and is non-empty, 1 otherwise
+research_has_summary() {
+    local output_dir="${1:-}"
+    local summary_file="$output_dir/$RALPH_HYBRID_RESEARCH_SUMMARY_FILE"
+
+    [[ -f "$summary_file" ]] && [[ -s "$summary_file" ]]
+}
