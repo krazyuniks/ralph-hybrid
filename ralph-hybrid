@@ -35,6 +35,7 @@ source "${SCRIPT_DIR}/lib/log_filter.sh"
 source "${SCRIPT_DIR}/lib/mcp.sh"
 source "${SCRIPT_DIR}/lib/debug.sh"
 source "${SCRIPT_DIR}/lib/memory.sh"
+source "${SCRIPT_DIR}/lib/ai_invoke.sh"
 
 #=============================================================================
 # Global Variables (set by parse_args or load_config)
@@ -92,7 +93,7 @@ Run Options:
   --skip-preflight           Skip preflight validation (use with caution)
   --dangerously-skip-permissions  Pass to Claude Code
   --monitor                  Launch with tmux monitoring dashboard
-  -m, --model MODEL          Claude model (opus, sonnet, or full name)
+  -m, --model CMD            AI command to use (opus, sonnet, haiku, glm, codex, gemini)
   --profile PROFILE          Model profile (quality, balanced, budget; default: balanced)
 
 Archive Options:
@@ -104,20 +105,20 @@ Import Options:
 
 Verify Options:
   --profile PROFILE        Model profile for verification (quality, balanced, budget)
-  -m, --model MODEL        Specific model to use (overrides profile)
+  -m, --model CMD          AI command to use (opus, sonnet, haiku, glm, codex, gemini)
   -o, --output FILE        Output file (default: .ralph-hybrid/{branch}/VERIFICATION.md)
   -v, --verbose            Enable verbose output
 
 Debug Options:
   --profile PROFILE        Model profile for debugging (quality, balanced, budget)
-  -m, --model MODEL        Specific model to use (overrides profile)
+  -m, --model CMD          AI command to use (opus, sonnet, haiku, glm, codex, gemini)
   --continue               Continue from previous debug state
   --reset                  Start fresh, discarding previous debug state
   -v, --verbose            Enable verbose output
 
 Integrate Options:
   --profile PROFILE        Model profile for integration check (quality, balanced, budget)
-  -m, --model MODEL        Specific model to use (overrides profile)
+  -m, --model CMD          AI command to use (opus, sonnet, haiku, glm, codex, gemini)
   -o, --output FILE        Output file (default: .ralph-hybrid/{branch}/INTEGRATION.md)
   -v, --verbose            Enable verbose output
 
@@ -751,49 +752,53 @@ cmd_verify() {
         output_file="${feature_dir}/VERIFICATION.md"
     fi
 
-    # Determine model to use
+    # Determine AI command to use
     # Priority: CLI model > profile verification model > default
-    local effective_model=""
+    local ai_cmd=""
     if [[ -n "$model" ]]; then
-        effective_model="$model"
+        ai_cmd="$model"
     elif [[ -n "$profile" ]]; then
         if ! cfg_validate_profile "$profile"; then
             log_error "Invalid profile: $profile"
             log_info "Valid profiles: quality, balanced, budget (or custom from config)"
             return 1
         fi
-        effective_model=$(cfg_get_profile_model "$profile" "verification")
+        ai_cmd=$(cfg_get_profile_model "$profile" "verification")
     elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
-        effective_model=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "verification")
+        ai_cmd=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "verification")
+    fi
+    # Fall back to default
+    ai_cmd="${ai_cmd:-$(ai_get_default_cmd)}"
+
+    # Validate AI command exists
+    if ! ai_validate_cmd "$ai_cmd"; then
+        return 1
     fi
 
     log_info "Running goal-backward verification..."
     log_info "Feature: $(basename "$feature_dir")"
+    log_debug "Using AI command: $ai_cmd"
 
     # Build the verification prompt
     local prompt
     prompt=$(_verify_build_prompt "$feature_dir" "$spec_file" "$prd_file" "$progress_file")
 
-    # Build Claude command
-    local claude_args="--permission-mode bypassPermissions"
-    if [[ -n "$effective_model" ]]; then
-        claude_args+=" --model ${effective_model}"
-        log_debug "Using model: $effective_model"
-    fi
+    # Build extra args for AI invocation
+    local extra_args="--permission-mode bypassPermissions"
 
-    # Run Claude with the verifier prompt
+    # Run AI with the verifier prompt
     log_info "Invoking verification agent..."
 
     local temp_output
     temp_output=$(mktemp)
 
     set +e
-    echo "$prompt" | claude -p $claude_args 2>&1 | tee "$temp_output"
-    local claude_exit=$?
+    echo "$prompt" | ai_invoke_simple "$ai_cmd" "$extra_args" 2>&1 | tee "$temp_output"
+    local ai_exit=$?
     set -e
 
-    if [[ $claude_exit -ne 0 ]]; then
-        log_error "Claude verification failed with exit code: $claude_exit"
+    if [[ $ai_exit -ne 0 ]]; then
+        log_error "Verification failed with exit code: $ai_exit"
         rm -f "$temp_output"
         return 1
     fi
@@ -867,7 +872,7 @@ Run goal-backward verification on the current feature to ensure:
 
 Options:
   --profile PROFILE    Model profile to use (quality, balanced, budget)
-  --model, -m MODEL    Specific model to use (overrides profile)
+  --model, -m CMD      AI command to use (opus, sonnet, haiku, glm, codex, gemini)
   --output, -o FILE    Output file (default: .ralph-hybrid/{branch}/VERIFICATION.md)
   --verbose, -v        Enable verbose output
   --help, -h           Show this help message
@@ -879,7 +884,7 @@ Exit Codes:
 
 Examples:
   ralph-hybrid verify                    # Run with default settings
-  ralph-hybrid verify --profile quality  # Use quality profile (opus model)
+  ralph-hybrid verify --profile quality  # Use quality profile (opus)
   ralph-hybrid verify -m sonnet          # Use specific model
   ralph-hybrid verify -o custom.md       # Custom output file
 EOF
@@ -1117,49 +1122,53 @@ cmd_integrate() {
         output_file="${feature_dir}/INTEGRATION.md"
     fi
 
-    # Determine model to use
+    # Determine AI command to use
     # Priority: CLI model > profile verification model > default
-    local effective_model=""
+    local ai_cmd=""
     if [[ -n "$model" ]]; then
-        effective_model="$model"
+        ai_cmd="$model"
     elif [[ -n "$profile" ]]; then
         if ! cfg_validate_profile "$profile"; then
             log_error "Invalid profile: $profile"
             log_info "Valid profiles: quality, balanced, budget (or custom from config)"
             return 1
         fi
-        effective_model=$(cfg_get_profile_model "$profile" "verification")
+        ai_cmd=$(cfg_get_profile_model "$profile" "verification")
     elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
-        effective_model=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "verification")
+        ai_cmd=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "verification")
+    fi
+    # Fall back to default
+    ai_cmd="${ai_cmd:-$(ai_get_default_cmd)}"
+
+    # Validate AI command exists
+    if ! ai_validate_cmd "$ai_cmd"; then
+        return 1
     fi
 
     log_info "Running integration check..."
     log_info "Feature: $(basename "$feature_dir")"
+    log_debug "Using AI command: $ai_cmd"
 
     # Build the integration prompt
     local prompt
     prompt=$(_integrate_build_prompt "$feature_dir" "$spec_file" "$prd_file" "$progress_file")
 
-    # Build Claude command
-    local claude_args="--permission-mode bypassPermissions"
-    if [[ -n "$effective_model" ]]; then
-        claude_args+=" --model ${effective_model}"
-        log_debug "Using model: $effective_model"
-    fi
+    # Build extra args for AI invocation
+    local extra_args="--permission-mode bypassPermissions"
 
-    # Run Claude with the integration checker prompt
+    # Run AI with the integration checker prompt
     log_info "Invoking integration checker agent..."
 
     local temp_output
     temp_output=$(mktemp)
 
     set +e
-    echo "$prompt" | claude -p $claude_args 2>&1 | tee "$temp_output"
-    local claude_exit=$?
+    echo "$prompt" | ai_invoke_simple "$ai_cmd" "$extra_args" 2>&1 | tee "$temp_output"
+    local ai_exit=$?
     set -e
 
-    if [[ $claude_exit -ne 0 ]]; then
-        log_error "Claude integration check failed with exit code: $claude_exit"
+    if [[ $ai_exit -ne 0 ]]; then
+        log_error "Integration check failed with exit code: $ai_exit"
         rm -f "$temp_output"
         return 1
     fi
@@ -1226,7 +1235,7 @@ Run integration check on the current feature to ensure:
 
 Options:
   --profile PROFILE    Model profile to use (quality, balanced, budget)
-  --model, -m MODEL    Specific model to use (overrides profile)
+  --model, -m CMD      AI command to use (opus, sonnet, haiku, glm, codex, gemini)
   --output, -o FILE    Output file (default: .ralph-hybrid/{branch}/INTEGRATION.md)
   --verbose, -v        Enable verbose output
   --help, -h           Show this help message
@@ -1238,7 +1247,7 @@ Exit Codes:
 
 Examples:
   ralph-hybrid integrate                    # Run with default settings
-  ralph-hybrid integrate --profile quality  # Use quality profile (opus model)
+  ralph-hybrid integrate --profile quality  # Use quality profile (opus)
   ralph-hybrid integrate -m sonnet          # Use specific model
   ralph-hybrid integrate -o custom.md       # Custom output file
 EOF
@@ -1528,36 +1537,40 @@ cmd_debug() {
         return 1
     fi
 
-    # Determine model to use
-    local effective_model=""
+    # Determine AI command to use
+    local ai_cmd=""
     if [[ -n "$model" ]]; then
-        effective_model="$model"
+        ai_cmd="$model"
     elif [[ -n "$profile" ]]; then
         if ! cfg_validate_profile "$profile"; then
             log_error "Invalid profile: $profile"
             log_info "Valid profiles: quality, balanced, budget (or custom from config)"
             return 1
         fi
-        effective_model=$(cfg_get_profile_model "$profile" "execution")
+        ai_cmd=$(cfg_get_profile_model "$profile" "execution")
     elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
-        effective_model=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "execution")
+        ai_cmd=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "execution")
+    fi
+    # Fall back to default
+    ai_cmd="${ai_cmd:-$(ai_get_default_cmd)}"
+
+    # Validate AI command exists
+    if ! ai_validate_cmd "$ai_cmd"; then
+        return 1
     fi
 
     log_info "Starting scientific debug session #${session_num}..."
     log_info "Feature: $(basename "$feature_dir")"
+    log_debug "Using AI command: $ai_cmd"
 
     # Build the debug prompt
     local prompt
     prompt=$(_debug_build_prompt "$feature_dir" "$problem_description" "$existing_state" "$session_num")
 
-    # Build Claude command
-    local claude_args="--permission-mode bypassPermissions"
-    if [[ -n "$effective_model" ]]; then
-        claude_args+=" --model ${effective_model}"
-        log_debug "Using model: $effective_model"
-    fi
+    # Build extra args for AI invocation
+    local extra_args="--permission-mode bypassPermissions"
 
-    # Run Claude with the debug prompt
+    # Run AI with the debug prompt
     log_info "Invoking debug agent..."
     if [[ "$verbose" == true ]]; then
         log_debug "Problem: ${problem_description:-'(continuing previous session)'}"
@@ -1567,12 +1580,12 @@ cmd_debug() {
     temp_output=$(mktemp)
 
     set +e
-    echo "$prompt" | claude -p $claude_args 2>&1 | tee "$temp_output"
-    local claude_exit=$?
+    echo "$prompt" | ai_invoke_simple "$ai_cmd" "$extra_args" 2>&1 | tee "$temp_output"
+    local ai_exit=$?
     set -e
 
-    if [[ $claude_exit -ne 0 ]]; then
-        log_error "Claude debugging failed with exit code: $claude_exit"
+    if [[ $ai_exit -ne 0 ]]; then
+        log_error "Debugging failed with exit code: $ai_exit"
         rm -f "$temp_output"
         return 1
     fi
@@ -1612,13 +1625,13 @@ cmd_debug() {
                     log_info "Starting fix implementation..."
                     local fix_prompt
                     fix_prompt=$(debug_build_fix_prompt "$feature_dir" "$debug_state")
-                    echo "$fix_prompt" | claude -p $claude_args
+                    echo "$fix_prompt" | ai_invoke_simple "$ai_cmd" "$extra_args"
                     ;;
                 plan)
                     log_info "Creating solution plan..."
                     local plan_prompt
                     plan_prompt=$(debug_build_plan_prompt "$feature_dir" "$debug_state")
-                    echo "$plan_prompt" | claude -p $claude_args
+                    echo "$plan_prompt" | ai_invoke_simple "$ai_cmd" "$extra_args"
                     ;;
                 manual)
                     log_info "Exiting for manual handling"
@@ -1656,7 +1669,7 @@ investigation to find root causes systematically.
 
 Options:
   --profile PROFILE    Model profile to use (quality, balanced, budget)
-  --model, -m MODEL    Specific model to use (overrides profile)
+  --model, -m CMD      AI command to use (opus, sonnet, haiku, glm, codex, gemini)
   --continue           Continue from previous debug state
   --reset              Start fresh, discarding previous debug state
   --verbose, -v        Enable verbose output
@@ -2922,11 +2935,6 @@ _run_invoke_claude() {
     local log_file="$3"
     local iteration="$4"
 
-    # Build claude command args
-    # Note: --permission-mode bypassPermissions works with -p mode
-    # while --dangerously-skip-permissions causes hangs
-    local claude_args="--permission-mode bypassPermissions"
-
     # Get per-story configuration from prd.json (if available)
     local story_model=""
     local story_mcp_servers=""
@@ -2936,55 +2944,91 @@ _run_invoke_claude() {
         story_mcp_servers=$(prd_get_current_story_mcp_servers "$RUN_PRD_FILE")
     fi
 
-    # Model selection priority:
+    # AI command selection priority:
     # 1. Story-level model (from prd.json story.model field)
     # 2. CLI --model flag
     # 3. Profile's execution model (from --profile or config)
-    # 4. None (let Claude CLI use its default)
-    local effective_model=""
+    # 4. Default AI command
+    local ai_cmd=""
     if [[ -n "$story_model" ]]; then
-        effective_model="$story_model"
-        log_debug "Using story-level model: $story_model"
+        ai_cmd="$story_model"
+        log_debug "Using story-level AI command: $story_model"
     elif [[ -n "${RALPH_HYBRID_MODEL:-}" ]]; then
-        effective_model="$RALPH_HYBRID_MODEL"
-        log_debug "Using CLI model: $RALPH_HYBRID_MODEL"
+        ai_cmd="$RALPH_HYBRID_MODEL"
+        log_debug "Using CLI AI command: $RALPH_HYBRID_MODEL"
     elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
-        effective_model=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "execution")
-        if [[ -n "$effective_model" ]]; then
-            log_debug "Using profile '$RALPH_HYBRID_PROFILE' execution model: $effective_model"
+        ai_cmd=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "execution")
+        if [[ -n "$ai_cmd" ]]; then
+            log_debug "Using profile '$RALPH_HYBRID_PROFILE' execution command: $ai_cmd"
         fi
     fi
+    # Fall back to default
+    ai_cmd="${ai_cmd:-$(ai_get_default_cmd)}"
 
-    if [[ -n "$effective_model" ]]; then
-        claude_args+=" --model ${effective_model}"
-    fi
+    # Detect tool type for building invocation
+    local tool_type
+    tool_type=$(ai_detect_tool_type "$ai_cmd")
 
-    # MCP: if story specifies servers, use strict mode with only those servers
-    # Three modes:
-    #   - No mcpServers field: use global MCP config (no --strict-mcp-config)
-    #   - mcpServers: []: explicitly no MCP (--strict-mcp-config with empty config)
-    #   - mcpServers: ["x"]: only specified servers (--strict-mcp-config with config)
-    if [[ -n "$story_mcp_servers" ]] && [[ "$story_mcp_servers" != "null" ]]; then
-        local mcp_config
-        if mcp_config=$(mcp_build_config "$story_mcp_servers"); then
-            # Note: mcp_config is compact JSON (no spaces), so no quoting needed
-            # when word-splitting $claude_args - quotes would be literal characters
-            claude_args+=" --strict-mcp-config --mcp-config ${mcp_config}"
-            if [[ "$story_mcp_servers" != "[]" ]]; then
-                log_debug "Using story-level MCP servers: $story_mcp_servers"
-            else
-                log_debug "Story explicitly disables MCP servers"
+    # Build extra args based on tool type
+    local extra_args=""
+    local output_format=""
+
+    case "$tool_type" in
+        "$AI_TOOL_CLAUDE")
+            # Claude: --permission-mode bypassPermissions works with -p mode
+            extra_args="--permission-mode bypassPermissions"
+            output_format="stream-json"
+
+            # MCP: if story specifies servers, use strict mode with only those servers
+            # Three modes:
+            #   - No mcpServers field: use global MCP config (no --strict-mcp-config)
+            #   - mcpServers: []: explicitly no MCP (--strict-mcp-config with empty config)
+            #   - mcpServers: ["x"]: only specified servers (--strict-mcp-config with config)
+            if [[ -n "$story_mcp_servers" ]] && [[ "$story_mcp_servers" != "null" ]]; then
+                local mcp_config
+                if mcp_config=$(mcp_build_config "$story_mcp_servers"); then
+                    extra_args+=" --strict-mcp-config --mcp-config ${mcp_config}"
+                    if [[ "$story_mcp_servers" != "[]" ]]; then
+                        log_debug "Using story-level MCP servers: $story_mcp_servers"
+                    else
+                        log_debug "Story explicitly disables MCP servers"
+                    fi
+                else
+                    log_error "Failed to build MCP config for story - check that servers are configured"
+                    INVOKE_EXIT_CODE=1
+                    return 1
+                fi
             fi
-        else
-            log_error "Failed to build MCP config for story - check that servers are configured"
-            INVOKE_EXIT_CODE=1
-            return 1
-        fi
-    fi
+            ;;
+        "$AI_TOOL_CODEX")
+            output_format="json"
+            ;;
+        "$AI_TOOL_GEMINI")
+            output_format="json"
+            ;;
+    esac
 
-    # Run Claude with timeout and real-time output
+    # Build the full invocation command based on tool type
+    local invoke_cmd
+    case "$tool_type" in
+        "$AI_TOOL_CLAUDE")
+            invoke_cmd="$ai_cmd -p $extra_args --output-format $output_format --verbose"
+            ;;
+        "$AI_TOOL_CODEX")
+            invoke_cmd="$ai_cmd exec - --json"
+            ;;
+        "$AI_TOOL_GEMINI")
+            invoke_cmd="$ai_cmd -p --output-format json"
+            ;;
+        *)
+            # Default to Claude pattern
+            invoke_cmd="$ai_cmd -p $extra_args --output-format stream-json --verbose"
+            ;;
+    esac
+
+    # Run AI with timeout and real-time output
     # Display activity header
-    printf "${UI_MUTED}${UI_BORDER}━━━ Claude Activity ━━━${UI_RESET}\n"
+    printf "${UI_MUTED}${UI_BORDER}━━━ AI Activity [$ai_cmd] ━━━${UI_RESET}\n"
 
     # Initialize log file
     echo "=== Iteration ${iteration} ===" > "$log_file"
@@ -2992,15 +3036,15 @@ _run_invoke_claude() {
     echo "" >> "$log_file"
 
     set +e
-    # Use stream-json for real-time visibility, tee to log file
-    # Parse JSON stream to show activity while also saving raw output
+    # Use streaming output for real-time visibility, tee to log file
+    # Parse output stream to show activity while also saving raw output
     # Run in background to allow proper signal handling
     # NOTE: set -f disables glob expansion to prevent {} and [] in MCP JSON
     # from being interpreted as brace/glob patterns
     (
         set -f  # Disable glob expansion for MCP JSON
         echo "$prompt_content" | $timeout_cmd "${RALPH_HYBRID_TIMEOUT_MINUTES}m" \
-            claude -p $claude_args --output-format stream-json --verbose 2>&1 | \
+            $invoke_cmd 2>&1 | \
             tee -a "$log_file"
         set +f  # Re-enable glob expansion
     ) | \

@@ -22,9 +22,15 @@ defaults:
   profile: balanced
 
 #=============================================================================
-# Model Profiles
+# AI Command Profiles
 #=============================================================================
-# Profiles define which Claude model to use for each phase of work.
+# Profiles define which AI command (shell alias/wrapper) to use for each phase.
+#
+# Supported commands:
+#   - Claude wrappers: opus, sonnet, haiku, glm (or custom wrappers)
+#   - OpenAI Codex: codex
+#   - Google Gemini: gemini
+#
 # Built-in profiles:
 #   - quality:  opus for all phases (best quality, highest cost)
 #   - balanced: opus for planning, sonnet for execution (good balance)
@@ -50,11 +56,18 @@ profiles:
     research: haiku
     verification: haiku
 
-  # Example custom profile:
-  # my_custom:
+  # Example custom profile using GLM:
+  # glm:
+  #   planning: glm
+  #   execution: glm
+  #   research: sonnet
+  #   verification: glm
+
+  # Example mixed profile with different AI tools:
+  # mixed:
   #   planning: opus
-  #   execution: haiku
-  #   research: haiku
+  #   execution: codex
+  #   research: gemini
   #   verification: sonnet
 
 #=============================================================================

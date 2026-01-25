@@ -298,6 +298,10 @@ readonly RALPH_HYBRID_BUILTIN_BUDGET_VERIFICATION="haiku"
 # Claude CLI Settings
 #=============================================================================
 
+# Default Claude command (shell alias/wrapper)
+# Available: opus, sonnet, haiku, glm (or any custom wrapper)
+readonly RALPH_HYBRID_DEFAULT_CLAUDE_CMD="sonnet"
+
 # Default permission mode for Claude CLI
 readonly RALPH_HYBRID_CLAUDE_PERMISSION_MODE="bypassPermissions"
 
