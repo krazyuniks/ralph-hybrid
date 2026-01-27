@@ -74,7 +74,7 @@ jobs:
 
       - name: Check bash syntax
         run: |
-          for file in ralph lib/*.sh install.sh uninstall.sh; do
+          for file in ralph-hybrid lib/*.sh install.sh uninstall.sh; do
             if [[ -f "$file" ]]; then
               echo "Checking syntax: $file"
               bash -n "$file"
@@ -83,7 +83,7 @@ jobs:
 
       - name: Check executable permissions
         run: |
-          for file in ralph install.sh uninstall.sh; do
+          for file in ralph-hybrid install.sh uninstall.sh; do
             if [[ -f "$file" ]]; then
               if [[ ! -x "$file" ]]; then
                 echo "Error: $file is not executable"

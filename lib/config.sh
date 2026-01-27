@@ -404,3 +404,80 @@ _cfg_load_profile() {
     export RALPH_HYBRID_PROFILE="${RALPH_HYBRID_PROFILE:-$(cfg_get_value "defaults.profile")}"
     export RALPH_HYBRID_PROFILE="${RALPH_HYBRID_PROFILE:-$RALPH_HYBRID_DEFAULT_PROFILE}"
 }
+
+#=============================================================================
+# Feature-Specific Configuration
+#=============================================================================
+
+# Load feature-specific config from .ralph-hybrid/{branch}/config.yaml
+# This is called AFTER parse_run_args so CLI flags take priority
+# Arguments:
+#   $1 - Feature directory path
+# Usage: cfg_load_feature_config "/path/to/.ralph-hybrid/feature-name"
+cfg_load_feature_config() {
+    local feature_dir="${1:-}"
+
+    if [[ -z "$feature_dir" ]]; then
+        log_debug "No feature directory specified for config load"
+        return 0
+    fi
+
+    local feature_config="${feature_dir}/config.yaml"
+
+    if [[ ! -f "$feature_config" ]]; then
+        log_debug "No feature config found: ${feature_config}"
+        return 0
+    fi
+
+    log_debug "Loading feature config: ${feature_config}"
+
+    # Load feature-specific settings (only if not already set by CLI)
+    # Profile (--profile flag takes priority)
+    if [[ -z "${RALPH_HYBRID_PROFILE_FROM_CLI:-}" ]]; then
+        local feature_profile
+        feature_profile=$(cfg_load_yaml_value "$feature_config" "profile")
+        if [[ -n "$feature_profile" ]]; then
+            export RALPH_HYBRID_PROFILE="$feature_profile"
+            log_debug "Feature config: profile=${feature_profile}"
+        fi
+    fi
+
+    # Tmux/monitor mode (--monitor flag takes priority)
+    if [[ -z "${RALPH_HYBRID_MONITOR_FROM_CLI:-}" ]]; then
+        local feature_tmux
+        feature_tmux=$(cfg_load_yaml_value "$feature_config" "tmux")
+        if [[ "$feature_tmux" == "true" ]]; then
+            export RALPH_HYBRID_MONITOR=true
+            log_debug "Feature config: tmux=true (monitor enabled)"
+        fi
+    fi
+
+    # Max iterations (--max-iterations flag takes priority)
+    if [[ -z "${RALPH_HYBRID_MAX_ITERATIONS_FROM_CLI:-}" ]]; then
+        local feature_max_iterations
+        feature_max_iterations=$(cfg_load_yaml_value "$feature_config" "max_iterations")
+        if [[ -n "$feature_max_iterations" ]]; then
+            export RALPH_HYBRID_MAX_ITERATIONS="$feature_max_iterations"
+            log_debug "Feature config: max_iterations=${feature_max_iterations}"
+        fi
+    fi
+
+    # Success criteria (--success-criteria flag takes priority)
+    if [[ -z "${RALPH_HYBRID_SUCCESS_CRITERIA_FROM_CLI:-}" ]]; then
+        local feature_success_cmd
+        feature_success_cmd=$(cfg_load_yaml_value "$feature_config" "successCriteria.command")
+        if [[ -n "$feature_success_cmd" ]]; then
+            export RALPH_HYBRID_SUCCESS_CRITERIA_CMD="$feature_success_cmd"
+            log_debug "Feature config: successCriteria.command=${feature_success_cmd}"
+        fi
+
+        local feature_success_timeout
+        feature_success_timeout=$(cfg_load_yaml_value "$feature_config" "successCriteria.timeout")
+        if [[ -n "$feature_success_timeout" ]]; then
+            export RALPH_HYBRID_SUCCESS_CRITERIA_TIMEOUT="$feature_success_timeout"
+            log_debug "Feature config: successCriteria.timeout=${feature_success_timeout}"
+        fi
+    fi
+
+    return 0
+}

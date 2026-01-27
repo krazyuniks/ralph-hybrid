@@ -2086,6 +2086,37 @@ _setup_copy_skill_templates() {
     return 0
 }
 
+#-----------------------------------------------------------------------------
+# Setup: Create default project config
+#-----------------------------------------------------------------------------
+
+_setup_create_default_config() {
+    local project_dir="$1"
+    local config_dest="${project_dir}/.ralph-hybrid/config.yaml"
+    local config_src="${SCRIPT_DIR}/templates/config.yaml.example"
+
+    # If config already exists, don't overwrite
+    if [[ -f "$config_dest" ]]; then
+        log_debug "Project config already exists: ${config_dest}"
+        return 0
+    fi
+
+    # Check if template exists
+    if [[ ! -f "$config_src" ]]; then
+        log_debug "Config template not found: ${config_src}"
+        return 0
+    fi
+
+    # Create .ralph-hybrid directory if needed
+    mkdir -p "${project_dir}/.ralph-hybrid"
+
+    # Copy template to project
+    cp "$config_src" "$config_dest"
+    log_info "Created default config: ${config_dest}"
+
+    return 0
+}
+
 cmd_setup() {
     local ralph_home="${HOME}/.ralph-hybrid"
     local commands_src="${ralph_home}/commands"
@@ -2153,6 +2184,9 @@ cmd_setup() {
 
     # Copy skill templates to project
     _setup_copy_skill_templates "$project_dir"
+
+    # Create default project config if not exists
+    _setup_create_default_config "$project_dir"
 
     echo ""
     log_info "Quick start:"
@@ -2356,6 +2390,7 @@ parse_run_args() {
         case "$1" in
             -n|--max-iterations)
                 RALPH_HYBRID_MAX_ITERATIONS="${2:-}"
+                RALPH_HYBRID_MAX_ITERATIONS_FROM_CLI=true
                 shift 2
                 ;;
             -t|--timeout)
@@ -2393,6 +2428,7 @@ parse_run_args() {
                 ;;
             --monitor)
                 RALPH_HYBRID_MONITOR=true
+                RALPH_HYBRID_MONITOR_FROM_CLI=true
                 shift
                 ;;
             -m|--model)
@@ -2411,6 +2447,7 @@ parse_run_args() {
                     return 1
                 fi
                 export RALPH_HYBRID_PROFILE
+                RALPH_HYBRID_PROFILE_FROM_CLI=true
                 shift 2
                 ;;
             --success-criteria)
@@ -2420,6 +2457,7 @@ parse_run_args() {
                     return 1
                 fi
                 export RALPH_HYBRID_SUCCESS_CRITERIA_CMD
+                RALPH_HYBRID_SUCCESS_CRITERIA_FROM_CLI=true
                 shift 2
                 ;;
             -*)
@@ -2846,6 +2884,9 @@ run_validate_setup() {
     RUN_FEATURE_DIR=$(get_feature_dir) || return 1
     RUN_FEATURE_NAME=$(basename "$RUN_FEATURE_DIR")
     RUN_PRD_FILE="${RUN_FEATURE_DIR}/prd.json"
+
+    # Load feature-specific config (CLI flags take priority over feature config)
+    cfg_load_feature_config "$RUN_FEATURE_DIR"
 
     # Verify prd.json exists
     if [[ ! -f "$RUN_PRD_FILE" ]]; then
