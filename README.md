@@ -798,10 +798,9 @@ ralph-hybrid orchestrate
 
 | Document | Purpose |
 |----------|---------|
-| [SPEC.md](SPEC.md) | Complete technical specification |
-| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | v0.2 refactor roadmap |
 | [templates/](templates/) | Prompt templates, examples, config |
 | [.claude/commands/](.claude/commands/) | Planning/amendment slash commands |
+| [CLAUDE.md](CLAUDE.md) | Project instructions for Claude |
 
 ---
 
@@ -817,9 +816,8 @@ Ralph Hybrid is an experiment in multi-agent, AI-agnostic development workflows.
 - Documentation improvements
 
 **Before contributing:**
-1. Read [SPEC.md](SPEC.md) for architecture
-2. Check [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for roadmap
-3. Open an issue to discuss major changes
+1. Read this README for architecture
+2. Open an issue to discuss major changes
 
 ### Philosophy
 
@@ -830,6 +828,93 @@ We value:
 - **Composition** over monoliths
 
 Ralph Hybrid should remain a focused tool for the inner loop. Outer-loop concerns belong elsewhere.
+
+---
+
+## Reference
+
+### Exit Codes
+
+| Code | Meaning | Description |
+|------|---------|-------------|
+| 0 | Success | Feature complete or verification passed |
+| 1 | Failure | Max iterations, circuit breaker, or verification issues |
+| 2 | API Limit | Claude usage limit reached |
+| 10 | Checkpoint | Debug session checkpoint (needs continuation) |
+| 75 | Verification Failed | Hook verification failed (backpressure) |
+| 130 | Interrupted | User pressed Ctrl+C |
+
+### Hook Environment Variables
+
+Hook scripts receive these environment variables:
+
+| Variable | Description | Available In |
+|----------|-------------|--------------|
+| `RALPH_HYBRID_HOOK_POINT` | Current hook point | All hooks |
+| `RALPH_HYBRID_ITERATION` | Current iteration number | `pre_iteration`, `post_iteration` |
+| `RALPH_HYBRID_FEATURE_DIR` | Path to feature directory | All hooks |
+| `RALPH_HYBRID_PRD_FILE` | Path to prd.json | All hooks |
+| `RALPH_HYBRID_FEATURE_NAME` | Feature name (from branch) | All hooks |
+| `RALPH_HYBRID_STORY_ID` | Current story ID | `post_iteration` |
+| `RALPH_HYBRID_OUTPUT_FILE` | Path to iteration output | `post_iteration` |
+| `RALPH_HYBRID_RUN_STATUS` | Outcome: complete, error, user_exit | `post_run` |
+| `RALPH_HYBRID_ERROR_TYPE` | Error: circuit_breaker, max_iterations | `on_error` |
+
+### Hook Lookup Order
+
+Hooks are searched in this order (first found wins):
+1. Feature-specific: `.ralph-hybrid/{branch}/hooks/{hook_name}.sh`
+2. Project-wide: `.ralph-hybrid/hooks/{hook_name}.sh`
+
+### Configuration (config.yaml)
+
+**Global** (`~/.ralph-hybrid/config.yaml`) and **project** (`.ralph-hybrid/config.yaml`):
+
+```yaml
+defaults:
+  max_iterations: 20
+  timeout_minutes: 15
+  rate_limit_per_hour: 100
+
+circuit_breaker:
+  no_progress_threshold: 3
+  same_error_threshold: 5
+
+profiles:
+  quality:
+    planning: opus
+    execution: opus
+  balanced:
+    planning: opus
+    execution: sonnet
+  budget:
+    planning: sonnet
+    execution: haiku
+
+memory:
+  token_budget: 2000
+  injection: auto  # auto, manual, none
+
+hooks:
+  enabled: true
+  timeout: 300
+
+completion:
+  promise: "<promise>COMPLETE</promise>"
+  custom_patterns: ""  # comma-separated additional patterns
+
+protected_branches:
+  - main
+  - master
+  - develop
+```
+
+### File Formats
+
+See `templates/` for examples:
+- `templates/prd.json.example` - PRD schema
+- `templates/spec.md.example` - Spec format
+- `templates/config.yaml.example` - Full config reference
 
 ---
 

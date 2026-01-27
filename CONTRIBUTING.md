@@ -233,7 +233,7 @@ For feature requests, please describe:
 ## Questions?
 
 - Check existing issues and discussions
-- Review the [SPEC.md](SPEC.md) for technical details
+- Review the [README.md](README.md) for architecture and reference
 - Open an issue with the `question` label
 
 ## Release Process
@@ -289,7 +289,7 @@ When making changes:
 
 2. **Update version numbers**
    - Update `RALPH_VERSION` in `ralph` script
-   - Update version in SPEC.md if applicable
+   - Update version in README.md if applicable
 
 3. **Update CHANGELOG.md**
    - Change `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`
@@ -302,7 +302,7 @@ When making changes:
 
 4. **Create the release commit**
    ```bash
-   git add CHANGELOG.md ralph SPEC.md
+   git add CHANGELOG.md ralph
    git commit -m "chore: release vX.Y.Z"
    ```
 

@@ -301,7 +301,6 @@ pf_check_sync() {
     local has_error=false
 
     # Check for orphans: stories in prd.json but not in spec.md
-    # Per SPEC.md:
     #   - Orphaned story (passes: false) = WARN (run /ralph-prd or add to spec)
     #   - Orphaned story (passes: true) = ERROR (completed work will be lost)
     for prd_id in "${prd_array[@]}"; do

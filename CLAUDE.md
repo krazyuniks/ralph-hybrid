@@ -10,8 +10,7 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 
 | Component | Status |
 |-----------|--------|
-| README.md | Complete - Philosophy, rationale, source material |
-| SPEC.md | Complete - Technical specification |
+| README.md | Complete - Philosophy, architecture, features, reference |
 | templates/ | Complete - Prompt templates, examples |
 | .claude/commands/ | Complete - `/ralph-hybrid-plan`, `/ralph-hybrid-amend` commands |
 | lib/ | Complete - All library functions |
@@ -82,14 +81,13 @@ ralph-hybrid run --model opus         # Or with specific model
 ### Extensibility
 - **Hooks system** - pre/post hooks for run, iteration, completion, error
 - **Custom completion patterns** - Configurable via config or environment
-- **Hooks directory** - `.ralph-hybrid/{feature}/hooks/` for user scripts
+- **Hooks directories** - Project-wide `.ralph-hybrid/hooks/` or feature-specific `.ralph-hybrid/{feature}/hooks/`
 
 ## Reference Documents
 
 | Document | Purpose |
 |----------|---------|
-| [README.md](README.md) | Philosophy, source material, rationale, feature comparison |
-| [SPEC.md](SPEC.md) | Technical specification - requirements, architecture, CLI, formats |
+| [README.md](README.md) | Philosophy, architecture, features, reference |
 | [templates/](templates/) | Prompt templates, prd.json example, config example, spec.md example |
 | [.claude/commands/](.claude/commands/) | Claude Code slash commands for planning workflow |
 
@@ -102,7 +100,7 @@ ralph-hybrid run --model opus         # Or with specific model
 
 ## Testing
 
-Use BATS (Bash Automated Testing System). Test cases defined in SPEC.md section 20.
+Use BATS (Bash Automated Testing System).
 
 ```bash
 ./run_tests.sh                    # All tests (1100+ test cases)
