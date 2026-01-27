@@ -309,6 +309,20 @@ readonly RALPH_HYBRID_CLAUDE_PERMISSION_MODE="bypassPermissions"
 readonly RALPH_HYBRID_CLAUDE_OUTPUT_FORMAT="stream-json"
 
 #=============================================================================
+# Success Criteria Settings
+#=============================================================================
+
+# Default timeout for success criteria command (seconds)
+readonly RALPH_HYBRID_DEFAULT_SUCCESS_CRITERIA_TIMEOUT=300
+
+#=============================================================================
+# Command Logging Settings
+#=============================================================================
+
+# Command log file name
+readonly RALPH_HYBRID_COMMAND_LOG_FILE="commands.jsonl"
+
+#=============================================================================
 # Bash Requirements
 #=============================================================================
 

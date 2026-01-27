@@ -23,6 +23,9 @@ fi
 if [[ "${_RALPH_HYBRID_UTILS_SOURCED:-}" != "1" ]] && [[ -f "${_QC_LIB_DIR}/utils.sh" ]]; then
     source "${_QC_LIB_DIR}/utils.sh"
 fi
+if [[ "${_RALPH_HYBRID_COMMAND_LOG_SOURCED:-}" != "1" ]] && [[ -f "${_QC_LIB_DIR}/command_log.sh" ]]; then
+    source "${_QC_LIB_DIR}/command_log.sh"
+fi
 
 #=============================================================================
 # Quality Check Configuration
@@ -100,10 +103,23 @@ qc_run() {
 
     log_info "Running quality checks: $qc_command"
 
+    # Record start time for command logging
+    local start_ms=0
+    if declare -f cmd_log_start &>/dev/null; then
+        start_ms=$(cmd_log_start)
+    fi
+
     # Run the quality check command (READ-ONLY verification)
     local qc_output qc_exit_code
     qc_output=$(eval "$qc_command" 2>&1) || qc_exit_code=$?
     qc_exit_code=${qc_exit_code:-0}
+
+    # Log the command execution
+    if declare -f cmd_log_write &>/dev/null && [[ $start_ms -gt 0 ]]; then
+        local duration_ms
+        duration_ms=$(cmd_log_duration "$start_ms")
+        cmd_log_write "quality_gate" "$qc_command" "$qc_exit_code" "$duration_ms"
+    fi
 
     if [[ $qc_exit_code -eq 0 ]]; then
         log_success "Quality checks passed!"

@@ -26,6 +26,12 @@ if [[ -f "${_ED_LIB_DIR}/quality_check.sh" ]]; then
     source "${_ED_LIB_DIR}/quality_check.sh"
 fi
 
+# Source success_criteria.sh for success criteria gate
+# shellcheck source=./success_criteria.sh
+if [[ -f "${_ED_LIB_DIR}/success_criteria.sh" ]]; then
+    source "${_ED_LIB_DIR}/success_criteria.sh"
+fi
+
 #=============================================================================
 # Constants and Patterns
 #=============================================================================
@@ -721,6 +727,29 @@ EOF
                 echo "quality_check_failed"
                 return 0
             fi
+        fi
+
+        # Run success criteria gate before quality checks
+        if declare -f sc_is_configured &>/dev/null && sc_is_configured "$prd_file"; then
+            log_info "Running success criteria gate..."
+            local feature_dir
+            feature_dir=$(dirname "$prd_file")
+
+            if ! sc_verify_completion "$prd_file" "$feature_dir"; then
+                log_error "Story marked complete but SUCCESS CRITERIA FAILED!"
+                log_error "Claude should fix issues. Continuing iteration..."
+
+                # Rollback the story's passes field
+                if [[ -n "$passes_before" ]] && [[ -n "$prd_file" ]]; then
+                    if declare -f prd_rollback_passes &>/dev/null; then
+                        log_error "Rolling back story completion..."
+                        prd_rollback_passes "$prd_file" "$passes_before"
+                    fi
+                fi
+                echo "success_criteria_failed"
+                return 0
+            fi
+            log_info "Success criteria passed"
         fi
 
         # Verify quality checks before accepting story completion

@@ -36,6 +36,9 @@ source "${SCRIPT_DIR}/lib/mcp.sh"
 source "${SCRIPT_DIR}/lib/debug.sh"
 source "${SCRIPT_DIR}/lib/memory.sh"
 source "${SCRIPT_DIR}/lib/ai_invoke.sh"
+source "${SCRIPT_DIR}/lib/success_criteria.sh"
+source "${SCRIPT_DIR}/lib/command_log.sh"
+source "${SCRIPT_DIR}/lib/command_analysis.sh"
 
 #=============================================================================
 # Global Variables (set by parse_args or load_config)
@@ -76,6 +79,7 @@ Commands:
   debug [options]        Start or continue scientific debugging session
   setup                  Install Claude commands (/ralph-hybrid-plan, etc.) to project
   import <file>          Import PRD from Markdown or JSON file
+  analyse-commands       Analyse command execution logs for redundancy
   help                   Show this help message
   version                Show version information
 
@@ -95,6 +99,7 @@ Run Options:
   --monitor                  Launch with tmux monitoring dashboard
   -m, --model CMD            AI command to use (opus, sonnet, haiku, glm, codex, gemini)
   --profile PROFILE          Model profile (quality, balanced, budget; default: balanced)
+  --success-criteria CMD     Command that must pass before story completion
 
 Archive Options:
   -y, --yes                  Skip confirmation for deferred work warnings
@@ -2404,6 +2409,15 @@ parse_run_args() {
                 export RALPH_HYBRID_PROFILE
                 shift 2
                 ;;
+            --success-criteria)
+                RALPH_HYBRID_SUCCESS_CRITERIA_CMD="${2:-}"
+                if [[ -z "$RALPH_HYBRID_SUCCESS_CRITERIA_CMD" ]]; then
+                    log_error "Command required for --success-criteria"
+                    return 1
+                fi
+                export RALPH_HYBRID_SUCCESS_CRITERIA_CMD
+                shift 2
+                ;;
             -*)
                 log_error "Unknown option: $1"
                 return 1
@@ -3268,6 +3282,13 @@ _run_handle_completion() {
             cb_record_progress  # Reset no-progress counter since work was done
             return 0  # Continue to next iteration
             ;;
+        success_criteria_failed)
+            # Story was completed but success criteria failed - rolled back
+            # This counts as progress attempt, don't penalize with circuit breaker
+            log_warn "Success criteria failed - Claude will retry in same iteration"
+            cb_record_progress  # Reset no-progress counter since work was done
+            return 0  # Continue to next iteration
+            ;;
         api_limit)
             log_warn "API limit detected in output."
             if ed_prompt_api_limit; then
@@ -3802,6 +3823,84 @@ cmd_run() {
 }
 
 #=============================================================================
+# Analyse Commands Command
+#=============================================================================
+
+cmd_analyse_commands() {
+    local iteration_filter=""
+    local output_format="text"
+    local feature_dir=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --last-run|--last)
+                iteration_filter="last"
+                shift
+                ;;
+            --iteration|-i)
+                iteration_filter="${2:-}"
+                shift 2
+                ;;
+            --json)
+                output_format="json"
+                shift
+                ;;
+            -h|--help)
+                cat << EOF
+Usage: ralph-hybrid analyse-commands [options]
+
+Analyse command execution logs to identify redundancy.
+
+Options:
+  --last-run, --last     Analyse only the last run
+  --iteration, -i N      Analyse specific iteration number
+  --json                 Output in JSON format
+  -h, --help             Show this help
+
+Examples:
+  ralph-hybrid analyse-commands --last-run
+  ralph-hybrid analyse-commands --iteration 5
+  ralph-hybrid analyse-commands --json > analysis.json
+EOF
+                return 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+
+    # Check git repo first
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Get feature directory from current git branch
+    feature_dir=$(get_feature_dir) || return 1
+
+    # Check if log file exists
+    local log_file
+    log_file=$(cmd_log_get_file "$feature_dir")
+
+    if [[ ! -f "$log_file" ]]; then
+        log_error "No command log found at: $log_file"
+        log_info "Commands are logged during 'ralph-hybrid run'"
+        return 1
+    fi
+
+    # Output based on format
+    if [[ "$output_format" == "json" ]]; then
+        ca_export_json "$feature_dir" "$iteration_filter"
+    else
+        ca_full_report "$feature_dir" "$iteration_filter"
+    fi
+
+    return 0
+}
+
+#=============================================================================
 # Main Entry Point
 #=============================================================================
 
@@ -3869,6 +3968,10 @@ main() {
             ;;
         import)
             cmd_import "$@"
+            return $?
+            ;;
+        analyse-commands|analyze-commands)
+            cmd_analyse_commands "$@"
             return $?
             ;;
         run)

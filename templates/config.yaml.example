@@ -172,6 +172,22 @@ memory:
   injection: auto
 
 #=============================================================================
+# Success Criteria (mandatory gate before story completion)
+#=============================================================================
+# Success criteria is a command that MUST pass before a story can be marked
+# as complete. This is more strict than quality_checks and runs first.
+#
+# Use this for critical acceptance tests (e.g., E2E tests, integration tests).
+# Quality checks are for linting/formatting; success criteria is for correctness.
+#
+# successCriteria:
+#   # Command that must pass for story completion
+#   command: "pytest tests/e2e"
+#
+#   # Timeout in seconds (default: 300)
+#   timeout: 600
+
+#=============================================================================
 # Project-Specific Quality Checks (override in project config)
 #=============================================================================
 # IMPORTANT: Quality checks should be READ-ONLY verification commands.

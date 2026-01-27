@@ -36,6 +36,10 @@ if [[ "${_RALPH_HYBRID_LOGGING_SOURCED:-}" != "1" ]] && [[ -f "${_HOOKS_LIB_DIR}
     source "${_HOOKS_LIB_DIR}/logging.sh"
 fi
 
+if [[ "${_RALPH_HYBRID_COMMAND_LOG_SOURCED:-}" != "1" ]] && [[ -f "${_HOOKS_LIB_DIR}/command_log.sh" ]]; then
+    source "${_HOOKS_LIB_DIR}/command_log.sh"
+fi
+
 #=============================================================================
 # Constants
 #=============================================================================
@@ -658,6 +662,12 @@ EOF
 
     log_debug "Hook context file: $context_file"
 
+    # Record start time for command logging
+    local start_ms=0
+    if declare -f cmd_log_start &>/dev/null; then
+        start_ms=$(cmd_log_start)
+    fi
+
     # Execute hook with timeout
     local exit_code=0
     local timeout_cmd=""
@@ -682,6 +692,13 @@ EOF
         fi
     )
     exit_code=$?
+
+    # Log the hook execution
+    if declare -f cmd_log_write &>/dev/null && [[ $start_ms -gt 0 ]]; then
+        local duration_ms
+        duration_ms=$(cmd_log_duration "$start_ms")
+        cmd_log_write "hook" "hook:$hook_name ($hook_script)" "$exit_code" "$duration_ms" "$iteration" "$story_id" "$feature_dir"
+    fi
 
     # Clean up context file
     rm -f "$context_file"
