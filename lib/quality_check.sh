@@ -184,7 +184,7 @@ qc_verify_all_complete() {
     fi
 
     # First check if all stories have passes=true
-    if ! all_stories_complete "$prd_file"; then
+    if ! prd_all_stories_complete "$prd_file"; then
         log_debug "Not all stories have passes=true"
         return 1
     fi

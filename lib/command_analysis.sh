@@ -32,6 +32,11 @@ if [[ "${_RALPH_HYBRID_COMMAND_LOG_SOURCED:-}" != "1" ]] && [[ -f "${_CA_LIB_DIR
     source "${_CA_LIB_DIR}/command_log.sh"
 fi
 
+# Source deps.sh for external command wrappers
+if [[ "${_RALPH_HYBRID_DEPS_SOURCED:-}" != "1" ]] && [[ -f "${_CA_LIB_DIR}/deps.sh" ]]; then
+    source "${_CA_LIB_DIR}/deps.sh"
+fi
+
 #=============================================================================
 # Summary Functions
 #=============================================================================
@@ -59,7 +64,7 @@ ca_summarise_commands() {
     fi
 
     # Group by command and source, aggregate counts and durations
-    jq -s "
+    deps_jq -s "
         map($filter_expr) |
         group_by(.command) |
         map({
@@ -104,7 +109,7 @@ ca_identify_duplicates() {
     fi
 
     # Find commands that ran multiple times, especially from different sources
-    jq -s "
+    deps_jq -s "
         map($filter_expr) |
         group_by([.command, .iteration]) |
         map(select(length > 1)) |
@@ -141,7 +146,7 @@ ca_calculate_waste() {
 
     # Calculate totals
     local stats
-    stats=$(echo "$duplicates" | jq '
+    stats=$(echo "$duplicates" | deps_jq '
         {
             total_duplicate_commands: length,
             total_redundant_runs: (map(.runs - 1) | add // 0),
@@ -180,7 +185,7 @@ ca_generate_recommendations() {
     duplicates=$(ca_identify_duplicates "$feature_dir" "$iteration_filter")
 
     # Analyse patterns and generate recommendations
-    echo "$duplicates" | jq '
+    echo "$duplicates" | deps_jq '
         map(
             if (.sources | contains(["claude_code", "quality_gate"])) then
                 {
@@ -251,7 +256,7 @@ ca_display_summary() {
     fi
 
     # Display each command summary
-    echo "$summary" | jq -r '
+    echo "$summary" | deps_jq -r '
         .[] |
         "\n\(.command)\n" +
         "  Total: \(.total_runs) runs, \(.total_duration_ms)ms\n" +
@@ -263,8 +268,8 @@ ca_display_summary() {
     waste=$(ca_calculate_waste "$feature_dir" "$iteration_filter")
 
     local redundant_ms redundant_s
-    redundant_ms=$(echo "$waste" | jq -r '.total_redundant_duration_ms // 0')
-    redundant_s=$(echo "$waste" | jq -r '.total_redundant_duration_s // 0')
+    redundant_ms=$(echo "$waste" | deps_jq -r '.total_redundant_duration_ms // 0')
+    redundant_s=$(echo "$waste" | deps_jq -r '.total_redundant_duration_s // 0')
 
     if [[ "$redundant_ms" -gt 0 ]]; then
         echo ""
@@ -272,7 +277,7 @@ ca_display_summary() {
         echo "$(printf '%0.s─' {1..50})"
         echo "Total redundant time: ${redundant_s}s (${redundant_ms}ms)"
 
-        echo "$waste" | jq -r '
+        echo "$waste" | deps_jq -r '
             .top_offenders[] |
             "  - \(.command | .[0:40])... (\(.redundant_ms)ms redundant)"
         ' 2>/dev/null
@@ -301,7 +306,7 @@ ca_display_recommendations() {
     echo "$(printf '%0.s─' {1..50})"
 
     local index=1
-    echo "$recommendations" | jq -r '
+    echo "$recommendations" | deps_jq -r '
         to_entries |
         map("\(.key + 1). [\(.value.priority)] \(.value.suggestion)") |
         .[]
@@ -326,7 +331,7 @@ ca_full_report() {
         log_file=$(cmd_log_get_file "$feature_dir")
 
         if [[ -f "$log_file" ]]; then
-            iteration_filter=$(jq -r '.iteration' "$log_file" 2>/dev/null | sort -n | tail -1)
+            iteration_filter=$(deps_jq -r '.iteration' "$log_file" 2>/dev/null | sort -n | tail -1)
         fi
     fi
 
@@ -353,7 +358,7 @@ ca_export_json() {
     waste=$(ca_calculate_waste "$feature_dir" "$iteration_filter")
     recommendations=$(ca_generate_recommendations "$feature_dir" "$iteration_filter")
 
-    jq -n \
+    deps_jq -n \
         --argjson summary "$summary" \
         --argjson duplicates "$duplicates" \
         --argjson waste "$waste" \

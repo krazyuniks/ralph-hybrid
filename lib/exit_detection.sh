@@ -32,6 +32,12 @@ if [[ -f "${_ED_LIB_DIR}/success_criteria.sh" ]]; then
     source "${_ED_LIB_DIR}/success_criteria.sh"
 fi
 
+# Source deps.sh for external command wrappers
+# shellcheck source=./deps.sh
+if [[ "${_RALPH_HYBRID_DEPS_SOURCED:-}" != "1" ]] && [[ -f "${_ED_LIB_DIR}/deps.sh" ]]; then
+    source "${_ED_LIB_DIR}/deps.sh"
+fi
+
 #=============================================================================
 # Constants and Patterns
 #=============================================================================
@@ -371,7 +377,7 @@ ed_check_all_complete() {
     fi
 
     # First check if all stories have passes=true in prd.json
-    if ! all_stories_complete "$prd_file"; then
+    if ! prd_all_stories_complete "$prd_file"; then
         return 1
     fi
 
@@ -437,13 +443,13 @@ ed_check_mcp_failures() {
     fi
 
     # Check if this is a JSON object with mcp_servers field
-    if ! echo "$line" | jq -e '.mcp_servers' &>/dev/null; then
+    if ! echo "$line" | deps_jq -e '.mcp_servers' &>/dev/null; then
         return 1
     fi
 
     # Extract names of failed servers
     local failed_servers
-    failed_servers=$(echo "$line" | jq -r '
+    failed_servers=$(echo "$line" | deps_jq -r '
         .mcp_servers[]? |
         select(.status == "failed") |
         .name
@@ -902,7 +908,7 @@ ed_get_current_story() {
     fi
 
     # Get the first story where passes is false
-    jq -r '.userStories[] | select(.passes == false) | "\(.id): \(.title)"' "$prd_file" 2>/dev/null | head -1
+    deps_jq -r '.userStories[] | select(.passes == false) | "\(.id): \(.title)"' "$prd_file" 2>/dev/null | head -1
     return 0
 }
 
@@ -922,8 +928,8 @@ ed_get_story_progress() {
     fi
 
     local total passed incomplete
-    total=$(jq '.userStories | length' "$prd_file" 2>/dev/null || echo "0")
-    passed=$(jq '[.userStories[] | select(.passes == true)] | length' "$prd_file" 2>/dev/null || echo "0")
+    total=$(deps_jq '.userStories | length' "$prd_file" 2>/dev/null || echo "0")
+    passed=$(deps_jq '[.userStories[] | select(.passes == true)] | length' "$prd_file" 2>/dev/null || echo "0")
     incomplete=$((total - passed))
 
     echo "${passed}/${total} stories complete (${incomplete} remaining)"
@@ -961,8 +967,8 @@ ed_extract_last_tool() {
 
     if [[ -n "$tool_info" ]]; then
         local tool_name tool_input
-        tool_name=$(echo "$tool_info" | jq -r '.name // empty' 2>/dev/null || true)
-        tool_input=$(echo "$tool_info" | jq -r '.input | tostring | .[0:80]' 2>/dev/null || true)
+        tool_name=$(echo "$tool_info" | deps_jq -r '.name // empty' 2>/dev/null || true)
+        tool_input=$(echo "$tool_info" | deps_jq -r '.input | tostring | .[0:80]' 2>/dev/null || true)
 
         if [[ -n "$tool_name" ]]; then
             echo "${tool_name}: ${tool_input}..."

@@ -33,21 +33,11 @@ prd_get_passes_count() {
     deps_jq '[.userStories[] | select(.passes == true)] | length' "$file"
 }
 
-# Alias for backwards compatibility
-get_prd_passes_count() {
-    prd_get_passes_count "$@"
-}
-
 # Count total stories
 # Usage: prd_get_total_stories "prd.json"
 prd_get_total_stories() {
     local file="$1"
     deps_jq '.userStories | length' "$file"
-}
-
-# Alias for backwards compatibility
-get_prd_total_stories() {
-    prd_get_total_stories "$@"
 }
 
 # Serialize all passes values as comma-separated string
@@ -56,11 +46,6 @@ get_prd_total_stories() {
 prd_get_passes_state() {
     local file="$1"
     deps_jq -r '[.userStories[].passes] | map(tostring) | join(",")' "$file"
-}
-
-# Alias for backwards compatibility
-get_passes_state() {
-    prd_get_passes_state "$@"
 }
 
 # Note: get_feature_name() removed - feature identity comes from folder path (STORY-003)
@@ -89,22 +74,12 @@ prd_all_stories_complete() {
     fi
 }
 
-# Alias for backwards compatibility
-all_stories_complete() {
-    prd_all_stories_complete "$@"
-}
-
 # Get the first incomplete story (first with passes=false)
 # Returns JSON object with id, title, description
 # Usage: prd_get_current_story "prd.json"
 prd_get_current_story() {
     local file="$1"
     deps_jq -r '[.userStories[] | select(.passes == false)][0] // empty' "$file"
-}
-
-# Alias for backwards compatibility
-get_current_story() {
-    prd_get_current_story "$@"
 }
 
 # Get the index (1-based) of the first incomplete story
@@ -122,11 +97,6 @@ prd_get_current_story_index() {
     else
         echo "$((idx + 1))"
     fi
-}
-
-# Alias for backwards compatibility
-get_current_story_index() {
-    prd_get_current_story_index "$@"
 }
 
 # Get current story ID

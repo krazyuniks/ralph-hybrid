@@ -26,6 +26,11 @@ if [[ "${_RALPH_HYBRID_CONSTANTS_SOURCED:-}" != "1" ]] && [[ -f "${_MON_SCRIPT_D
     source "${_MON_SCRIPT_DIR}/constants.sh"
 fi
 
+# Source deps.sh for external command wrappers
+if [[ "${_RALPH_HYBRID_DEPS_SOURCED:-}" != "1" ]] && [[ -f "${_MON_SCRIPT_DIR}/deps.sh" ]]; then
+    source "${_MON_SCRIPT_DIR}/deps.sh"
+fi
+
 #=============================================================================
 # Constants and Configuration
 #=============================================================================
@@ -111,7 +116,7 @@ mon_write_status() {
     # Get started_at from existing status file or use current time
     local started_at=""
     if [[ -f "$status_file" ]]; then
-        started_at=$(jq -r '.startedAt // empty' "$status_file" 2>/dev/null || true)
+        started_at=$(deps_jq -r '.startedAt // empty' "$status_file" 2>/dev/null || true)
     fi
     if [[ -z "$started_at" ]]; then
         started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -180,7 +185,7 @@ mon_get_status_field() {
     local field="$1"
     local status
     status=$(mon_read_status)
-    echo "$status" | jq -r ".${field} // empty"
+    echo "$status" | deps_jq -r ".${field} // empty"
 }
 
 #=============================================================================
@@ -200,18 +205,18 @@ mon_render_dashboard() {
     local api_calls_used api_calls_limit rate_limit_resets_at
     local started_at last_updated
 
-    iteration=$(echo "$status" | jq -r '.iteration // 0')
-    max_iterations=$(echo "$status" | jq -r ".maxIterations // ${RALPH_HYBRID_DEFAULT_MAX_ITERATIONS:-20}")
-    loop_status=$(echo "$status" | jq -r '.status // "unknown"')
-    feature=$(echo "$status" | jq -r '.feature // ""')
-    stories_complete=$(echo "$status" | jq -r '.storiesComplete // 0')
-    stories_total=$(echo "$status" | jq -r '.storiesTotal // 0')
-    current_story=$(echo "$status" | jq -r '.currentStory // ""')
-    api_calls_used=$(echo "$status" | jq -r '.apiCallsUsed // 0')
-    api_calls_limit=$(echo "$status" | jq -r ".apiCallsLimit // ${RALPH_HYBRID_DEFAULT_RATE_LIMIT:-100}")
-    rate_limit_resets_at=$(echo "$status" | jq -r '.rateLimitResetsAt // ""')
-    started_at=$(echo "$status" | jq -r '.startedAt // ""')
-    last_updated=$(echo "$status" | jq -r '.lastUpdated // ""')
+    iteration=$(echo "$status" | deps_jq -r '.iteration // 0')
+    max_iterations=$(echo "$status" | deps_jq -r ".maxIterations // ${RALPH_HYBRID_DEFAULT_MAX_ITERATIONS:-20}")
+    loop_status=$(echo "$status" | deps_jq -r '.status // "unknown"')
+    feature=$(echo "$status" | deps_jq -r '.feature // ""')
+    stories_complete=$(echo "$status" | deps_jq -r '.storiesComplete // 0')
+    stories_total=$(echo "$status" | deps_jq -r '.storiesTotal // 0')
+    current_story=$(echo "$status" | deps_jq -r '.currentStory // ""')
+    api_calls_used=$(echo "$status" | deps_jq -r '.apiCallsUsed // 0')
+    api_calls_limit=$(echo "$status" | deps_jq -r ".apiCallsLimit // ${RALPH_HYBRID_DEFAULT_RATE_LIMIT:-100}")
+    rate_limit_resets_at=$(echo "$status" | deps_jq -r '.rateLimitResetsAt // ""')
+    started_at=$(echo "$status" | deps_jq -r '.startedAt // ""')
+    last_updated=$(echo "$status" | deps_jq -r '.lastUpdated // ""')
 
     # Calculate rate limit countdown
     local rate_limit_countdown=""
@@ -276,9 +281,9 @@ mon_render_dashboard() {
             # Parse JSON stream for meaningful entries
             tail -"${_RALPH_HYBRID_DASHBOARD_ACTIVITY_LINES:-20}" "$latest_log" 2>/dev/null | while IFS= read -r line; do
                 # Try to extract useful info from JSON stream
-                if echo "$line" | jq -e '.message.content' &>/dev/null 2>&1; then
+                if echo "$line" | deps_jq -e '.message.content' &>/dev/null 2>&1; then
                     local display
-                    display=$(echo "$line" | jq -r "
+                    display=$(echo "$line" | deps_jq -r "
                         .message.content[]? |
                         if .type == \"text\" then
                             \"[\" + (.text | split(\"\n\")[0] | .[0:${_RALPH_HYBRID_MONITOR_TEXT_TRUNCATE:-60}]) + \"]\"
@@ -322,7 +327,7 @@ mon_run_dashboard_loop() {
 mon_session_exists() {
     local session_name
     session_name="$(_mon_get_session_name)"
-    tmux has-session -t "$session_name" 2>/dev/null
+    deps_tmux has-session -t "$session_name" 2>/dev/null
 }
 
 # Start the tmux monitoring session
@@ -354,33 +359,33 @@ mon_start_dashboard() {
     # Create new tmux session in detached mode
     # Left pane: Ralph loop
     # Right pane: Monitor dashboard
-    tmux new-session -d -s "$session_name" -x "${_RALPH_HYBRID_TMUX_WINDOW_WIDTH:-160}" -y "${_RALPH_HYBRID_TMUX_WINDOW_HEIGHT:-40}"
+    deps_tmux new-session -d -s "$session_name" -x "${_RALPH_HYBRID_TMUX_WINDOW_WIDTH:-160}" -y "${_RALPH_HYBRID_TMUX_WINDOW_HEIGHT:-40}"
 
     # Split window vertically (left/right)
     # Explicitly target window 0 to avoid "can't find window" errors
-    tmux split-window -h -t "${session_name}:0"
+    deps_tmux split-window -h -t "${session_name}:0"
 
     # Left pane (0): Run ralph command (or placeholder)
     if [[ -n "$ralph_command" ]]; then
-        tmux send-keys -t "${session_name}:0.0" "$ralph_command" C-m
+        deps_tmux send-keys -t "${session_name}:0.0" "$ralph_command" C-m
     else
-        tmux send-keys -t "${session_name}:0.0" "echo 'Waiting for ralph run...'" C-m
+        deps_tmux send-keys -t "${session_name}:0.0" "echo 'Waiting for ralph run...'" C-m
     fi
 
     # Right pane (1): Run monitor dashboard loop
     # Source the monitor script and run the dashboard loop
-    tmux send-keys -t "${session_name}:0.1" "source '$monitor_script' && mon_run_dashboard_loop" C-m
+    deps_tmux send-keys -t "${session_name}:0.1" "source '$monitor_script' && mon_run_dashboard_loop" C-m
 
     # Set pane sizes (60% left, 40% right)
-    tmux resize-pane -t "${session_name}:0.0" -x "${_RALPH_HYBRID_TMUX_LEFT_PANE_WIDTH:-95}"
+    deps_tmux resize-pane -t "${session_name}:0.0" -x "${_RALPH_HYBRID_TMUX_LEFT_PANE_WIDTH:-95}"
 
     # Select the left pane
-    tmux select-pane -t "${session_name}:0.0"
+    deps_tmux select-pane -t "${session_name}:0.0"
 
     log_info "Started ralph tmux session. Attaching..."
 
     # Attach to session
-    tmux attach-session -t "$session_name"
+    deps_tmux attach-session -t "$session_name"
 
     return 0
 }
@@ -405,7 +410,7 @@ mon_attach() {
     fi
 
     log_info "Attaching to ralph tmux session..."
-    tmux attach-session -t "$session_name"
+    deps_tmux attach-session -t "$session_name"
 
     return 0
 }
@@ -424,7 +429,7 @@ mon_stop_dashboard() {
     fi
 
     log_info "Stopping ralph tmux session..."
-    tmux kill-session -t "$session_name"
+    deps_tmux kill-session -t "$session_name"
 
     return 0
 }
@@ -445,8 +450,8 @@ mon_iteration_start() {
     local stories_complete=0
     local stories_total=0
     if [[ -f "$prd_file" ]]; then
-        stories_total=$(jq '.userStories | length' "$prd_file" 2>/dev/null || echo 0)
-        stories_complete=$(jq '[.userStories[] | select(.passes == true)] | length' "$prd_file" 2>/dev/null || echo 0)
+        stories_total=$(deps_jq '.userStories | length' "$prd_file" 2>/dev/null || echo 0)
+        stories_complete=$(deps_jq '[.userStories[] | select(.passes == true)] | length' "$prd_file" 2>/dev/null || echo 0)
     fi
 
     # Get API usage from rate limiter state
@@ -483,8 +488,8 @@ mon_iteration_end() {
     local stories_complete=0
     local stories_total=0
     if [[ -f "$prd_file" ]]; then
-        stories_total=$(jq '.userStories | length' "$prd_file" 2>/dev/null || echo 0)
-        stories_complete=$(jq '[.userStories[] | select(.passes == true)] | length' "$prd_file" 2>/dev/null || echo 0)
+        stories_total=$(deps_jq '.userStories | length' "$prd_file" 2>/dev/null || echo 0)
+        stories_complete=$(deps_jq '[.userStories[] | select(.passes == true)] | length' "$prd_file" 2>/dev/null || echo 0)
     fi
 
     # Get API usage from rate limiter state
@@ -517,8 +522,8 @@ mon_mark_complete() {
     local stories_complete=0
     local stories_total=0
     if [[ -f "$prd_file" ]]; then
-        stories_total=$(jq '.userStories | length' "$prd_file" 2>/dev/null || echo 0)
-        stories_complete=$(jq '[.userStories[] | select(.passes == true)] | length' "$prd_file" 2>/dev/null || echo 0)
+        stories_total=$(deps_jq '.userStories | length' "$prd_file" 2>/dev/null || echo 0)
+        stories_complete=$(deps_jq '[.userStories[] | select(.passes == true)] | length' "$prd_file" 2>/dev/null || echo 0)
     fi
 
     # Get API usage
@@ -547,8 +552,8 @@ mon_mark_error() {
     local stories_complete=0
     local stories_total=0
     if [[ -f "$prd_file" ]]; then
-        stories_total=$(jq '.userStories | length' "$prd_file" 2>/dev/null || echo 0)
-        stories_complete=$(jq '[.userStories[] | select(.passes == true)] | length' "$prd_file" 2>/dev/null || echo 0)
+        stories_total=$(deps_jq '.userStories | length' "$prd_file" 2>/dev/null || echo 0)
+        stories_complete=$(deps_jq '[.userStories[] | select(.passes == true)] | length' "$prd_file" 2>/dev/null || echo 0)
     fi
 
     # Get API usage

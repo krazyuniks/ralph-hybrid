@@ -223,8 +223,8 @@ cmd_status() {
 
     # Get story counts
     local total passed
-    total=$(get_prd_total_stories "$prd_file")
-    passed=$(get_prd_passes_count "$prd_file")
+    total=$(prd_get_total_stories "$prd_file")
+    passed=$(prd_get_passes_count "$prd_file")
 
     # Get current branch (for display only - feature is derived from folder)
     local current_branch
@@ -249,7 +249,7 @@ cmd_status() {
 
     # Show stories
     echo "Stories:"
-    jq -r '.userStories[] | "  [\(if .passes then "X" else " " end)] \(.id): \(.title)"' "$prd_file"
+    deps_jq -r '.userStories[] | "  [\(if .passes then "X" else " " end)] \(.id): \(.title)"' "$prd_file"
 
     return 0
 }
@@ -2646,8 +2646,8 @@ _display_title_bar() {
 
     # Get story info
     local total_stories passed_stories current_idx current_title current_id
-    total_stories=$(get_prd_total_stories "$prd_file")
-    passed_stories=$(get_prd_passes_count "$prd_file")
+    total_stories=$(prd_get_total_stories "$prd_file")
+    passed_stories=$(prd_get_passes_count "$prd_file")
     current_idx=$(prd_get_current_story_index "$prd_file")
     current_title=$(prd_get_current_story_title "$prd_file")
     current_id=$(prd_get_current_story_id "$prd_file")
@@ -3093,7 +3093,7 @@ _run_invoke_claude() {
                         printf '\e[?25l'  # Hide cursor again
                     fi
                     # Mark as checked if this was an init message (has mcp_servers field)
-                    if echo "$line" | jq -e '.mcp_servers' &>/dev/null 2>&1; then
+                    if echo "$line" | deps_jq -e '.mcp_servers' &>/dev/null 2>&1; then
                         mcp_checked=true
                     fi
                 fi
@@ -3101,8 +3101,8 @@ _run_invoke_claude() {
                 # Parse JSON and extract display text
                 local display=""
                 local line_color=""
-                if echo "$line" | jq -e '.message.content' &>/dev/null; then
-                    display=$(echo "$line" | jq -r "
+                if echo "$line" | deps_jq -e '.message.content' &>/dev/null; then
+                    display=$(echo "$line" | deps_jq -r "
                         .message.content[]? |
                         if .type == \"text\" then
                             \"${UI_TEXT}  text: \" + (.text | split(\"\n\")[0] | .[0:$_RALPH_HYBRID_TEXT_TRUNCATE]) + \"${UI_RESET}\"
@@ -3110,11 +3110,11 @@ _run_invoke_claude() {
                             \"${UI_TOOL}  tool: ${UI_TOOL_NAME}\" + .name + \"${UI_RESET}${UI_MUTED}: \" + (.input | tostring | .[0:$_RALPH_HYBRID_TOOL_OUTPUT_TRUNCATE]) + \"${UI_RESET}\"
                         else empty end
                     " 2>/dev/null)
-                    if echo "$line" | jq -e '.message.content[]? | select(.type == "tool_use")' &>/dev/null; then
+                    if echo "$line" | deps_jq -e '.message.content[]? | select(.type == "tool_use")' &>/dev/null; then
                         tool_count=$((tool_count + 1))
                     fi
-                elif echo "$line" | jq -e '.type == "result"' &>/dev/null; then
-                    display=$(echo "$line" | jq -r "\"${UI_SUCCESS}  Done: \" + (.result | .[0:70]) + \"${UI_RESET}\"" 2>/dev/null)
+                elif echo "$line" | deps_jq -e '.type == "result"' &>/dev/null; then
+                    display=$(echo "$line" | deps_jq -r "\"${UI_SUCCESS}  Done: \" + (.result | .[0:70]) + \"${UI_RESET}\"" 2>/dev/null)
                 fi
 
                 # Add to buffer if we have display text
@@ -3226,7 +3226,7 @@ _run_handle_completion() {
     # Also check custom completion patterns from hooks system
     if [[ "$exit_signal" == "continue" ]] && hk_check_completion_patterns "$output"; then
         # Custom pattern matched, but verify all stories are complete
-        if all_stories_complete "$prd_file"; then
+        if prd_all_stories_complete "$prd_file"; then
             exit_signal="complete"
         else
             log_warn "Custom completion pattern detected but not all stories complete - continuing"
@@ -3352,7 +3352,7 @@ _run_backpressure_gate() {
 
     # Get current story ID from prd.json (first incomplete story, or last story if all complete)
     local story_id
-    story_id=$(jq -r '(.userStories[] | select(.passes == false) | .id) // (.userStories[-1].id) // "unknown"' "$prd_file" 2>/dev/null || echo "unknown")
+    story_id=$(deps_jq -r '(.userStories[] | select(.passes == false) | .id) // (.userStories[-1].id) // "unknown"' "$prd_file" 2>/dev/null || echo "unknown")
 
     # Check if hook exists before running
     if ! hook_exists "post_iteration" "$feature_dir"; then
@@ -3496,7 +3496,7 @@ _run_iteration() {
 
     # Snapshot passes state before
     local passes_before
-    passes_before=$(get_passes_state "$prd_file")
+    passes_before=$(prd_get_passes_state "$prd_file")
 
     # Build prompt (pass iteration number for timestamp context)
     local prompt_content
@@ -3527,14 +3527,14 @@ _run_iteration() {
         # before the timeout hit. This prevents infinite loops where work is done
         # but progress is not detected.
         local passes_after_timeout
-        passes_after_timeout=$(get_passes_state "$prd_file")
+        passes_after_timeout=$(prd_get_passes_state "$prd_file")
 
         if cb_detect_progress "$passes_before" "$passes_after_timeout"; then
             log_success "Progress detected despite timeout (prd.json was updated)"
             cb_record_progress
 
             # Also check if all stories are now complete
-            if all_stories_complete "$prd_file"; then
+            if prd_all_stories_complete "$prd_file"; then
                 log_success "All stories complete (detected after timeout)!"
                 cb_save_state
 
@@ -3578,7 +3578,7 @@ _run_iteration() {
 
     # Check for progress
     local passes_after
-    passes_after=$(get_passes_state "$prd_file")
+    passes_after=$(prd_get_passes_state "$prd_file")
 
     if cb_detect_progress "$passes_before" "$passes_after"; then
         log_success "Progress detected!"
@@ -3658,7 +3658,7 @@ _run_build_monitor_cmd() {
 # Check if all stories are already complete and handle archiving
 # Returns: 0 if handled (caller should exit), 1 if not complete (continue)
 _run_check_already_complete() {
-    if ! all_stories_complete "$RUN_PRD_FILE"; then
+    if ! prd_all_stories_complete "$RUN_PRD_FILE"; then
         return 1  # Not complete, continue
     fi
 
@@ -3737,16 +3737,22 @@ _run_main_loop() {
     log_info "Max iterations: ${RALPH_HYBRID_MAX_ITERATIONS}, Timeout: ${RALPH_HYBRID_TIMEOUT_MINUTES}m"
 
     local iteration=0
+    local _prev_story_id=""
     while [[ $iteration -lt $RALPH_HYBRID_MAX_ITERATIONS ]]; do
         iteration=$((iteration + 1))
-        mon_iteration_start "$iteration" "$RUN_PRD_FILE" ""
+        local _current_story_id
+        _current_story_id=$(prd_get_current_story_id "$RUN_PRD_FILE")
+        mon_iteration_start "$iteration" "$RUN_PRD_FILE" "$_current_story_id"
 
         local iter_result=0
         _run_iteration "$iteration" "$RUN_FEATURE_DIR" "$RUN_PRD_FILE" "$timeout_cmd" "$RUN_FEATURE_NAME" || iter_result=$?
 
+        # Update current story ID (may have changed during iteration)
+        _current_story_id=$(prd_get_current_story_id "$RUN_PRD_FILE")
+
         case $iter_result in
             "$RALPH_HYBRID_EXIT_SUCCESS")
-                mon_iteration_end "$iteration" "$RUN_PRD_FILE" "running" ""
+                mon_iteration_end "$iteration" "$RUN_PRD_FILE" "running" "$_current_story_id"
                 sleep "$_RALPH_HYBRID_ITERATION_SLEEP"
                 ;;
             "$RALPH_HYBRID_EXIT_ERROR")
@@ -3755,7 +3761,7 @@ _run_main_loop() {
                 return $?
                 ;;
             "$RALPH_HYBRID_EXIT_USER")
-                mon_iteration_end "$iteration" "$RUN_PRD_FILE" "paused" ""
+                mon_iteration_end "$iteration" "$RUN_PRD_FILE" "paused" "$_current_story_id"
                 _run_exit_with_hooks "user_exit"
                 return $?
                 ;;
