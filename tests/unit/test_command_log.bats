@@ -143,7 +143,7 @@ teardown() {
     local log_file="$feature_dir/logs/commands.jsonl"
 
     cmd_log_write "quality_gate" "pytest tests/" "0" "1000" "1" "STORY-001" "$feature_dir"
-    cmd_log_write "hook" "lint.sh" "0" "500" "1" "STORY-001" "$feature_dir"
+    cmd_log_write "callback" "lint.sh" "0" "500" "1" "STORY-001" "$feature_dir"
     cmd_log_write "success_criteria" "cargo test" "0" "2000" "1" "STORY-001" "$feature_dir"
 
     # Should have 3 lines
@@ -186,7 +186,7 @@ teardown() {
     local feature_dir="$TEST_DIR/.ralph-hybrid/test-feature"
 
     cmd_log_write "quality_gate" "test1" "0" "100" "1" "" "$feature_dir"
-    cmd_log_write "hook" "test2" "0" "200" "2" "" "$feature_dir"
+    cmd_log_write "callback" "test2" "0" "200" "2" "" "$feature_dir"
 
     run cmd_log_read "$feature_dir"
     [[ "$status" -eq 0 ]]
@@ -198,7 +198,7 @@ teardown() {
     local feature_dir="$TEST_DIR/.ralph-hybrid/test-feature"
 
     cmd_log_write "quality_gate" "iter1-cmd" "0" "100" "1" "" "$feature_dir"
-    cmd_log_write "hook" "iter2-cmd" "0" "200" "2" "" "$feature_dir"
+    cmd_log_write "callback" "iter2-cmd" "0" "200" "2" "" "$feature_dir"
     cmd_log_write "quality_gate" "iter2-cmd2" "0" "300" "2" "" "$feature_dir"
 
     run cmd_log_read_iteration "2" "$feature_dir"
@@ -212,9 +212,9 @@ teardown() {
     local feature_dir="$TEST_DIR/.ralph-hybrid/test-feature"
 
     cmd_log_write "quality_gate" "cmd1" "0" "100" "1" "" "$feature_dir"
-    cmd_log_write "hook" "cmd2" "0" "100" "2" "" "$feature_dir"
+    cmd_log_write "callback" "cmd2" "0" "100" "2" "" "$feature_dir"
     cmd_log_write "quality_gate" "cmd3" "0" "100" "3" "" "$feature_dir"
-    cmd_log_write "hook" "cmd4" "0" "100" "4" "" "$feature_dir"
+    cmd_log_write "callback" "cmd4" "0" "100" "4" "" "$feature_dir"
 
     run cmd_log_tail "2" "$feature_dir"
     [[ "$status" -eq 0 ]]

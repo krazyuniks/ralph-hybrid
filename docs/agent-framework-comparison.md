@@ -15,7 +15,7 @@ Research document comparing ralph-hybrid with other agent orchestration framewor
 
 ### Gastown (Steve Yegge)
 
-- **Hook persistence model**: Git worktrees for crash-resilient state
+- **Callback persistence model**: Git worktrees for crash-resilient state
 - **Convoy tracking**: Could replace/augment `prd.json` stories
 - **Multi-runtime presets**: Agent aliasing pattern (`claude`, `gemini`, `codex`)
 - **Witness pattern**: Health monitoring for long-running agents
@@ -65,12 +65,12 @@ Research document comparing ralph-hybrid with other agent orchestration framewor
 
 | Feature | Source | Integration |
 |---------|--------|-------------|
-| Hook (git worktree) persistence | Gastown | Replace log file with worktree state |
+| Callback (git worktree) persistence | Gastown | Replace log file with worktree state |
 | Convoy tracking | Gastown | Augment/replace prd.json |
 
 ## Open Questions
 
-1. Is Gastown's Hook model (git worktrees) worth the complexity vs simpler file-based state?
+1. Is Gastown's Callback model (git worktrees) worth the complexity vs simpler file-based state?
 2. Do we need 20-30 agent scaling, or is 4-agent specialisation sufficient?
 3. Would 5k-10k line expertise skills actually improve Planner output quality?
 4. Is the `/heal-skill` pattern applicable to ralph-hybrid agents?

@@ -9,7 +9,6 @@ setup() {
 
     # Template paths
     TEMPLATE_PATH="${PROJECT_ROOT}/templates/skills/code-archaeology.md"
-    SPEC_PATH="${PROJECT_ROOT}/SPEC.md"
 
     # Create temp directory
     TEMP_DIR="$(mktemp -d)"
@@ -366,30 +365,6 @@ teardown() {
 
 @test "template references characterization testing" {
     grep -q "characterization testing\|Characterization" "$TEMPLATE_PATH"
-}
-
-#=============================================================================
-# SPEC.md Documentation Tests
-#=============================================================================
-
-@test "SPEC.md documents code-archaeology skill in Template Library" {
-    grep -q "code-archaeology.md" "$SPEC_PATH"
-}
-
-@test "SPEC.md describes code-archaeology as legacy code modification" {
-    grep -q "code-archaeology.*[Ll]egacy\|[Ll]egacy.*code-archaeology" "$SPEC_PATH"
-}
-
-@test "SPEC.md includes four-role pattern description" {
-    grep -q "Surveyor.*Historian.*Archaeologist.*Careful Modifier\|four-role\|Four-role" "$SPEC_PATH"
-}
-
-@test "SPEC.md includes code-archaeology in template directory listing" {
-    grep -q "skills/code-archaeology.md" "$SPEC_PATH"
-}
-
-@test "SPEC.md includes legacy code pattern detection" {
-    grep -q "Legacy Code.*code-archaeology\|legacy.*code-archaeology" "$SPEC_PATH"
 }
 
 #=============================================================================

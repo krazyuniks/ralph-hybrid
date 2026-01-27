@@ -91,9 +91,9 @@ ls .ralph-hybrid/
 Add configurable quality check strategies:
 
 ```yaml
-# Option 1: Git hooks only (let pre-commit handle everything)
+# Option 1: Git callbacks only (let pre-commit handle everything)
 quality_checks:
-  strategy: "git-hooks"
+  strategy: "git-callbacks"
 
 # Option 2: Explicit commands (current behavior)
 quality_checks:
@@ -102,20 +102,20 @@ quality_checks:
 # Option 3: Hybrid (pre-commit + additional checks)
 quality_checks:
   strategy: "hybrid"
-  pre_commit: true           # Run quality via git commit hooks
-  additional:                # Extra checks not covered by hooks
+  pre_commit: true           # Run quality via git commit callbacks
+  additional:                # Extra checks not covered by callbacks
     - "docker compose exec backend pytest"
     - "npm run e2e"
 ```
 
 **Rationale:**
-- Pre-commit hooks handle formatting/linting (language-specific, user-configured)
-- Additional checks for things hooks don't cover (integration tests, docker-based tests)
+- Pre-commit callbacks handle formatting/linting (language-specific, user-configured)
+- Additional checks for things callbacks don't cover (integration tests, docker-based tests)
 - Ralph stays language-agnostic
 
 **Tasks:**
 - [ ] Add `strategy` field to quality_checks config
-- [ ] Implement git-hooks strategy (just run `git commit`, check exit code)
+- [ ] Implement git-callbacks strategy (just run `git commit`, check exit code)
 - [ ] Implement hybrid strategy (run additional checks, then commit)
 - [ ] Update documentation
 

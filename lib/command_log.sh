@@ -6,7 +6,7 @@
 #
 # Each entry contains:
 #   - timestamp: ISO-8601 timestamp
-#   - source: Where the command originated (quality_gate, hook, claude_code, success_criteria)
+#   - source: Where the command originated (quality_gate, callback, claude_code, success_criteria)
 #   - command: The command that was executed
 #   - exit_code: The exit code of the command
 #   - duration_ms: How long the command took in milliseconds
@@ -149,7 +149,7 @@ cmd_log_ensure_dir() {
 
 # Write a command execution entry to the log
 # Arguments:
-#   $1 - source (quality_gate, hook, claude_code, success_criteria)
+#   $1 - source (quality_gate, callback, claude_code, success_criteria)
 #   $2 - command (the command that was executed)
 #   $3 - exit_code
 #   $4 - duration_ms
@@ -213,7 +213,7 @@ cmd_log_write() {
 
 # Execute a command and log it
 # Arguments:
-#   $1 - source (quality_gate, hook, success_criteria)
+#   $1 - source (quality_gate, callback, success_criteria)
 #   $2 - command to execute
 #   $3 - story_id (optional)
 #   $4 - feature_dir (optional)

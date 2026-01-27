@@ -79,9 +79,9 @@ ralph-hybrid run --model opus         # Or with specific model
 - Automatic archiving of completed features
 
 ### Extensibility
-- **Hooks system** - pre/post hooks for run, iteration, completion, error
+- **Callbacks system** - pre/post callbacks for run, iteration, completion, error
 - **Custom completion patterns** - Configurable via config or environment
-- **Hooks directories** - Project-wide `.ralph-hybrid/hooks/` or feature-specific `.ralph-hybrid/{feature}/hooks/`
+- **Callbacks directories** - Project-wide `.ralph-hybrid/callbacks/` or feature-specific `.ralph-hybrid/{feature}/callbacks/`
 
 ## Reference Documents
 

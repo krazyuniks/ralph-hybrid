@@ -371,7 +371,7 @@ Generate:
 |-------------|--------|-------|
 | Visual parity skill template | P1 | Confirmed need from repeated file reads |
 | CSS variable validation script | P1 | Would have caught missing vars |
-| Pre-iteration visual diff hook | P2 | Not needed for this epic (no MCP) |
+| Pre-iteration visual diff callback | P2 | Not needed for this epic (no MCP) |
 | Migration epic skill detection | P2 | Pattern detection confirmed valuable |
 | Story sequencing analysis | P3 | Not an issue in this epic |
 | Batch endpoint validation | P1 | Would reduce ~50 curl calls |

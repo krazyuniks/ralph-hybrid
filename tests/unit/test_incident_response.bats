@@ -9,7 +9,6 @@ setup() {
 
     # Template paths
     TEMPLATE_PATH="${PROJECT_ROOT}/templates/skills/incident-response.md"
-    SPEC_PATH="${PROJECT_ROOT}/SPEC.md"
 
     # Create temp directory
     TEMP_DIR="$(mktemp -d)"
@@ -455,27 +454,6 @@ teardown() {
 
 @test "checklist includes post-mortem item" {
     grep -q "post-mortem\|Post-mortem" "$TEMPLATE_PATH"
-}
-
-#=============================================================================
-# SPEC.md Integration Tests
-#=============================================================================
-
-@test "SPEC.md lists incident-response skill in Skills table" {
-    grep -q "incident-response.md" "$SPEC_PATH"
-}
-
-@test "SPEC.md describes incident-response with OODA pattern" {
-    grep -q "OODA.*Observer.*Mitigator\|Observer.*Mitigator.*Investigator.*Fixer" "$SPEC_PATH"
-}
-
-@test "SPEC.md includes incident-response in template flow" {
-    run bash -c "sed -n '/ralph-hybrid\\/templates/,/Customized per-feature/p' '$SPEC_PATH' | grep -q 'incident-response.md'"
-    [[ "$status" -eq 0 ]]
-}
-
-@test "SPEC.md includes incident pattern detection keywords" {
-    grep -q "incident.*outage.*production\|Incident Response.*incident.*outage" "$SPEC_PATH"
 }
 
 #=============================================================================

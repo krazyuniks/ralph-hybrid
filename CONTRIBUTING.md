@@ -103,7 +103,7 @@ Each library module uses a unique prefix for its functions:
 | `exit_detection.sh` | `ed_` | Exit and completion detection |
 | `preflight.sh` | `pf_` | Preflight validation |
 | `monitor.sh` | `mon_` | Monitoring dashboard |
-| `hooks.sh` | `hk_` | Hooks system |
+| `callbacks.sh` | `hk_` | Callbacks system |
 | `deps.sh` | `deps_` | Dependencies abstraction |
 | `import.sh` | `im_` | PRD import |
 | `platform.sh` | `plat_` | Platform detection |

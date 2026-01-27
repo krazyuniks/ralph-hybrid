@@ -336,10 +336,10 @@ Ralph Hybrid includes a comprehensive set of features adopted from [GSD](https:/
 
 **Problem solved**: Stories marked complete based on AI self-assessment, not actual test results.
 
-Hooks execute after each iteration to verify quality gates before marking stories complete.
+Callbacks execute after each iteration to verify quality gates before marking stories complete.
 
 ```bash
-# Project hook at .ralph-hybrid/hooks/post_iteration.sh
+# Project callback at .ralph-hybrid/callbacks/post_iteration.sh
 #!/bin/bash
 CONTEXT_FILE="$1"  # JSON with story_id, iteration, feature_dir
 
@@ -350,9 +350,9 @@ exit 0
 
 **Configuration**:
 ```yaml
-hooks:
+callbacks:
   post_iteration:
-    enabled: true   # Default: true if hook exists
+    enabled: true   # Default: true if callback exists
   timeout: 300      # Seconds (default: 300)
 ```
 
@@ -640,7 +640,7 @@ Ralph Hybrid is deliberately **outer-loop agnostic**. It focuses on the **inner 
 | Source | Author | Key Insight | What We Adopted |
 |--------|--------|-------------|-----------------|
 | [Reddit: The Ralph Wiggum Loop](https://www.reddit.com/r/ClaudeCode/comments/1q9qjk4/the_ralphwiggum_loop/) | person-pitch | **Two-tier orchestration**: Claude orchestrator manages Codex worker loop. Orchestrator handles meta-layer (what to work on, blockers, auth), worker grinds through implementation. | Two-tier architecture with orchestrator agent managing worker loop |
-| [Boris Cherny's Claude Code Workflow](https://karozieminski.substack.com/p/boris-cherny-claude-code-workflow) | Boris Cherny | **Dedicated agents**: One to plan (iterative refinement), one to code, one to verify. "Don't let a system act before you've agreed on intent." Hooks for automation. | Four specialized agents, plan-first workflow, comprehensive hooks system |
+| [Boris Cherny's Claude Code Workflow](https://karozieminski.substack.com/p/boris-cherny-claude-code-workflow) | Boris Cherny | **Dedicated agents**: One to plan (iterative refinement), one to code, one to verify. "Don't let a system act before you've agreed on intent." Callbacks for automation. | Four specialized agents, plan-first workflow, comprehensive callbacks system |
 | [Progress vs Context](https://x.com/agrimsingh/status/2010412150918189210) | Agrim Singh | Trade-off between maintaining context vs making progress. Fresh context enables progress. | Fresh context per iteration, state persisted in files |
 
 ### Practitioner Guides
@@ -841,30 +841,30 @@ Ralph Hybrid should remain a focused tool for the inner loop. Outer-loop concern
 | 1 | Failure | Max iterations, circuit breaker, or verification issues |
 | 2 | API Limit | Claude usage limit reached |
 | 10 | Checkpoint | Debug session checkpoint (needs continuation) |
-| 75 | Verification Failed | Hook verification failed (backpressure) |
+| 75 | Verification Failed | Callback verification failed (backpressure) |
 | 130 | Interrupted | User pressed Ctrl+C |
 
-### Hook Environment Variables
+### Callback Environment Variables
 
-Hook scripts receive these environment variables:
+Callback scripts receive these environment variables:
 
 | Variable | Description | Available In |
 |----------|-------------|--------------|
-| `RALPH_HYBRID_HOOK_POINT` | Current hook point | All hooks |
+| `RALPH_HYBRID_CALLBACK_POINT` | Current callback point | All callbacks |
 | `RALPH_HYBRID_ITERATION` | Current iteration number | `pre_iteration`, `post_iteration` |
-| `RALPH_HYBRID_FEATURE_DIR` | Path to feature directory | All hooks |
-| `RALPH_HYBRID_PRD_FILE` | Path to prd.json | All hooks |
-| `RALPH_HYBRID_FEATURE_NAME` | Feature name (from branch) | All hooks |
+| `RALPH_HYBRID_FEATURE_DIR` | Path to feature directory | All callbacks |
+| `RALPH_HYBRID_PRD_FILE` | Path to prd.json | All callbacks |
+| `RALPH_HYBRID_FEATURE_NAME` | Feature name (from branch) | All callbacks |
 | `RALPH_HYBRID_STORY_ID` | Current story ID | `post_iteration` |
 | `RALPH_HYBRID_OUTPUT_FILE` | Path to iteration output | `post_iteration` |
 | `RALPH_HYBRID_RUN_STATUS` | Outcome: complete, error, user_exit | `post_run` |
 | `RALPH_HYBRID_ERROR_TYPE` | Error: circuit_breaker, max_iterations | `on_error` |
 
-### Hook Lookup Order
+### Callback Lookup Order
 
-Hooks are searched in this order (first found wins):
-1. Feature-specific: `.ralph-hybrid/{branch}/hooks/{hook_name}.sh`
-2. Project-wide: `.ralph-hybrid/hooks/{hook_name}.sh`
+Callbacks are searched in this order (first found wins):
+1. Feature-specific: `.ralph-hybrid/{branch}/callbacks/{callback_name}.sh`
+2. Project-wide: `.ralph-hybrid/callbacks/{callback_name}.sh`
 
 ### Configuration (config.yaml)
 
@@ -895,7 +895,7 @@ memory:
   token_budget: 2000
   injection: auto  # auto, manual, none
 
-hooks:
+callbacks:
   enabled: true
   timeout: 300
 

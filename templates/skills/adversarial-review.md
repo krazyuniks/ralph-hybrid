@@ -354,10 +354,10 @@ security-review:
         trivy fs --format json --output trivy-report.json .
 ```
 
-**Post-review hook:**
+**Post-review callback:**
 ```bash
 #!/bin/bash
-# .ralph-hybrid/hooks/post_security_review.sh
+# .ralph-hybrid/callbacks/post_security_review.sh
 # Blocks merge if CRITICAL findings exist
 
 if grep -q '"severity": "CRITICAL"' SECURITY-REVIEW.md; then

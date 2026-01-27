@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# post_iteration.sh - Backpressure verification hook template
+# post_iteration.sh - Backpressure verification callback template
 #
-# This hook runs after each Ralph Hybrid iteration to verify that tests pass
+# This callback runs after each Ralph Hybrid iteration to verify that tests pass
 # before allowing the story to be marked complete. It implements "backpressure"
 # by failing if the test suite doesn't pass, preventing premature story completion.
 #
 # INSTALLATION:
-#   1. Copy to .ralph-hybrid/{feature}/hooks/post_iteration.sh
-#      OR .ralph-hybrid/hooks/post_iteration.sh (project-wide)
+#   1. Copy to .ralph-hybrid/{feature}/callbacks/post_iteration.sh
+#      OR .ralph-hybrid/callbacks/post_iteration.sh (project-wide)
 #   2. Make executable: chmod +x post_iteration.sh
 #   3. Customize the TEST_COMMAND for your project
 #
@@ -16,7 +16,7 @@
 #   0  - Tests passed, story can be marked complete
 #   75 - VERIFICATION_FAILED: Tests failed, blocks story completion
 #        (This triggers circuit breaker increments)
-#   1  - Other error (hook infrastructure issue)
+#   1  - Other error (callback infrastructure issue)
 #
 # ARGUMENTS:
 #   $1 - Path to JSON context file containing:
@@ -29,7 +29,7 @@
 #        }
 #
 # ENVIRONMENT VARIABLES (set by Ralph Hybrid):
-#   RALPH_HYBRID_HOOK_POINT   - "post_iteration"
+#   RALPH_HYBRID_CALLBACK_POINT   - "post_iteration"
 #   RALPH_HYBRID_STORY_ID     - Current story ID
 #   RALPH_HYBRID_ITERATION    - Current iteration number
 #   RALPH_HYBRID_FEATURE_DIR  - Path to feature directory
@@ -106,9 +106,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-log_info() { echo -e "${YELLOW}[hook]${NC} $*" >&2; }
-log_pass() { echo -e "${GREEN}[hook]${NC} $*" >&2; }
-log_fail() { echo -e "${RED}[hook]${NC} $*" >&2; }
+log_info() { echo -e "${YELLOW}[callback]${NC} $*" >&2; }
+log_pass() { echo -e "${GREEN}[callback]${NC} $*" >&2; }
+log_fail() { echo -e "${RED}[callback]${NC} $*" >&2; }
 
 #=============================================================================
 # Parse JSON Context
@@ -154,7 +154,7 @@ parse_context() {
 run_tests() {
     if [[ -z "$TEST_COMMAND" ]]; then
         log_info "No TEST_COMMAND configured - skipping tests"
-        log_info "Configure TEST_COMMAND in this hook to enable verification"
+        log_info "Configure TEST_COMMAND in this callback to enable verification"
         return 0
     fi
 
@@ -224,7 +224,7 @@ run_build() {
 main() {
     local context_file="${1:-}"
 
-    log_info "Post-iteration verification hook starting..."
+    log_info "Post-iteration verification callback starting..."
 
     # Parse context
     if ! parse_context "$context_file"; then

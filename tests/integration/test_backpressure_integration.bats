@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Integration tests for backpressure hook integration into iteration loop
+# Integration tests for backpressure callback integration into iteration loop
 # STORY-003: Integrate Backpressure into Iteration Loop
 
 setup() {
@@ -7,9 +7,9 @@ setup() {
     TEST_DIR=$(mktemp -d)
 
     # Create minimal project structure
-    mkdir -p "$TEST_DIR/.ralph-hybrid/test-feature/hooks"
+    mkdir -p "$TEST_DIR/.ralph-hybrid/test-feature/callbacks"
     mkdir -p "$TEST_DIR/.ralph-hybrid/test-feature/logs"
-    mkdir -p "$TEST_DIR/.ralph-hybrid/hooks"
+    mkdir -p "$TEST_DIR/.ralph-hybrid/callbacks"
 
     cd "$TEST_DIR"
 
@@ -18,7 +18,7 @@ setup() {
     source "$PROJECT_ROOT/lib/logging.sh"
     source "$PROJECT_ROOT/lib/config.sh"
     source "$PROJECT_ROOT/lib/circuit_breaker.sh"
-    source "$PROJECT_ROOT/lib/hooks.sh"
+    source "$PROJECT_ROOT/lib/callbacks.sh"
 
     # Set log level to suppress debug output
     export RALPH_HYBRID_LOG_LEVEL="error"
@@ -50,34 +50,34 @@ create_test_prd() {
 EOF
 }
 
-@test "Hook is called after iteration with proper context" {
-    local marker_file="$TEST_DIR/hook_called"
+@test "Callback is called after iteration with proper context" {
+    local marker_file="$TEST_DIR/callback_called"
 
-    # Create a hook that marks its execution
-    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << EOF
+    # Create a callback that marks its execution
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh" << EOF
 #!/bin/bash
 touch "$marker_file"
 echo "\$1" > "$TEST_DIR/context_path"
 exit 0
 EOF
-    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh"
 
-    # Call run_hook as it would be called from the iteration loop
-    run run_hook "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "$TEST_DIR/.ralph-hybrid/test-feature/logs/iteration-1.log"
+    # Call run_callback as it would be called from the iteration loop
+    run run_callback "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "$TEST_DIR/.ralph-hybrid/test-feature/logs/iteration-1.log"
 
     [[ "$status" -eq 0 ]]
     [[ -f "$marker_file" ]]
 }
 
 @test "VERIFICATION_FAILED (exit 75) blocks story completion" {
-    # Create a hook that returns VERIFICATION_FAILED
-    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << 'EOF'
+    # Create a callback that returns VERIFICATION_FAILED
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh" << 'EOF'
 #!/bin/bash
 exit 75
 EOF
-    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh"
 
-    run run_hook "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
+    run run_callback "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
 
     # Should return 75 to signal verification failed
     [[ "$status" -eq 75 ]]
@@ -88,51 +88,51 @@ EOF
     cb_load_state
     local initial_count=$CB_NO_PROGRESS_COUNT
 
-    # Create a hook that returns VERIFICATION_FAILED
-    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << 'EOF'
+    # Create a callback that returns VERIFICATION_FAILED
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh" << 'EOF'
 #!/bin/bash
 exit 75
 EOF
-    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh"
 
-    # Run hook and check result
-    run run_hook "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
+    # Run callback and check result
+    run run_callback "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
     [[ "$status" -eq 75 ]]
 
-    # Verify circuit breaker was incremented (caller's responsibility, but hook returns 75)
+    # Verify circuit breaker was incremented (caller's responsibility, but callback returns 75)
     # This test validates the exit code that triggers circuit breaker in main loop
 }
 
-@test "No hook = unchanged behavior (returns 0)" {
-    # Ensure no hooks exist
-    rm -rf "$TEST_DIR/.ralph-hybrid/test-feature/hooks"
-    rm -rf "$TEST_DIR/.ralph-hybrid/hooks"
+@test "No callback = unchanged behavior (returns 0)" {
+    # Ensure no callbacks exist
+    rm -rf "$TEST_DIR/.ralph-hybrid/test-feature/callbacks"
+    rm -rf "$TEST_DIR/.ralph-hybrid/callbacks"
     mkdir -p "$TEST_DIR/.ralph-hybrid/test-feature"
 
-    # run_hook should return 0 when no hook exists
-    run run_hook "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
+    # run_callback should return 0 when no callback exists
+    run run_callback "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
 
     [[ "$status" -eq 0 ]]
 }
 
-@test "Hook passing allows story completion" {
-    # Create a hook that passes
-    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << 'EOF'
+@test "Callback passing allows story completion" {
+    # Create a callback that passes
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh" << 'EOF'
 #!/bin/bash
 exit 0
 EOF
-    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh"
 
-    run run_hook "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
+    run run_callback "post_iteration" "STORY-001" 1 "$TEST_DIR/.ralph-hybrid/test-feature" "output.log"
 
     [[ "$status" -eq 0 ]]
 }
 
-@test "hooks.post_iteration.enabled=false disables hook" {
-    # Create config that disables post_iteration hook
+@test "callbacks.post_iteration.enabled=false disables callback" {
+    # Create config that disables post_iteration callback
     mkdir -p "$TEST_DIR/.ralph-hybrid"
     cat > "$TEST_DIR/.ralph-hybrid/config.yaml" << 'EOF'
-hooks:
+callbacks:
   post_iteration:
     enabled: false
 EOF
@@ -142,25 +142,25 @@ EOF
     _RALPH_HYBRID_CONFIG_SOURCED=0
     source "$PROJECT_ROOT/lib/config.sh"
 
-    # Create a hook that would fail
-    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << 'EOF'
+    # Create a callback that would fail
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh" << 'EOF'
 #!/bin/bash
 exit 75
 EOF
-    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh"
 
-    # Check if hooks.post_iteration.enabled is respected
+    # Check if callbacks.post_iteration.enabled is respected
     local enabled
-    enabled=$(cfg_get_value "hooks.post_iteration.enabled")
+    enabled=$(cfg_get_value "callbacks.post_iteration.enabled")
 
     [[ "$enabled" == "false" ]]
 }
 
-@test "hooks.post_iteration.enabled=true (or default) enables hook" {
-    # Create config that explicitly enables post_iteration hook
+@test "callbacks.post_iteration.enabled=true (or default) enables callback" {
+    # Create config that explicitly enables post_iteration callback
     mkdir -p "$TEST_DIR/.ralph-hybrid"
     cat > "$TEST_DIR/.ralph-hybrid/config.yaml" << 'EOF'
-hooks:
+callbacks:
   post_iteration:
     enabled: true
 EOF
@@ -171,16 +171,16 @@ EOF
     source "$PROJECT_ROOT/lib/config.sh"
 
     local enabled
-    enabled=$(cfg_get_value "hooks.post_iteration.enabled")
+    enabled=$(cfg_get_value "callbacks.post_iteration.enabled")
 
     [[ "$enabled" == "true" ]]
 }
 
-@test "hooks.timeout config is respected" {
+@test "callbacks.timeout config is respected" {
     # Create config with custom timeout
     mkdir -p "$TEST_DIR/.ralph-hybrid"
     cat > "$TEST_DIR/.ralph-hybrid/config.yaml" << 'EOF'
-hooks:
+callbacks:
   timeout: 60
 EOF
     export RALPH_HYBRID_PROJECT_CONFIG="$TEST_DIR/.ralph-hybrid/config.yaml"
@@ -190,28 +190,28 @@ EOF
     source "$PROJECT_ROOT/lib/config.sh"
 
     local timeout
-    timeout=$(cfg_get_value "hooks.timeout")
+    timeout=$(cfg_get_value "callbacks.timeout")
 
     [[ "$timeout" == "60" ]]
 }
 
-@test "Default hook timeout is 300s" {
-    # Check that RALPH_HYBRID_HOOK_TIMEOUT defaults to 300
-    [[ "${RALPH_HYBRID_HOOK_TIMEOUT:-300}" == "300" ]]
+@test "Default callback timeout is 300s" {
+    # Check that RALPH_HYBRID_CALLBACK_TIMEOUT defaults to 300
+    [[ "${RALPH_HYBRID_CALLBACK_TIMEOUT:-300}" == "300" ]]
 }
 
-@test "Hook context contains required fields" {
+@test "Callback context contains required fields" {
     local context_capture="$TEST_DIR/captured_context.json"
 
-    # Create a hook that captures the context
-    cat > "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh" << EOF
+    # Create a callback that captures the context
+    cat > "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh" << EOF
 #!/bin/bash
 cp "\$1" "$context_capture"
 exit 0
 EOF
-    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/hooks/post_iteration.sh"
+    chmod +x "$TEST_DIR/.ralph-hybrid/test-feature/callbacks/post_iteration.sh"
 
-    run run_hook "post_iteration" "STORY-002" 3 "$TEST_DIR/.ralph-hybrid/test-feature" "$TEST_DIR/iteration-3.log"
+    run run_callback "post_iteration" "STORY-002" 3 "$TEST_DIR/.ralph-hybrid/test-feature" "$TEST_DIR/iteration-3.log"
     [[ "$status" -eq 0 ]]
 
     # Verify all required fields are present

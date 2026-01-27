@@ -135,7 +135,7 @@ New capabilities to enhance the Ralph experience.
 |-------|-------|-------------|
 | #14 | Abstract external dependencies | Create abstraction layer for `jq`, `date`, `claude` for testability |
 | #9 | Define constants for magic numbers | Replace hardcoded values with named constants |
-| #10 | Extensibility hooks | Pre/post iteration hooks, custom completion patterns |
+| #10 | Extensibility callbacks | Pre/post iteration callbacks, custom completion patterns |
 | #11 | PRD import | `ralph import` command for Markdown/JSON/PDF conversion |
 
 ### Low Priority

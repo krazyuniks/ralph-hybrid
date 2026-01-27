@@ -76,7 +76,7 @@ Find all registered routes and verify consumers exist.
 - API routes (REST, GraphQL, gRPC)
 - Frontend routes (React Router, Vue Router, etc.)
 - CLI commands and subcommands
-- Event handlers and webhooks
+- Event handlers and webcallbacks
 
 **Detection Patterns:**
 ```

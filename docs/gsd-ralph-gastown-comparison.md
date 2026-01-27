@@ -16,7 +16,7 @@ Create an exhaustive comparison between GSD (Get Shit Done), Ralph Hybrid, and G
 | **Philosophy** | Context engineering for solo devs | Fresh context per iteration | Multi-agent orchestration at scale |
 | **Scale** | 1-4 agents | 1 agent (sequential) | 4-30+ agents |
 | **Focus** | Full project lifecycle | Inner-loop feature implementation | Infrastructure for agent coordination |
-| **State Model** | File-based (.planning/) | File-based (.ralph-hybrid/) | Git worktree-backed (Hooks) |
+| **State Model** | File-based (.planning/) | File-based (.ralph-hybrid/) | Git worktree-backed (Callbacks) |
 | **Complexity** | Medium | Low | High |
 | **Best For** | Greenfield projects | GitHub-driven features | Large multi-agent systems |
 
@@ -44,8 +44,8 @@ This comprehensive table covers all dimensions across all three systems.
 | Dimension | GSD | Ralph Hybrid | Gastown | Gap Analysis |
 |-----------|-----|--------------|---------|--------------|
 | **Context budget target** | 30-50% optimal, <70% max | Fresh each iteration | Fresh each Polecat | Equivalent philosophy |
-| **Always-loaded files** | PROJECT.md, REQUIREMENTS.md, ROADMAP.md, STATE.md | spec.md, prd.json, progress.txt | PRIME.md, Hook data | Different sets |
-| **Task-specific context** | PLAN.md + CONTEXT.md | Story + spec.md section | Bead data + Hook | Equivalent |
+| **Always-loaded files** | PROJECT.md, REQUIREMENTS.md, ROADMAP.md, STATE.md | spec.md, prd.json, progress.txt | PRIME.md, Callback data | Different sets |
+| **Task-specific context** | PLAN.md + CONTEXT.md | Story + spec.md section | Bead data + Callback | Equivalent |
 | **Context degradation awareness** | Explicit (quality curve documented) | Implicit (fresh context) | Implicit (Polecat ephemeral) | GSD more explicit |
 | **Size constraints** | 2-3 tasks per plan | 1 story per iteration | 1 bead per agent | Equivalent atomicity |
 
@@ -72,7 +72,7 @@ This comprehensive table covers all dimensions across all three systems.
 | **Parallel execution** | Multiple Task() in one message | Sequential (current) | 20-30+ parallel | **RH gap: no parallel** |
 | **Agent specialisation** | 11+ dedicated agents | 6+ templates | Role-based (Polecat, Crew) | GSD most specialised |
 | **Fresh context strategy** | Each executor: 200k fresh | Each iteration: fresh | Each Polecat: fresh | Equivalent |
-| **Result collection** | Orchestrator aggregates SUMMARYs | progress.txt append | Hook + Convoy status | Different mechanisms |
+| **Result collection** | Orchestrator aggregates SUMMARYs | progress.txt append | Callback + Convoy status | Different mechanisms |
 | **Checkpoint handling** | Structured pause → user → fresh continue | N/A | `/handoff` | **RH gap** |
 | **Wave grouping** | Dependency-based waves | Priority ordering | Convoy distribution | GSD explicit waves |
 | **Orchestrator budget** | ~15% context | Minimal | Mayor: 20-30% | GSD documented |
@@ -82,12 +82,12 @@ This comprehensive table covers all dimensions across all three systems.
 
 | Dimension | GSD | Ralph Hybrid | Gastown | Gap Analysis |
 |-----------|-----|--------------|---------|--------------|
-| **Persistence mechanism** | Files in `.planning/` | Files in `.ralph-hybrid/` | Git worktrees (Hooks) | Gastown most robust |
+| **Persistence mechanism** | Files in `.planning/` | Files in `.ralph-hybrid/` | Git worktrees (Callbacks) | Gastown most robust |
 | **Crash recovery** | STATE.md resume | progress.txt resume | Worktree survives | Gastown best |
 | **Work tracking format** | PLAN.md (XML) + SUMMARY.md | prd.json (JSON) + progress.txt | Beads (JSONL) | Different formats |
 | **Session handoff** | `/gsd:pause-work` → `/gsd:resume-work` | progress.txt continuity | `/handoff` + `gt seance` | Gastown most sophisticated |
 | **Previous session query** | N/A | Read progress.txt | `gt seance` command | **Gastown advantage** |
-| **Decisions tracking** | STATE.md `## Decisions` | progress.txt learnings | Hook history | GSD most structured |
+| **Decisions tracking** | STATE.md `## Decisions` | progress.txt learnings | Callback history | GSD most structured |
 | **Blockers tracking** | STATE.md `## Blockers` | progress.txt notes | Bead status | GSD most structured |
 | **Requirements tracking** | REQUIREMENTS.md (v1/v2/out) | spec.md (unstructured) | N/A | **GSD advantage** |
 | **Roadmap** | ROADMAP.md with phases | N/A | N/A | **GSD advantage** |
@@ -156,7 +156,7 @@ This comprehensive table covers all dimensions across all three systems.
 | **Installation** | `npx get-shit-done-cc` | `./install.sh` | Binary download | Equivalent |
 | **CLI** | Slash commands only | `ralph-hybrid` + slash | `gt` + `bd` binaries | Gastown most powerful |
 | **Dashboard** | `/gsd:progress` | `ralph-hybrid status` | Web dashboard | **Gastown advantage** |
-| **Hooks/Extensions** | N/A | pre/post hooks | Formula system | Both extensible |
+| **Callbacks/Extensions** | N/A | pre/post callbacks | Formula system | Both extensible |
 | **Multi-runtime** | Claude, OpenCode | Claude (planned: others) | Claude, Gemini, Codex, etc. | **Gastown advantage** |
 
 ### Error Recovery Patterns
@@ -170,7 +170,7 @@ This comprehensive table covers all dimensions across all three systems.
 | **Partial completion** | SUMMARY.md tracks done tasks | `passes: true` per story | Bead status | Equivalent |
 | **Debug escalation** | gsd-debugger auto-spawn | Manual debug-agent | N/A | **GSD advantage** |
 | **Human escalation** | Checkpoint tasks pause | Circuit breaker message | Nudge to user | Different approaches |
-| **State recovery** | STATE.md reload | progress.txt replay | Hook restore | Gastown most robust |
+| **State recovery** | STATE.md reload | progress.txt replay | Callback restore | Gastown most robust |
 | **API limit handling** | N/A | Detect + prompt user | N/A | **RH advantage** |
 | **Timeout handling** | N/A | 15 min/iteration kill | Configurable | RH has explicit timeout |
 
@@ -182,7 +182,7 @@ This comprehensive table covers all dimensions across all three systems.
 | **Test in verification** | `<verify>` runs test command | AC includes "tests pass" | N/A | GSD more executable |
 | **Test-first enforcement** | Planner creates test tasks | Implicit in AC | N/A | **GSD advantage** |
 | **Test file targeting** | `<files>` includes test paths | N/A | N/A | **GSD advantage** |
-| **Test runner integration** | Via `<verify>` command | Via hooks | Via Formula | Equivalent flexibility |
+| **Test runner integration** | Via `<verify>` command | Via callbacks | Via Formula | Equivalent flexibility |
 | **Failed test handling** | Verifier creates fix plan | Retry iteration | N/A | **GSD advantage** |
 | **Coverage tracking** | N/A | N/A | N/A | Gap in all systems |
 | **E2E test support** | Checkpoint for human verify | MCP servers (Playwright) | N/A | RH has MCP integration |
@@ -454,7 +454,7 @@ Story 1 → Story 2 → Story 3 → Story 4 → Story 5
 4. **Rate limiting** - API protection built-in
 5. **Assumption lister** - Surface hidden assumptions
 6. **Per-story MCP** - Fine-grained tool access
-7. **Hooks system** - pre/post iteration hooks
+7. **Callbacks system** - pre/post iteration callbacks
 
 ---
 
@@ -521,7 +521,7 @@ The overhead of switching to GSD doesn't justify the gains when the valuable fea
 | **Mayor** | Chief-of-staff agent for coordination | Orchestrator (conceptual) |
 | **Polecat** | Ephemeral worker agents | Ralph executor iterations |
 | **Crew** | Long-lived named agents | N/A |
-| **Hook** | Git worktree-backed agent work queue | `prd.json` + `progress.txt` |
+| **Callback** | Git worktree-backed agent work queue | `prd.json` + `progress.txt` |
 | **Bead** | Git-backed atomic work unit (JSONL) | Story in `prd.json` |
 | **Convoy** | Work-order wrapping related beads | Feature (all stories) |
 | **Formula** | TOML-based workflow template | Prompt templates |
@@ -535,7 +535,7 @@ The overhead of switching to GSD doesn't justify the gains when the valuable fea
 
 | Principle | Meaning | Ralph Hybrid Status |
 |-----------|---------|---------------------|
-| **GUPP** | "If there is work on your Hook, YOU MUST RUN IT" | Implicit in iteration loop |
+| **GUPP** | "If there is work on your Callback, YOU MUST RUN IT" | Implicit in iteration loop |
 | **MEOW** | Molecular Expression of Work (decomposition) | Story decomposition |
 | **NDI** | Nondeterministic Idempotence (eventual completion) | Circuit breaker retry |
 
@@ -543,7 +543,7 @@ The overhead of switching to GSD doesn't justify the gains when the valuable fea
 
 | Aspect | GSD | Ralph Hybrid | Gastown |
 |--------|-----|--------------|---------|
-| **Persistence** | Files in `.planning/` | Files in `.ralph-hybrid/` | Git worktrees (Hooks) |
+| **Persistence** | Files in `.planning/` | Files in `.ralph-hybrid/` | Git worktrees (Callbacks) |
 | **Crash recovery** | STATE.md resume | progress.txt resume | Worktree survives crashes |
 | **Work tracking** | PLAN.md XML | prd.json JSON | Beads JSONL |
 | **Session handoff** | pause/resume commands | progress.txt continuity | `/handoff` + `gt seance` |
@@ -554,7 +554,7 @@ The overhead of switching to GSD doesn't justify the gains when the valuable fea
 
 | Feature | Description | Adoption Priority |
 |---------|-------------|-------------------|
-| **Hook persistence** | Git worktree-backed state | Medium - adds complexity |
+| **Callback persistence** | Git worktree-backed state | Medium - adds complexity |
 | **Convoy tracking** | Work-order bundles | Low - prd.json sufficient |
 | **GUPP principle** | Autonomous work execution | Already implicit |
 | **Seance** | Query previous sessions | **High** - context recovery |
@@ -617,7 +617,7 @@ The overhead of switching to GSD doesn't justify the gains when the valuable fea
 - Amendment workflow (unique strength)
 - Circuit breaker (simpler than Deacon)
 - Per-story MCP config (more granular)
-- Hooks system (extensibility)
+- Callbacks system (extensibility)
 
 ---
 

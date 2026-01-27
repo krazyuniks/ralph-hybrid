@@ -42,7 +42,7 @@ You have been given:
    - Check `package.json` for `scripts` (lint, typecheck, test)
    - Check `pyproject.toml` for ruff, mypy, pytest config
    - Check `Makefile` for lint/check targets
-   - Check `.pre-commit-config.yaml` for hooks
+   - Check `.pre-commit-config.yaml` for callbacks
 
 2. **Run all quality checks:**
    ```bash

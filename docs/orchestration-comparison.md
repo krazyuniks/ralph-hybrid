@@ -172,7 +172,7 @@ Legend: RH = Ralph Hybrid, RO = Ralph Orchestrator, GSD = Get Shit Done
 | **Rate Limiting** | Built-in (100/hour default) | N/A | N/A |
 | **Timeout** | 15 min/iteration | N/A | idle_timeout_secs |
 | **Git Integration** | Commit per story | Atomic commit per task | External |
-| **Hooks System** | pre/post run, iteration, completion | Phase lifecycle | Event pub/sub |
+| **Callbacks System** | pre/post run, iteration, completion | Phase lifecycle | Event pub/sub |
 | **Amendment Workflow** | `/ralph-hybrid-amend` | Add/insert phases | Event emission |
 | **Monitoring** | tmux dashboard | `/gsd:progress` | Interactive TUI |
 | **State Persistence** | prd.json, progress.txt | STATE.md, config.json | scratchpad.md, memories.md |
@@ -721,11 +721,11 @@ if ! npm test; then
 fi
 ```
 
-**Option B: Hook-based verification**
+**Option B: Callback-based verification**
 
-Use Ralph Hybrid's existing hooks system:
+Use Ralph Hybrid's existing callbacks system:
 ```bash
-# .ralph-hybrid/{feature}/hooks/post_iteration.sh
+# .ralph-hybrid/{feature}/callbacks/post_iteration.sh
 #!/bin/bash
 
 # Run actual tests
@@ -843,7 +843,7 @@ Given your constraints (GitHub Issues as central, need real TDD enforcement):
 **Phase 1: Add backpressure to Ralph Hybrid**
 
 ```bash
-# .ralph-hybrid/hooks/post_iteration.sh
+# .ralph-hybrid/callbacks/post_iteration.sh
 #!/bin/bash
 set -e
 
@@ -917,13 +917,13 @@ This gives you real backpressure enforcement out of the box. If it works well, y
 1. **GSD covers full lifecycle** (outer + inner loop), while Ralph Hybrid and Ralph Orchestrator are inner-loop focused
 2. **Ralph Orchestrator's backpressure gates** solve the "Claude says done but tests didn't pass" problem
 3. **All three can work with GitHub Issues** - Ralph Hybrid natively, others via integration
-4. **Quick win**: Add verification hooks to Ralph Hybrid to enforce actual test execution
+4. **Quick win**: Add verification callbacks to Ralph Hybrid to enforce actual test execution
 
 ### Recommended Action Items
 
 | Priority | Action | Effort |
 |----------|--------|--------|
-| 1 | Add post_iteration.sh verification hook to Ralph Hybrid | Low |
+| 1 | Add post_iteration.sh verification callback to Ralph Hybrid | Low |
 | 2 | Test Ralph Orchestrator's TDD preset on one GTS feature | Medium |
 | 3 | Evaluate GSD for new projects needing full lifecycle management | Medium |
 | 4 | Consider contributing backpressure concept to Ralph Hybrid | High |

@@ -157,7 +157,7 @@ readonly RALPH_HYBRID_EXIT_TIMEOUT=124
 # Interrupt signal exit code (128 + SIGINT)
 readonly RALPH_HYBRID_EXIT_INTERRUPT=130
 
-# Verification failed exit code (for backpressure hooks)
+# Verification failed exit code (for backpressure callbacks)
 # Distinct from general errors to enable circuit breaker handling
 readonly RALPH_HYBRID_EXIT_VERIFICATION_FAILED=75
 
@@ -194,7 +194,7 @@ readonly RALPH_HYBRID_LOGS_DIR_NAME="logs"
 readonly RALPH_HYBRID_SPECS_DIR_NAME="specs"
 
 # Hooks directory name
-readonly RALPH_HYBRID_HOOKS_DIR_NAME="hooks"
+readonly RALPH_HYBRID_CALLBACKS_DIR_NAME="callbacks"
 
 # Default prompt template filename
 readonly RALPH_HYBRID_DEFAULT_PROMPT_TEMPLATE="prompt-tdd.md"

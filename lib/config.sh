@@ -33,7 +33,7 @@ RALPH_HYBRID_PROJECT_CONFIG="${RALPH_HYBRID_PROJECT_CONFIG:-.ralph-hybrid/config
 
 # Extract a value from a YAML file by key path
 # Supports simple key: value and up to three levels of nesting
-# Examples: "model", "defaults.max_iterations", "hooks.post_iteration.enabled"
+# Examples: "model", "defaults.max_iterations", "callbacks.post_iteration.enabled"
 # Usage: cfg_load_yaml_value "config.yaml" "defaults.max_iterations"
 cfg_load_yaml_value() {
     local file="$1"
@@ -96,9 +96,9 @@ cfg_load_yaml_value() {
             fi
         done < "$file"
     elif [[ $nesting_level -eq 2 ]]; then
-        # Three-level nesting (e.g., "hooks.post_iteration.enabled")
+        # Three-level nesting (e.g., "callbacks.post_iteration.enabled")
         # YAML structure:
-        #   hooks:                    <- section (0 indent)
+        #   callbacks:                    <- section (0 indent)
         #     post_iteration:         <- subsection (2 spaces)
         #       enabled: false        <- key (4 spaces)
         #     timeout: 60             <- sibling subsection (2 spaces, exits post_iteration)
@@ -251,9 +251,9 @@ cfg_load() {
     # Custom completion patterns (comma-separated in config)
     export RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS="${RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS:-$(cfg_get_value "completion.custom_patterns")}"
 
-    # Hooks enabled flag
-    export RALPH_HYBRID_HOOKS_ENABLED="${RALPH_HYBRID_HOOKS_ENABLED:-$(cfg_get_value "hooks.enabled")}"
-    export RALPH_HYBRID_HOOKS_ENABLED="${RALPH_HYBRID_HOOKS_ENABLED:-true}"
+    # Callbacks enabled flag
+    export RALPH_HYBRID_CALLBACKS_ENABLED="${RALPH_HYBRID_CALLBACKS_ENABLED:-$(cfg_get_value "callbacks.enabled")}"
+    export RALPH_HYBRID_CALLBACKS_ENABLED="${RALPH_HYBRID_CALLBACKS_ENABLED:-true}"
 
     # Display/Theme settings
     export RALPH_HYBRID_THEME="${RALPH_HYBRID_THEME:-$(cfg_get_value "display.theme")}"

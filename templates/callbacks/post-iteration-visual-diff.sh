@@ -1,17 +1,17 @@
 #!/bin/bash
 #
-# post-iteration-visual-diff.sh - Visual regression testing hook
+# post-iteration-visual-diff.sh - Visual regression testing callback
 #
 # Usage: post-iteration-visual-diff.sh [options]
 #
-# This hook runs after each Ralph iteration to:
+# This callback runs after each Ralph iteration to:
 #   1. Take screenshots of configured URLs
 #   2. Compare against baseline screenshots
 #   3. Report pixel difference percentage
 #   4. Fail if difference exceeds threshold
 #
 # Configuration (via environment variables):
-#   VISUAL_DIFF_ENABLED=true           Enable/disable the hook
+#   VISUAL_DIFF_ENABLED=true           Enable/disable the callback
 #   VISUAL_DIFF_BASELINE_URL=http://localhost:4321   Baseline URL (source framework)
 #   VISUAL_DIFF_COMPARISON_URL=http://localhost:8010 Comparison URL (target framework)
 #   VISUAL_DIFF_THRESHOLD=0.05         Maximum allowed pixel difference (0-1)
@@ -61,7 +61,7 @@ fi
 
 # Early exit if disabled
 if [[ "$ENABLED" != "true" ]]; then
-    echo "Visual diff hook: disabled" >&2
+    echo "Visual diff callback: disabled" >&2
     exit 0
 fi
 
@@ -130,7 +130,7 @@ main() {
     local failed=0
     local results=()
 
-    echo "Visual Diff Hook: Starting comparison" >&2
+    echo "Visual Diff Callback: Starting comparison" >&2
     echo "  Baseline: $BASELINE_URL" >&2
     echo "  Comparison: $COMPARISON_URL" >&2
     echo "  Threshold: $THRESHOLD" >&2
@@ -198,7 +198,7 @@ main() {
     # Output JSON report
     echo ""
     echo "{"
-    echo "  \"hook\": \"visual-diff\","
+    echo "  \"callback\": \"visual-diff\","
     echo "  \"baseline_url\": \"$BASELINE_URL\","
     echo "  \"comparison_url\": \"$COMPARISON_URL\","
     echo "  \"threshold\": $THRESHOLD,"

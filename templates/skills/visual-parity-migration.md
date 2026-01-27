@@ -133,7 +133,7 @@ Only translate framework syntax, never visual styling:
 
 ```bash
 # Run visual diff if configured
-./hooks/post-iteration-visual-diff.sh
+./callbacks/post-iteration-visual-diff.sh
 ```
 
 ### 3. Browser Console Check (Required)
@@ -232,7 +232,7 @@ Copy this checklist to each migration story's acceptance criteria:
 
 - `scripts/css-audit.sh` - Audit CSS variable usage vs definitions
 - `scripts/template-comparison.sh` - Compare source vs target class usage
-- `hooks/post-iteration-visual-diff.sh` - Visual regression testing
+- `callbacks/post-iteration-visual-diff.sh` - Visual regression testing
 
 ---
 

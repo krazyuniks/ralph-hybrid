@@ -28,7 +28,7 @@ source "${SCRIPT_DIR}/lib/rate_limiter.sh"
 source "${SCRIPT_DIR}/lib/exit_detection.sh"
 source "${SCRIPT_DIR}/lib/archive.sh"
 source "${SCRIPT_DIR}/lib/monitor.sh"
-source "${SCRIPT_DIR}/lib/hooks.sh"
+source "${SCRIPT_DIR}/lib/callbacks.sh"
 source "${SCRIPT_DIR}/lib/import.sh"
 source "${SCRIPT_DIR}/lib/lockfile.sh"
 source "${SCRIPT_DIR}/lib/log_filter.sh"
@@ -326,6 +326,10 @@ cmd_archive() {
             }
         fi
     fi
+
+    # Remind user about analyse command
+    echo ""
+    log_info "To analyse command efficiency, run: ralph-hybrid analyse-commands"
 
     return 0
 }
@@ -1978,46 +1982,46 @@ _setup_update_claude_md() {
 }
 
 #-----------------------------------------------------------------------------
-# Setup: Copy hook templates to project
+# Setup: Copy callback templates to project
 #-----------------------------------------------------------------------------
 
-_setup_copy_hook_templates() {
+_setup_copy_callback_templates() {
     local project_dir="$1"
     local ralph_home="${HOME}/.ralph-hybrid"
-    local hooks_src="${ralph_home}/templates/hooks"
-    local hooks_dest="${project_dir}/.ralph-hybrid/hooks"
+    local callbacks_src="${ralph_home}/templates/callbacks"
+    local callbacks_dest="${project_dir}/.ralph-hybrid/callbacks"
 
-    # Check if hook templates exist in ralph home
-    if [[ ! -d "$hooks_src" ]]; then
-        log_debug "No hook templates found in ${hooks_src}"
+    # Check if callback templates exist in ralph home
+    if [[ ! -d "$callbacks_src" ]]; then
+        log_debug "No callback templates found in ${callbacks_src}"
         return 0
     fi
 
-    # Create project-wide hooks directory
-    mkdir -p "$hooks_dest"
+    # Create project-wide callbacks directory
+    mkdir -p "$callbacks_dest"
 
-    # Copy hook templates (but don't overwrite existing)
+    # Copy callback templates (but don't overwrite existing)
     local copied=0
     local skipped=0
-    for hook_file in "${hooks_src}"/*.sh; do
-        if [[ -f "$hook_file" ]]; then
+    for callback_file in "${callbacks_src}"/*.sh; do
+        if [[ -f "$callback_file" ]]; then
             local filename
-            filename=$(basename "$hook_file")
-            if [[ -f "${hooks_dest}/${filename}" ]]; then
+            filename=$(basename "$callback_file")
+            if [[ -f "${callbacks_dest}/${filename}" ]]; then
                 skipped=$((skipped + 1))
             else
-                cp "$hook_file" "${hooks_dest}/${filename}"
-                chmod +x "${hooks_dest}/${filename}"
+                cp "$callback_file" "${callbacks_dest}/${filename}"
+                chmod +x "${callbacks_dest}/${filename}"
                 copied=$((copied + 1))
             fi
         fi
     done
 
     if [[ $copied -gt 0 ]]; then
-        log_info "Installed ${copied} hook template(s) to ${hooks_dest}/"
+        log_info "Installed ${copied} callback template(s) to ${callbacks_dest}/"
     fi
     if [[ $skipped -gt 0 ]]; then
-        log_debug "Skipped ${skipped} existing hook(s)"
+        log_debug "Skipped ${skipped} existing callback(s)"
     fi
 
     return 0
@@ -2144,8 +2148,8 @@ cmd_setup() {
     # Update .gitignore with ephemeral state files
     _setup_update_gitignore "$project_dir"
 
-    # Copy hook templates to project
-    _setup_copy_hook_templates "$project_dir"
+    # Copy callback templates to project
+    _setup_copy_callback_templates "$project_dir"
 
     # Copy skill templates to project
     _setup_copy_skill_templates "$project_dir"
@@ -2858,8 +2862,8 @@ run_validate_setup() {
     # Set up state directory for this feature
     export RALPH_HYBRID_STATE_DIR="${RUN_FEATURE_DIR}"
 
-    # Set up hooks directory
-    export RALPH_HYBRID_HOOKS_DIR="${RUN_FEATURE_DIR}/${RALPH_HYBRID_HOOKS_DIR_NAME}"
+    # Set up callbacks directory
+    export RALPH_HYBRID_CALLBACKS_DIR="${RUN_FEATURE_DIR}/${RALPH_HYBRID_CALLBACKS_DIR_NAME}"
     export RALPH_HYBRID_FEATURE_DIR="${RUN_FEATURE_DIR}"
     export RALPH_HYBRID_PRD_FILE="${RUN_PRD_FILE}"
 
@@ -2868,7 +2872,7 @@ run_validate_setup() {
         IFS=',' read -ra patterns <<< "$RALPH_HYBRID_CUSTOM_COMPLETION_PATTERNS"
         for pattern in "${patterns[@]}"; do
             pattern=$(echo "$pattern" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            [[ -n "$pattern" ]] && hk_add_completion_pattern "$pattern"
+            [[ -n "$pattern" ]] && cb_add_completion_pattern "$pattern"
         done
     fi
 
@@ -3236,8 +3240,8 @@ _run_handle_completion() {
     local exit_signal
     exit_signal=$(ed_check "$output" "$prd_file" "$passes_before")
 
-    # Also check custom completion patterns from hooks system
-    if [[ "$exit_signal" == "continue" ]] && hk_check_completion_patterns "$output"; then
+    # Also check custom completion patterns from callbacks system
+    if [[ "$exit_signal" == "continue" ]] && cb_check_completion_patterns "$output"; then
         # Custom pattern matched, but verify all stories are complete
         if prd_all_stories_complete "$prd_file"; then
             exit_signal="complete"
@@ -3248,7 +3252,7 @@ _run_handle_completion() {
 
     case "$exit_signal" in
         complete)
-            # Run backpressure verification hook before accepting completion
+            # Run backpressure verification callback before accepting completion
             if ! _run_backpressure_gate "$prd_file" "$passes_before"; then
                 # Backpressure verification failed - continue iteration
                 return 0
@@ -3256,9 +3260,9 @@ _run_handle_completion() {
 
             log_success "All stories complete!"
 
-            # Execute on_completion hooks
-            if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
-                hk_on_completion || log_warn "Some on_completion hooks failed"
+            # Execute on_completion callbacks
+            if [[ "${RALPH_HYBRID_CALLBACKS_ENABLED:-true}" == "true" ]]; then
+                cb_on_completion || log_warn "Some on_completion callbacks failed"
             fi
 
             if [[ "$RALPH_HYBRID_NO_ARCHIVE" != true ]]; then
@@ -3278,7 +3282,7 @@ _run_handle_completion() {
             return "$RALPH_HYBRID_EXIT_COMPLETE"  # Special code for completion
             ;;
         story_complete)
-            # Run backpressure verification hook before accepting story completion
+            # Run backpressure verification callback before accepting story completion
             if ! _run_backpressure_gate "$prd_file" "$passes_before"; then
                 # Backpressure verification failed - continue iteration
                 return 0
@@ -3322,16 +3326,16 @@ _run_handle_completion() {
     return 0
 }
 
-# Run backpressure verification gate (post_iteration hook)
+# Run backpressure verification gate (post_iteration callback)
 # This provides an additional verification layer on story completion.
-# Hooks can run tests, lint, or other checks to ensure quality.
+# Callbacks can run tests, lint, or other checks to ensure quality.
 #
 # Arguments:
 #   $1 - Path to prd.json file
 #   $2 - passes_before state (for rollback on failure)
 #
 # Returns:
-#   0 - Verification passed (or hook not configured)
+#   0 - Verification passed (or callback not configured)
 #   1 - Verification failed (story completion blocked)
 #
 # On failure:
@@ -3342,17 +3346,17 @@ _run_backpressure_gate() {
     local prd_file="$1"
     local passes_before="${2:-}"
 
-    # Check if hooks are enabled globally
-    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" != "true" ]]; then
-        log_debug "Hooks disabled globally, skipping backpressure gate"
+    # Check if callbacks are enabled globally
+    if [[ "${RALPH_HYBRID_CALLBACKS_ENABLED:-true}" != "true" ]]; then
+        log_debug "Callbacks disabled globally, skipping backpressure gate"
         return 0
     fi
 
-    # Check if post_iteration hook is enabled in config
+    # Check if post_iteration callback is enabled in config
     local post_iteration_enabled
-    post_iteration_enabled=$(cfg_get_value "hooks.post_iteration.enabled")
+    post_iteration_enabled=$(cfg_get_value "callbacks.post_iteration.enabled")
     if [[ "$post_iteration_enabled" == "false" ]]; then
-        log_debug "Post-iteration hook disabled in config, skipping backpressure gate"
+        log_debug "Post-iteration callback disabled in config, skipping backpressure gate"
         return 0
     fi
 
@@ -3367,34 +3371,34 @@ _run_backpressure_gate() {
     local story_id
     story_id=$(deps_jq -r '(.userStories[] | select(.passes == false) | .id) // (.userStories[-1].id) // "unknown"' "$prd_file" 2>/dev/null || echo "unknown")
 
-    # Check if hook exists before running
-    if ! hook_exists "post_iteration" "$feature_dir"; then
-        log_debug "No post_iteration hook found, skipping backpressure gate"
+    # Check if callback exists before running
+    if ! callback_exists "post_iteration" "$feature_dir"; then
+        log_debug "No post_iteration callback found, skipping backpressure gate"
         return 0
     fi
 
-    # Load hook timeout from config if available
-    local hook_timeout
-    hook_timeout=$(cfg_get_value "hooks.timeout")
-    if [[ -n "$hook_timeout" ]]; then
-        export RALPH_HYBRID_HOOK_TIMEOUT="$hook_timeout"
+    # Load callback timeout from config if available
+    local callback_timeout
+    callback_timeout=$(cfg_get_value "callbacks.timeout")
+    if [[ -n "$callback_timeout" ]]; then
+        export RALPH_HYBRID_CALLBACK_TIMEOUT="$callback_timeout"
     fi
 
-    log_info "Running backpressure verification hook..."
+    log_info "Running backpressure verification callback..."
 
-    # Run the post_iteration hook
-    local hook_exit_code=0
-    run_hook "post_iteration" "$story_id" "$iteration" "$feature_dir" "$log_file" || hook_exit_code=$?
+    # Run the post_iteration callback
+    local callback_exit_code=0
+    run_callback "post_iteration" "$story_id" "$iteration" "$feature_dir" "$log_file" || callback_exit_code=$?
 
-    if [[ $hook_exit_code -eq 0 ]]; then
+    if [[ $callback_exit_code -eq 0 ]]; then
         log_info "Backpressure verification passed"
         return 0
     fi
 
-    # Hook failed - handle based on exit code
-    if [[ $hook_exit_code -eq 75 ]]; then
+    # Callback failed - handle based on exit code
+    if [[ $callback_exit_code -eq 75 ]]; then
         # VERIFICATION_FAILED - tests/lint/etc. failed
-        log_error "Backpressure verification FAILED (hook returned VERIFICATION_FAILED)"
+        log_error "Backpressure verification FAILED (callback returned VERIFICATION_FAILED)"
         log_error "Story completion blocked - Claude should fix issues and retry"
 
         # Save error feedback for next iteration
@@ -3402,7 +3406,7 @@ _run_backpressure_gate() {
 Backpressure Verification Failed
 =================================
 
-The post-iteration verification hook failed. This typically means:
+The post-iteration verification callback failed. This typically means:
 - Tests did not pass
 - Linting checks failed
 - Type checking failed
@@ -3411,7 +3415,7 @@ The post-iteration verification hook failed. This typically means:
 Your implementation does not meet the project's quality standards.
 You MUST fix all issues before the story can be marked as complete.
 
-Review the hook output above for specific errors to fix.
+Review the callback output above for specific errors to fix.
 EOF
         log_warn "Error feedback saved to ${feature_dir}/last_error.txt"
 
@@ -3429,9 +3433,9 @@ EOF
 
         return 1
     else
-        # Other hook error (non-75)
-        log_warn "Backpressure hook failed with exit code $hook_exit_code (infrastructure error)"
-        log_warn "Allowing story completion despite hook failure"
+        # Other callback error (non-75)
+        log_warn "Backpressure callback failed with exit code $callback_exit_code (infrastructure error)"
+        log_warn "Allowing story completion despite callback failure"
         # Infrastructure errors don't block completion - only VERIFICATION_FAILED does
         return 0
     fi
@@ -3474,12 +3478,12 @@ _run_iteration() {
     # Start background countdown timer updater
     _start_countdown_timer "$timer_row" "$iteration_start_time" "$RALPH_HYBRID_TIMEOUT_MINUTES" "$term_width"
 
-    # Export iteration number for hooks
+    # Export iteration number for callbacks
     export RALPH_HYBRID_ITERATION="$iteration"
 
-    # Execute pre_iteration hooks
-    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
-        hk_pre_iteration || log_warn "Some pre_iteration hooks failed"
+    # Execute pre_iteration callbacks
+    if [[ "${RALPH_HYBRID_CALLBACKS_ENABLED:-true}" == "true" ]]; then
+        cb_pre_iteration || log_warn "Some pre_iteration callbacks failed"
     fi
 
     # Check circuit breaker
@@ -3487,10 +3491,10 @@ _run_iteration() {
         _stop_countdown_timer  # Stop timer before early return
         log_error "Circuit breaker tripped! Stopping loop."
         cb_get_status
-        # Execute on_error hooks
-        if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
+        # Execute on_error callbacks
+        if [[ "${RALPH_HYBRID_CALLBACKS_ENABLED:-true}" == "true" ]]; then
             export RALPH_HYBRID_ERROR_TYPE="circuit_breaker"
-            hk_on_error || log_warn "Some on_error hooks failed"
+            cb_on_error || log_warn "Some on_error callbacks failed"
             unset RALPH_HYBRID_ERROR_TYPE
         fi
         return 1
@@ -3551,9 +3555,9 @@ _run_iteration() {
                 log_success "All stories complete (detected after timeout)!"
                 cb_save_state
 
-                # Execute on_completion hooks
-                if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
-                    hk_on_completion || log_warn "Some on_completion hooks failed"
+                # Execute on_completion callbacks
+                if [[ "${RALPH_HYBRID_CALLBACKS_ENABLED:-true}" == "true" ]]; then
+                    cb_on_completion || log_warn "Some on_completion callbacks failed"
                 fi
 
                 if [[ "$RALPH_HYBRID_NO_ARCHIVE" != true ]]; then
@@ -3619,9 +3623,9 @@ _run_iteration() {
         echo "--- End Output ---"
     fi
 
-    # Execute post_iteration hooks
-    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
-        hk_post_iteration || log_warn "Some post_iteration hooks failed"
+    # Execute post_iteration callbacks
+    if [[ "${RALPH_HYBRID_CALLBACKS_ENABLED:-true}" == "true" ]]; then
+        cb_post_iteration || log_warn "Some post_iteration callbacks failed"
     fi
 
     return 0  # Continue to next iteration
@@ -3693,27 +3697,27 @@ _run_check_already_complete() {
 }
 
 #=============================================================================
-# Run Command - Private Helper: Exit with Hooks
+# Run Command - Private Helper: Exit with Callbacks
 #=============================================================================
 
-# Execute post_run hooks with status and release lock
+# Execute post_run callbacks with status and release lock
 # Arguments: status (complete|error|user_exit), [error_type]
 # Returns: appropriate exit code
-_run_exit_with_hooks() {
+_run_exit_with_callbacks() {
     local status="$1"
     local error_type="${2:-}"
 
-    # Execute on_error hooks if error type specified
-    if [[ -n "$error_type" ]] && [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
+    # Execute on_error callbacks if error type specified
+    if [[ -n "$error_type" ]] && [[ "${RALPH_HYBRID_CALLBACKS_ENABLED:-true}" == "true" ]]; then
         export RALPH_HYBRID_ERROR_TYPE="$error_type"
-        hk_on_error || log_warn "Some on_error hooks failed"
+        cb_on_error || log_warn "Some on_error callbacks failed"
         unset RALPH_HYBRID_ERROR_TYPE
     fi
 
-    # Execute post_run hooks
-    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
+    # Execute post_run callbacks
+    if [[ "${RALPH_HYBRID_CALLBACKS_ENABLED:-true}" == "true" ]]; then
         export RALPH_HYBRID_RUN_STATUS="$status"
-        hk_post_run || log_warn "Some post_run hooks failed"
+        cb_post_run || log_warn "Some post_run callbacks failed"
         unset RALPH_HYBRID_RUN_STATUS
     fi
 
@@ -3741,9 +3745,9 @@ _run_main_loop() {
     # Initialize monitor status
     mon_write_status 0 "starting" 0 0 0 0 ""
 
-    # Execute pre_run hooks
-    if [[ "${RALPH_HYBRID_HOOKS_ENABLED:-true}" == "true" ]]; then
-        hk_pre_run || log_warn "Some pre_run hooks failed"
+    # Execute pre_run callbacks
+    if [[ "${RALPH_HYBRID_CALLBACKS_ENABLED:-true}" == "true" ]]; then
+        cb_pre_run || log_warn "Some pre_run callbacks failed"
     fi
 
     log_info "Starting Ralph loop for feature: ${RUN_FEATURE_NAME}"
@@ -3770,17 +3774,17 @@ _run_main_loop() {
                 ;;
             "$RALPH_HYBRID_EXIT_ERROR")
                 mon_mark_error "$RUN_PRD_FILE"
-                _run_exit_with_hooks "error"
+                _run_exit_with_callbacks "error"
                 return $?
                 ;;
             "$RALPH_HYBRID_EXIT_USER")
                 mon_iteration_end "$iteration" "$RUN_PRD_FILE" "paused" "$_current_story_id"
-                _run_exit_with_hooks "user_exit"
+                _run_exit_with_callbacks "user_exit"
                 return $?
                 ;;
             "$RALPH_HYBRID_EXIT_COMPLETE")
                 mon_mark_complete "$RUN_PRD_FILE"
-                _run_exit_with_hooks "complete"
+                _run_exit_with_callbacks "complete"
                 return $?
                 ;;
         esac
@@ -3789,7 +3793,7 @@ _run_main_loop() {
     # Max iterations reached
     mon_mark_error "$RUN_PRD_FILE"
     log_error "Max iterations (${RALPH_HYBRID_MAX_ITERATIONS}) reached without completion."
-    _run_exit_with_hooks "error" "max_iterations"
+    _run_exit_with_callbacks "error" "max_iterations"
     return $?
 }
 
@@ -3837,7 +3841,7 @@ cmd_run() {
         return 1
     fi
 
-    # Run main loop (handles its own exit with hooks)
+    # Run main loop (handles its own exit with callbacks)
     _run_main_loop "$timeout_cmd"
 }
 

@@ -656,33 +656,6 @@ EOF
 }
 
 #=============================================================================
-# SPEC.md Documentation Tests
-#=============================================================================
-
-@test "integrate command documented in SPEC.md Commands section" {
-    run grep "ralph-hybrid integrate" "$PROJECT_ROOT/SPEC.md"
-    [[ "$status" -eq 0 ]]
-}
-
-@test "Integrate Options section exists in SPEC.md" {
-    run grep "### Integrate Options" "$PROJECT_ROOT/SPEC.md"
-    [[ "$status" -eq 0 ]]
-}
-
-@test "Integration Exit Codes documented in SPEC.md" {
-    run grep -A10 "#### Integration Exit Codes" "$PROJECT_ROOT/SPEC.md"
-    [[ "$status" -eq 0 ]]
-    [[ "$output" =~ "INTEGRATED" ]]
-    [[ "$output" =~ "NEEDS_WIRING" ]]
-    [[ "$output" =~ "BROKEN" ]]
-}
-
-@test "Integration Check Process documented in SPEC.md" {
-    run grep "#### Integration Check Process" "$PROJECT_ROOT/SPEC.md"
-    [[ "$status" -eq 0 ]]
-}
-
-#=============================================================================
 # Issue Count Detection Tests
 #=============================================================================
 

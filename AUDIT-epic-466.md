@@ -331,7 +331,7 @@ Add to `base.html` `<style>` block:
 
 1. Create shared CSS variable file imported by both Astro and Jinja2
 2. Add visual regression tests to CI pipeline
-3. Add CSS variable linting to pre-commit hooks
+3. Add CSS variable linting to pre-commit callbacks
 
 ---
 
@@ -352,7 +352,7 @@ Add to `base.html` `<style>` block:
    - Enforce verbatim class copying
    - Require CSS variable definition check
 
-2. **Add pre-iteration hook** for visual epics
+2. **Add pre-iteration callback** for visual epics
    - Screenshot baseline before changes
    - Diff after each iteration
 

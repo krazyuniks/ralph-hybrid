@@ -24,7 +24,7 @@ Phase 1: SUMMARIZE    → Combine external context with user input
 Phase 1.5: ASSUMPTIONS → [Optional] Surface implicit assumptions (--list-assumptions flag)
 Phase 2: CLARIFY      → Ask targeted questions to fill gaps
 Phase 2.5: RESEARCH   → [Optional] Spawn research agents for topics (--research flag)
-Phase 3: ANALYZE      → Detect patterns requiring skills/scripts/hooks
+Phase 3: ANALYZE      → Detect patterns requiring skills/scripts/callbacks
 Phase 4: DRAFT        → Generate spec.md document
 Phase 5: DECOMPOSE    → Break spec into properly-sized stories
 Phase 6: GENERATE     → Create prd.json for Ralph execution
@@ -474,7 +474,7 @@ Proceeding to ANALYZE phase with research context...
 
 ## Phase 3: ANALYZE
 
-**Goal:** Detect patterns in the epic that require specialized skills, scripts, or hooks.
+**Goal:** Detect patterns in the epic that require specialized skills, scripts, or callbacks.
 
 ### Pattern Detection
 
@@ -483,7 +483,7 @@ Analyze the epic description, GitHub issue, and user responses for these pattern
 | Pattern | Indicators | Assets to Propose |
 |---------|------------|-------------------|
 | **Framework Migration** | "React → Jinja2", "Vue → Svelte", "migrate from X to Y" | visual-parity-migration skill, css-audit.sh, template-comparison.sh |
-| **Visual Parity** | "match existing", "same styling", "visual regression" | visual-parity-migration skill, post-iteration-visual-diff.sh hook |
+| **Visual Parity** | "match existing", "same styling", "visual regression" | visual-parity-migration skill, post-iteration-visual-diff.sh callback |
 | **API Changes** | "endpoint", "REST", "GraphQL", "routes" | endpoint-validation.sh script |
 | **Large Codebase** | >50 files affected, multiple subsystems | file-inventory.sh script |
 | **CSS/Styling** | "Tailwind", "CSS variables", "dark mode" | css-audit.sh script |
@@ -503,10 +503,10 @@ visual parity, match styling, same look, pixel perfect
 
 Scan for existing project-level assets:
 ```bash
-# Check for existing skills/scripts/hooks in project
+# Check for existing skills/scripts/callbacks in project
 ls -la .claude/skills/ 2>/dev/null || true
 ls -la .claude/scripts/ 2>/dev/null || true
-ls -la .claude/hooks/ 2>/dev/null || true
+ls -la .claude/callbacks/ 2>/dev/null || true
 ```
 
 If project already has relevant assets, propose reusing/extending them.
@@ -536,7 +536,7 @@ SCRIPTS:
   2. template-comparison.sh
      - Compares source vs target classes
 
-HOOKS:
+CALLBACKS:
   1. post-iteration-visual-diff.sh (optional)
      - Screenshot comparison after each iteration
      - Requires baseline URL
@@ -565,7 +565,7 @@ Create assets in the feature folder:
 ├── scripts/
 │   ├── css-audit.sh                  ← Customized for project
 │   └── template-comparison.sh        ← Customized for project
-└── hooks/
+└── callbacks/
     └── post-iteration-visual-diff.sh ← If visual parity enabled
 ```
 

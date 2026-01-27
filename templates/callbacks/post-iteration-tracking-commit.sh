@@ -2,21 +2,21 @@
 # post-iteration-tracking-commit.sh
 # Automatically commits ralph tracking files after each iteration.
 #
-# This hook eliminates the need for Claude to run:
+# This callback eliminates the need for Claude to run:
 #   git add .ralph-hybrid/ && git commit -m "chore: Update ralph tracking files"
 #
 # INSTALLATION:
-# 1. Copy to your project's .ralph-hybrid/{feature}/hooks/ directory
+# 1. Copy to your project's .ralph-hybrid/{feature}/callbacks/ directory
 # 2. Make executable: chmod +x post-iteration-tracking-commit.sh
-# 3. The hook runs automatically after each iteration
+# 3. The callback runs automatically after each iteration
 #
 # ENVIRONMENT VARIABLES (set by Ralph):
 # - RALPH_HYBRID_FEATURE_DIR: Path to feature directory
 # - RALPH_HYBRID_FEATURE_NAME: Feature name
 # - RALPH_HYBRID_ITERATION: Current iteration number
 #
-# NOTE: This hook runs AFTER Claude finishes but BEFORE the next iteration.
-# If Claude already committed the tracking files, this hook will do nothing.
+# NOTE: This callback runs AFTER Claude finishes but BEFORE the next iteration.
+# If Claude already committed the tracking files, this callback will do nothing.
 
 set -euo pipefail
 
