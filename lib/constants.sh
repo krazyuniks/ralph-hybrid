@@ -268,6 +268,7 @@ readonly _RALPH_HYBRID_COMPACT_TRUNCATE_THRESHOLD=500
 readonly RALPH_HYBRID_PROFILE_QUALITY="quality"
 readonly RALPH_HYBRID_PROFILE_BALANCED="balanced"
 readonly RALPH_HYBRID_PROFILE_BUDGET="budget"
+readonly RALPH_HYBRID_PROFILE_GLM="glm"
 
 # Default profile
 readonly RALPH_HYBRID_DEFAULT_PROFILE="balanced"
@@ -293,6 +294,12 @@ readonly RALPH_HYBRID_BUILTIN_BUDGET_PLANNING="sonnet"
 readonly RALPH_HYBRID_BUILTIN_BUDGET_EXECUTION="sonnet"
 readonly RALPH_HYBRID_BUILTIN_BUDGET_RESEARCH="haiku"
 readonly RALPH_HYBRID_BUILTIN_BUDGET_VERIFICATION="haiku"
+
+# GLM profile: glm for all phases
+readonly RALPH_HYBRID_BUILTIN_GLM_PLANNING="glm"
+readonly RALPH_HYBRID_BUILTIN_GLM_EXECUTION="glm"
+readonly RALPH_HYBRID_BUILTIN_GLM_RESEARCH="glm"
+readonly RALPH_HYBRID_BUILTIN_GLM_VERIFICATION="glm"
 
 #=============================================================================
 # Claude CLI Settings

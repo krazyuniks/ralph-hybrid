@@ -292,7 +292,7 @@ cfg_validate_profile() {
 
     # Check built-in profiles
     case "$profile" in
-        "$RALPH_HYBRID_PROFILE_QUALITY"|"$RALPH_HYBRID_PROFILE_BALANCED"|"$RALPH_HYBRID_PROFILE_BUDGET")
+        "$RALPH_HYBRID_PROFILE_QUALITY"|"$RALPH_HYBRID_PROFILE_BALANCED"|"$RALPH_HYBRID_PROFILE_BUDGET"|"$RALPH_HYBRID_PROFILE_GLM")
             return 0
             ;;
     esac
@@ -374,6 +374,14 @@ cfg_get_profile_model() {
                 execution)    echo "$RALPH_HYBRID_BUILTIN_BUDGET_EXECUTION" ;;
                 research)     echo "$RALPH_HYBRID_BUILTIN_BUDGET_RESEARCH" ;;
                 verification) echo "$RALPH_HYBRID_BUILTIN_BUDGET_VERIFICATION" ;;
+            esac
+            ;;
+        "$RALPH_HYBRID_PROFILE_GLM")
+            case "$phase" in
+                planning)     echo "$RALPH_HYBRID_BUILTIN_GLM_PLANNING" ;;
+                execution)    echo "$RALPH_HYBRID_BUILTIN_GLM_EXECUTION" ;;
+                research)     echo "$RALPH_HYBRID_BUILTIN_GLM_RESEARCH" ;;
+                verification) echo "$RALPH_HYBRID_BUILTIN_GLM_VERIFICATION" ;;
             esac
             ;;
     esac

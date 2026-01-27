@@ -520,6 +520,7 @@ Present all settings in a single prompt for quick batch answers:
    A) quality - Opus for all phases (best quality, highest cost)
    B) balanced - Opus planning, Sonnet execution (recommended)
    C) budget - Sonnet execution, Haiku research (lowest cost)
+   D) glm - GLM for all phases
 
 2. **Dashboard** - Use tmux monitoring dashboard during execution?
    A) Yes - Show live progress in split panes

@@ -39,6 +39,7 @@ teardown() {
     [[ -n "${RALPH_HYBRID_PROFILE_QUALITY:-}" ]]
     [[ -n "${RALPH_HYBRID_PROFILE_BALANCED:-}" ]]
     [[ -n "${RALPH_HYBRID_PROFILE_BUDGET:-}" ]]
+    [[ -n "${RALPH_HYBRID_PROFILE_GLM:-}" ]]
 }
 
 #=============================================================================
@@ -166,6 +167,9 @@ EOF
 
     run cfg_validate_profile "budget"
     [[ "$status" -eq 0 ]]
+
+    run cfg_validate_profile "glm"
+    [[ "$status" -eq 0 ]]
 }
 
 @test "cfg_validate_profile returns 1 for invalid profile name" {
@@ -272,4 +276,33 @@ EOF
     [[ "$(cfg_get_profile_model "custom" "execution")" == "sonnet" ]]
     [[ "$(cfg_get_profile_model "custom" "research")" == "haiku" ]]
     [[ "$(cfg_get_profile_model "custom" "verification")" == "sonnet" ]]
+}
+
+#=============================================================================
+# GLM Profile Tests
+#=============================================================================
+
+@test "RALPH_HYBRID_PROFILE_GLM is defined" {
+    [[ -n "${RALPH_HYBRID_PROFILE_GLM:-}" ]]
+    [[ "$RALPH_HYBRID_PROFILE_GLM" == "glm" ]]
+}
+
+@test "cfg_validate_profile accepts glm profile" {
+    run cfg_validate_profile "glm"
+    [[ "$status" -eq 0 ]]
+}
+
+@test "cfg_get_profile_model returns glm for all phases of glm profile" {
+    rm -f "$TEST_DIR/.ralph-hybrid/config.yaml"
+
+    local planning_model execution_model research_model verification_model
+    planning_model=$(cfg_get_profile_model "glm" "planning")
+    execution_model=$(cfg_get_profile_model "glm" "execution")
+    research_model=$(cfg_get_profile_model "glm" "research")
+    verification_model=$(cfg_get_profile_model "glm" "verification")
+
+    [[ "$planning_model" == "glm" ]]
+    [[ "$execution_model" == "glm" ]]
+    [[ "$research_model" == "glm" ]]
+    [[ "$verification_model" == "glm" ]]
 }

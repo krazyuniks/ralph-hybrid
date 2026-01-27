@@ -54,6 +54,9 @@ teardown() {
 
     run cfg_validate_profile "budget"
     [[ "$status" -eq 0 ]]
+
+    run cfg_validate_profile "glm"
+    [[ "$status" -eq 0 ]]
 }
 
 @test "cfg_validate_profile rejects invalid profile names" {

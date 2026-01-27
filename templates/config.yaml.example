@@ -56,12 +56,11 @@ profiles:
     research: haiku
     verification: haiku
 
-  # Example custom profile using GLM:
-  # glm:
-  #   planning: glm
-  #   execution: glm
-  #   research: sonnet
-  #   verification: glm
+  glm:
+    planning: glm
+    execution: glm
+    research: glm
+    verification: glm
 
   # Example mixed profile with different AI tools:
   # mixed:
