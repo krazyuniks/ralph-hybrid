@@ -19,16 +19,21 @@ You have been given:
 - prd.json is provided above - read it to find first story where `passes: false`
 - That's your story - no need to explore or discover anything else
 
-### 2. Implement (FOCUS HERE - most of your work)
-- Directories already exist (scripts/, tests/, src/)
-- All configuration is already done
-- Just write the code for the story
+### 2. Read Project Documentation (REQUIRED - before implementation)
+
+**Before writing any code, read the project's documentation to understand its SDLC:**
+
+1. **Read CLAUDE.md** (or AGENTS.md) - Project-specific conventions, tooling, rules
+2. **Read README.md** - Project overview, setup, development workflow
+3. **Check for task runners** (justfile, Makefile, package.json scripts, etc.)
+
+**Every project has its own SDLC.** The documentation tells you how to run tests, linting, builds. Use what the project provides - don't guess.
 
 ### 3. Implement Using TDD
 
 **Test First:**
 1. Write failing test(s) that define the acceptance criteria
-2. Run tests to confirm they fail
+2. Run tests to confirm they fail (use project's test command)
 3. Implement minimum code to make tests pass
 4. Run tests to confirm they pass
 5. Refactor if needed (tests must stay green)
@@ -38,24 +43,11 @@ You have been given:
 **You MUST run quality checks before committing.** Skipping this causes CI failures.
 
 **Steps:**
-1. **Discover project tooling** (first iteration only):
-   - Check `package.json` for `scripts` (lint, typecheck, test)
-   - Check `pyproject.toml` for ruff, mypy, pytest config
-   - Check `Makefile` for lint/check targets
-   - Check `.pre-commit-config.yaml` for callbacks
+1. **Use the project's tooling** - You learned this from step 2 (reading docs)
+2. **Check prd.json for successCriteria.command** - If defined, run that command
+3. **Fix any issues** before proceeding to commit
 
-2. **Run all quality checks:**
-   ```bash
-   # Examples (run what applies to this project):
-   npm run lint && npm run typecheck    # Node.js/TypeScript
-   ruff check . && mypy .               # Python
-   go vet ./... && go test ./...        # Go
-   cargo clippy && cargo test           # Rust
-   ```
-
-3. **Fix any issues** before proceeding to commit.
-
-**If you skip this step:** Ralph runs read-only quality checks after you commit. If they fail, you'll see "⚠️ PREVIOUS ATTEMPT FAILED" with exact errors and must fix them. Save time by running checks yourself first.
+**If you skip this step:** Ralph runs quality checks after you commit. If they fail, you'll see "⚠️ PREVIOUS ATTEMPT FAILED" and must fix them.
 
 ### 5. Commit & Update
 
@@ -65,9 +57,15 @@ You have been given:
    git commit -m "feat: [STORY-ID] - [Story Title]"
    ```
 
-2. **Update prd.json:**
-   - Set `passes: true` for the completed story
-   - Add brief notes if relevant
+2. **Update prd.json** (CRITICAL - use jq, NOT Edit tool):
+   ```bash
+   # NEVER use Edit tool on prd.json - it can overwrite other stories with stale content
+   # jq reads the current file state, so it's safe
+   PRD_FILE=$(find .ralph-hybrid -name "prd.json" -type f | head -1)
+   jq '(.userStories[] | select(.id == "STORY-XXX")) |= (.passes = true | .notes = "Your notes here")' \
+     "$PRD_FILE" > /tmp/prd.json && mv /tmp/prd.json "$PRD_FILE"
+   ```
+   Replace STORY-XXX with your story ID. The jq command only modifies the matching story, preserving all other stories.
 
 3. **Update progress.txt** (use iteration/timestamp from context above):
    ```
