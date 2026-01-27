@@ -1,6 +1,7 @@
 {
   "description": "A description of what this feature accomplishes",
   "createdAt": "2026-01-09T12:00:00Z",
+  "profile": "balanced",
   "successCriteria": {
     "command": "pytest tests/e2e",
     "timeout": 600

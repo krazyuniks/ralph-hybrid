@@ -304,7 +304,14 @@ If assumptions were surfaced, the CLARIFY phase uses them:
    - "What command validates this feature works?" (e.g., `pytest tests/`, `npm test`, `cargo test`)
    - "What timeout is appropriate for this validation?" (default: 300 seconds)
 
-7. **UX Decisions (REQUIRED for any UI work)**
+7. **Execution Profile** (REQUIRED)
+   - "Which model profile should Ralph use for execution?"
+     - A) **quality** - Opus for all phases (best quality, highest cost)
+     - B) **balanced** - Opus for planning, Sonnet for execution (recommended)
+     - C) **budget** - Sonnet for execution, Haiku for research (lowest cost)
+   - Store the chosen profile in prd.json
+
+8. **UX Decisions (REQUIRED for any UI work)**
    - "Navigation: flat visible links or dropdown menus?"
    - "Forms: inline validation or submit-time validation?"
    - "Confirmations: modal dialogs or inline prompts?"
@@ -823,6 +830,7 @@ For each story during decomposition:
 {
   "description": "{from spec Problem Statement}",
   "createdAt": "{ISO-8601}",
+  "profile": "{quality|balanced|budget}",  // From CLARIFY phase - controls execution model
   "successCriteria": {                    // OPTIONAL: Only include if user provided during CLARIFY
     "command": "{user's validation command}",
     "timeout": {timeout_seconds}          // Default: 300
@@ -1094,6 +1102,10 @@ Files:
   ├── progress.txt     # Ready for iterations
   └── PLAN-REVIEW.md   # Verification: {READY|NEEDS_REVISION|BLOCKED|SKIPPED}
 
+Configuration:
+  Profile: {quality|balanced|budget} ({description of what models will be used})
+  Success criteria: {command if provided, or "not set"}
+
 Plan Status: {READY ✓ | NEEDS_REVISION ⚠ | BLOCKED ✗ | NOT_VERIFIED}
 
 {If READY:}
@@ -1108,13 +1120,12 @@ Plan Status: {READY ✓ | NEEDS_REVISION ⚠ | BLOCKED ✗ | NOT_VERIFIED}
 {If NOT_VERIFIED (--skip-verify):}
   Verification was skipped. Consider running verification before execution.
 
-Next steps:
-  1. Review spec.md and prd.json
-  2. Run: ralph-hybrid run
+───────────────────────────────────────────────────────────────
+Ready to execute. Run:
 
-IMPORTANT: The command is exactly `ralph-hybrid run` - do NOT substitute with
-project-specific commands like `/execute`, `npm run dev`, or any other
-command. The Ralph development loop is initiated with `ralph-hybrid run` only.
+    ralph-hybrid run
+
+───────────────────────────────────────────────────────────────
 
 To modify: Edit spec.md, then run /ralph-hybrid-plan --regenerate
 ═══════════════════════════════════════════════════════════════

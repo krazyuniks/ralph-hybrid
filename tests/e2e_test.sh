@@ -96,6 +96,15 @@ else
     fail "PRD parsing failed (got $story_count stories)"
 fi
 
+# Test 6b: PRD profile field
+info "Test 6b: PRD profile field"
+profile=$(jq -r '.profile // ""' .ralph-hybrid/test-feature/prd.json 2>/dev/null)
+if [[ "$profile" == "balanced" ]]; then
+    pass "PRD has profile field"
+else
+    fail "PRD profile field missing or wrong (got '$profile')"
+fi
+
 # Test 7: Run loop with haiku model (requires claude CLI)
 info "Test 7: Run loop with haiku (requires claude CLI)"
 if ! command -v claude &>/dev/null; then

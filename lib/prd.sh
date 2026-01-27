@@ -121,6 +121,14 @@ prd_get_current_story_model() {
     deps_jq -r '[.userStories[] | select(.passes == false)][0].model // ""' "$file"
 }
 
+# Get profile from prd.json (top-level field)
+# Returns empty string if not specified
+# Usage: prd_get_profile "prd.json"
+prd_get_profile() {
+    local file="$1"
+    deps_jq -r '.profile // ""' "$file"
+}
+
 # Get MCP servers for current story (first incomplete story)
 # Returns JSON value: null if not specified, [] if explicitly empty, or array of servers
 # Usage: prd_get_current_story_mcp_servers "prd.json"

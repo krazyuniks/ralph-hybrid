@@ -2961,8 +2961,9 @@ _run_invoke_claude() {
     # AI command selection priority:
     # 1. Story-level model (from prd.json story.model field)
     # 2. CLI --model flag
-    # 3. Profile's execution model (from --profile or config)
-    # 4. Default AI command
+    # 3. prd.json profile (set during planning)
+    # 4. CLI --profile flag / env var
+    # 5. Default AI command
     local ai_cmd=""
     if [[ -n "$story_model" ]]; then
         ai_cmd="$story_model"
@@ -2970,10 +2971,22 @@ _run_invoke_claude() {
     elif [[ -n "${RALPH_HYBRID_MODEL:-}" ]]; then
         ai_cmd="$RALPH_HYBRID_MODEL"
         log_debug "Using CLI AI command: $RALPH_HYBRID_MODEL"
-    elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
-        ai_cmd=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "execution")
-        if [[ -n "$ai_cmd" ]]; then
-            log_debug "Using profile '$RALPH_HYBRID_PROFILE' execution command: $ai_cmd"
+    else
+        # Check prd.json for profile (set during planning)
+        local prd_profile=""
+        if [[ -f "$RUN_PRD_FILE" ]]; then
+            prd_profile=$(prd_get_profile "$RUN_PRD_FILE")
+        fi
+        if [[ -n "$prd_profile" ]]; then
+            ai_cmd=$(cfg_get_profile_model "$prd_profile" "execution")
+            if [[ -n "$ai_cmd" ]]; then
+                log_debug "Using prd.json profile '$prd_profile' execution command: $ai_cmd"
+            fi
+        elif [[ -n "${RALPH_HYBRID_PROFILE:-}" ]]; then
+            ai_cmd=$(cfg_get_profile_model "$RALPH_HYBRID_PROFILE" "execution")
+            if [[ -n "$ai_cmd" ]]; then
+                log_debug "Using CLI profile '$RALPH_HYBRID_PROFILE' execution command: $ai_cmd"
+            fi
         fi
     fi
     # Fall back to default

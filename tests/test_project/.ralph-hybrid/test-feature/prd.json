@@ -1,6 +1,7 @@
 {
   "description": "Test feature for ralph-hybrid e2e testing",
   "createdAt": "2024-01-01T00:00:00Z",
+  "profile": "balanced",
   "userStories": [
     {
       "id": "STORY-001",

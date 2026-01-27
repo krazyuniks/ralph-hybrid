@@ -289,3 +289,84 @@ EOF
     model=$(prd_get_current_story_model "$TEST_DIR/prd.json")
     [[ -z "$model" ]]
 }
+
+#=============================================================================
+# prd_get_profile Tests (top-level profile field)
+#=============================================================================
+
+@test "prd_get_profile returns profile when set in prd.json" {
+    cat > "$TEST_DIR/prd.json" << 'EOF'
+{
+    "description": "Test feature",
+    "profile": "quality",
+    "userStories": [
+        {"id": "STORY-001", "title": "Test", "passes": false}
+    ]
+}
+EOF
+
+    local profile
+    profile=$(prd_get_profile "$TEST_DIR/prd.json")
+    [[ "$profile" == "quality" ]]
+}
+
+@test "prd_get_profile returns empty when profile not set" {
+    cat > "$TEST_DIR/prd.json" << 'EOF'
+{
+    "description": "Test feature",
+    "userStories": [
+        {"id": "STORY-001", "title": "Test", "passes": false}
+    ]
+}
+EOF
+
+    local profile
+    profile=$(prd_get_profile "$TEST_DIR/prd.json")
+    [[ -z "$profile" ]]
+}
+
+@test "prd_get_profile returns empty for null profile" {
+    cat > "$TEST_DIR/prd.json" << 'EOF'
+{
+    "description": "Test feature",
+    "profile": null,
+    "userStories": []
+}
+EOF
+
+    local profile
+    profile=$(prd_get_profile "$TEST_DIR/prd.json")
+    [[ -z "$profile" ]]
+}
+
+@test "prd.json profile takes precedence over CLI profile in model selection" {
+    # This tests the priority: story > CLI model > prd.json profile > CLI profile
+    cat > "$TEST_DIR/prd.json" << 'EOF'
+{
+    "profile": "quality",
+    "userStories": [
+        {"id": "STORY-001", "title": "Test", "passes": false}
+    ]
+}
+EOF
+
+    # Simulate selection logic from ralph-hybrid run
+    local story_model=""
+    local cli_model=""
+    local prd_profile
+    prd_profile=$(prd_get_profile "$TEST_DIR/prd.json")
+    local cli_profile="budget"
+
+    local effective_profile=""
+    if [[ -n "$story_model" ]]; then
+        effective_profile=""  # story model used directly, not profile
+    elif [[ -n "$cli_model" ]]; then
+        effective_profile=""  # CLI model used directly
+    elif [[ -n "$prd_profile" ]]; then
+        effective_profile="$prd_profile"  # prd.json profile wins
+    else
+        effective_profile="$cli_profile"
+    fi
+
+    [[ "$effective_profile" == "quality" ]]
+}
