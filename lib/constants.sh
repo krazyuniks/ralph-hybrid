@@ -312,6 +312,9 @@ readonly RALPH_HYBRID_DEFAULT_CLAUDE_CMD="sonnet"
 # Default permission mode for Claude CLI
 readonly RALPH_HYBRID_CLAUDE_PERMISSION_MODE="bypassPermissions"
 
+# Built-in MCP servers (always available in Claude Code, not shown in 'claude mcp list')
+readonly RALPH_HYBRID_BUILTIN_MCP_SERVERS="playwright chrome-devtools"
+
 # Output format for Claude CLI
 readonly RALPH_HYBRID_CLAUDE_OUTPUT_FORMAT="stream-json"
 

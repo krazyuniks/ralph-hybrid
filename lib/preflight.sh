@@ -417,9 +417,12 @@ pf_check_story_infrastructure() {
         esac
     done
 
-    # Check MCP servers - must be in 'claude mcp list'
+    # Check MCP servers - must be in 'claude mcp list' or be a built-in MCP
+    # Built-in MCPs are always available in Claude Code (packaged with it)
     local available_mcps
     available_mcps=$(claude mcp list 2>/dev/null | grep -oE '^[a-zA-Z0-9_-]+:' | sed 's/:$//' || true)
+    # Add built-in MCPs to available list
+    available_mcps=$(printf '%s\n%s' "$available_mcps" "$RALPH_HYBRID_BUILTIN_MCP_SERVERS" | tr ' ' '\n' | sort -u)
 
     local story_mcps
     story_mcps=$(jq -r '.userStories[].mcpServers[]? // empty' "$prd_file" 2>/dev/null | sort -u) || true

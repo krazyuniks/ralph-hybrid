@@ -533,7 +533,16 @@ Present all settings in a single prompt for quick batch answers:
 4. **Max iterations** - Safety limit for the development loop?
    Default: 20
 
-Your choices (e.g., "1B, 2A, 3: npm test, 4: 20"):
+5. **MCP Servers** - Which MCP servers should be available to ALL stories?
+   Available servers can be listed with: claude mcp list
+   Common options:
+   - chrome-devtools: Browser console, network inspection, UI validation
+   - playwright: E2E testing with python-playwright
+   - (none): No MCP servers (pure backend work)
+
+   Examples: "chrome-devtools, playwright" or "none"
+
+Your choices (e.g., "1B, 2A, 3: npm test, 4: 20, 5: chrome-devtools, playwright"):
 ```
 
 ### Store Settings:
@@ -552,6 +561,13 @@ max_iterations: 20
 successCriteria:
   command: "npm test"
   timeout: 300
+
+# MCP servers for all stories (optional)
+# If set, all stories get these servers unless individually overridden
+mcpServers:
+  - chrome-devtools
+  - playwright
+mcpNotes: "chrome-devtools for UI validation, playwright for E2E tests"
 ```
 
 ### Output:
@@ -563,6 +579,7 @@ successCriteria:
   Dashboard:        enabled (--monitor)
   Success criteria: npm test
   Max iterations:   20
+  MCP Servers:      chrome-devtools, playwright
 
 When you run `ralph-hybrid run`, these settings will be used automatically.
 You can still override with CLI flags (e.g., --profile quality).
@@ -861,56 +878,23 @@ STORY-004: Implement user login (blocked by STORY-003)
 
 Stories can specify custom model and MCP server configurations. This allows different stories to use different resources based on their needs.
 
-#### Story Categories and MCP Mapping
+#### MCP Configuration
 
-| Category | MCP Servers | Validation Methods |
-|----------|-------------|-------------------|
-| **Backend/Data** (models, APIs, business logic) | `[]` (none) | Unit tests, integration tests, shell commands |
-| **Documentation** (docs, specs, configs) | `[]` (none) | File existence, linting, format validation |
-| **UI Development** (components, styling, layouts) | `["chrome-devtools"]` | Console checks, network inspection, visual review |
-| **UI Testing** (E2E tests, user flows) | `["playwright"]` | Playwright test execution |
-| **UI Debugging** (fixing UI bugs, performance) | `["chrome-devtools"]` | Console logs, network tab, performance traces |
-
-#### MCP Modes
+MCP servers are configured at the **epic level** during the SETTINGS phase. All stories inherit the same MCP servers unless individually overridden.
 
 Three modes for MCP configuration per story:
 
-1. **No `mcpServers` field**: Uses global MCP config (all enabled servers available)
-2. **`mcpServers: []`**: Explicitly disables all MCP (--strict-mcp-config with empty config)
-3. **`mcpServers: ["playwright"]`**: Only specified servers available (--strict-mcp-config)
+1. **No `mcpServers` field**: Uses epic-level MCP config from SETTINGS phase
+2. **`mcpServers: []`**: Explicitly disables all MCP for this story
+3. **`mcpServers: ["specific"]`**: Override with specific servers for this story
 
-#### Planning Flow
+#### When to Override Individual Stories
 
-For each story during decomposition:
+Only override individual story MCP if there's a specific reason:
+- A backend-only story that definitely doesn't need browser tools
+- A story that needs a special MCP server not in the epic config
 
-1. **Classify the story type** based on description and acceptance criteria
-2. **Auto-suggest MCP servers** based on category
-3. **Optionally set model** (opus for complex, sonnet for simpler work)
-4. **Ensure acceptance criteria match MCP capabilities**:
-   - If AC mentions "console errors" → needs `chrome-devtools`
-   - If AC mentions "network requests" → needs `chrome-devtools`
-   - If AC mentions "E2E test" or "Playwright" → needs `playwright`
-   - If AC is pure code/tests → no MCP needed
-
-#### Acceptance Criteria Guidelines by MCP
-
-**No MCP (`mcpServers: []`):**
-- "Unit tests pass"
-- "Integration tests pass"
-- "API returns correct response"
-- "Data model validates"
-- "File exists and is valid"
-
-**Chrome DevTools (`mcpServers: ["chrome-devtools"]`):**
-- "No console errors"
-- "Network requests return 200"
-- "Performance trace shows no blocking calls"
-- "DOM element renders correctly"
-
-**Playwright (`mcpServers: ["playwright"]`):**
-- "E2E test passes"
-- "User can complete flow X"
-- "UI interaction test validates"
+**Default behaviour**: Apply the epic-level `mcpServers` from SETTINGS to all stories.
 
 ### Actions:
 1. Review each story for size

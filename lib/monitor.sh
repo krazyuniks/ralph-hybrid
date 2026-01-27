@@ -359,7 +359,20 @@ mon_start_dashboard() {
     # Create new tmux session in detached mode
     # Left pane: Ralph loop
     # Right pane: Monitor dashboard
-    deps_tmux new-session -d -s "$session_name" -x "${_RALPH_HYBRID_TMUX_WINDOW_WIDTH:-160}" -y "${_RALPH_HYBRID_TMUX_WINDOW_HEIGHT:-40}"
+    # Note: Unset TMUX to avoid issues when running inside existing tmux session
+    TMUX= deps_tmux new-session -d -s "$session_name" -x "${_RALPH_HYBRID_TMUX_WINDOW_WIDTH:-160}" -y "${_RALPH_HYBRID_TMUX_WINDOW_HEIGHT:-40}"
+
+    # Wait for session to be ready (avoids "can't find window" race condition)
+    local retries=10
+    while ! deps_tmux has-session -t "$session_name" 2>/dev/null && [[ $retries -gt 0 ]]; do
+        sleep 0.1
+        retries=$((retries - 1))
+    done
+
+    if [[ $retries -eq 0 ]]; then
+        log_error "Failed to create tmux session"
+        return 1
+    fi
 
     # Split window vertically (left/right)
     # Explicitly target window 0 to avoid "can't find window" errors
