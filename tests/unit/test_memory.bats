@@ -7,6 +7,16 @@ setup() {
     TEST_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)"
     PROJECT_ROOT="$(cd "$TEST_DIR/../.." && pwd)"
 
+    # Create temp directory for tests (before sourcing config.sh)
+    TEST_TEMP_DIR=$(mktemp -d)
+    TEST_PROJECT_ROOT="$TEST_TEMP_DIR/project"
+    TEST_FEATURE_DIR="$TEST_TEMP_DIR/project/.ralph-hybrid/test-feature"
+    mkdir -p "$TEST_FEATURE_DIR"
+
+    # Isolate from user's actual config files
+    export RALPH_HYBRID_GLOBAL_CONFIG="$TEST_TEMP_DIR/nonexistent-global-config.yaml"
+    export RALPH_HYBRID_PROJECT_CONFIG="$TEST_TEMP_DIR/nonexistent-project-config.yaml"
+
     # Source the library
     source "$PROJECT_ROOT/lib/constants.sh"
     source "$PROJECT_ROOT/lib/theme.sh"
@@ -14,12 +24,6 @@ setup() {
     source "$PROJECT_ROOT/lib/config.sh"
     source "$PROJECT_ROOT/lib/utils.sh"
     source "$PROJECT_ROOT/lib/memory.sh"
-
-    # Create temp directory for tests
-    TEST_TEMP_DIR=$(mktemp -d)
-    TEST_PROJECT_ROOT="$TEST_TEMP_DIR/project"
-    TEST_FEATURE_DIR="$TEST_TEMP_DIR/project/.ralph-hybrid/test-feature"
-    mkdir -p "$TEST_FEATURE_DIR"
 }
 
 # Teardown - clean up temp files

@@ -18,6 +18,20 @@ Users need secure access to their accounts. Currently there is no authentication
 - [ ] Sessions persist across page refresh (token storage)
 - [ ] Invalid credentials show appropriate error message
 
+## Verification
+
+The following command validates feature completion:
+
+```bash
+# Command to run before marking stories complete
+pytest tests/
+
+# Timeout (seconds) - how long to wait for validation
+# Default: 300
+```
+
+> **Note:** This is optional. If not specified here, use `--success-criteria` flag with `ralph-hybrid run` or configure in `.ralph-hybrid/config.yaml`.
+
 ## Execution Guidelines
 
 **Use background agents for parallel sub-tasks.** When implementing stories, use the Task tool with `run_in_background: true` to maximize throughput without cluttering the output stream:

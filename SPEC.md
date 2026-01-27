@@ -2417,13 +2417,39 @@ ralph-hybrid help
 
 ```
 tests/
+├── e2e_test.sh                              # End-to-end CLI tests
+├── test_project/                            # Example project for e2e tests
+│   └── .ralph-hybrid/test-feature/
+│       ├── prd.json
+│       ├── progress.txt
+│       └── spec.md
 ├── unit/
-│   ├── test_circuit_breaker.bats
-│   ├── test_rate_limiter.bats
-│   ├── test_exit_detection.bats
-│   └── test_utils.bats
+│   ├── test_adversarial_review.bats         # Adversarial review agent
+│   ├── test_ai_invoke.bats                  # AI invocation layer
+│   ├── test_assumption_lister.bats          # Assumption surfacing
+│   ├── test_code_archaeology.bats           # Code archaeology agent
+│   ├── test_command_analysis.bats           # Command analysis
+│   ├── test_command_log.bats                # Command logging
+│   ├── test_debug_agent.bats                # Debug agent
+│   ├── test_debug.bats                      # Debug command
+│   ├── test_decimal_ids.bats                # Decimal story IDs
+│   ├── test_hooks.bats                      # Hook system
+│   ├── test_hook_template.bats              # Hook templates
+│   ├── test_incident_response.bats          # Incident response
+│   ├── test_integrate.bats                  # Integration command
+│   ├── test_integration_checker.bats        # Integration checker
+│   ├── test_memory.bats                     # Memory system
+│   ├── test_plan_checker.bats               # Plan verification
+│   ├── test_profile_cli.bats                # Profile CLI flags
+│   ├── test_profiles.bats                   # Model profiles
+│   ├── test_research.bats                   # Research agents
+│   ├── test_research_planning.bats          # Research planning
+│   ├── test_success_criteria.bats           # Success criteria
+│   ├── test_verifier.bats                   # Verifier agent
+│   └── test_verify.bats                     # Verify command
 └── integration/
-    └── test_loop.bats
+    ├── test_backpressure_integration.bats   # Backpressure gates
+    └── test_plan_verification_integration.bats
 ```
 
 ### Test Cases
@@ -2467,10 +2493,34 @@ tests/
 
 ### Running Tests
 
+**Prerequisites**: Install BATS (Bash Automated Testing System)
 ```bash
-./run_tests.sh              # All tests
-bats tests/unit/            # Unit tests only
-bats tests/integration/     # Integration tests only
+sudo apt install bats       # Debian/Ubuntu
+brew install bats-core      # macOS
+```
+
+**Test Runner** (`./run_tests.sh`)
+```bash
+./run_tests.sh                    # All unit + integration tests
+./run_tests.sh --unit             # Unit tests only
+./run_tests.sh --integration      # Integration tests only
+./run_tests.sh profile            # Tests matching "profile"
+./run_tests.sh --unit decimal     # Unit tests matching "decimal"
+./run_tests.sh --verbose          # Verbose output
+./run_tests.sh --tap              # TAP format output
+./run_tests.sh --jobs 4           # Run 4 tests in parallel
+```
+
+**Direct BATS Usage**
+```bash
+bats tests/unit/                           # All unit tests
+bats tests/unit/test_profiles.bats         # Single test file
+bats tests/integration/                    # All integration tests
+```
+
+**E2E Tests** (requires claude CLI)
+```bash
+./tests/e2e_test.sh              # Run CLI e2e tests with example project
 ```
 
 ### Dependency Abstraction Layer (lib/deps.sh)

@@ -300,7 +300,11 @@ If assumptions were surfaced, the CLARIFY phase uses them:
    - "Does this depend on other features?"
    - "What external systems does it interact with?"
 
-6. **UX Decisions (REQUIRED for any UI work)**
+6. **Verification** (optional - user can skip)
+   - "What command validates this feature works?" (e.g., `pytest tests/`, `npm test`, `cargo test`)
+   - "What timeout is appropriate for this validation?" (default: 300 seconds)
+
+7. **UX Decisions (REQUIRED for any UI work)**
    - "Navigation: flat visible links or dropdown menus?"
    - "Forms: inline validation or submit-time validation?"
    - "Confirmations: modal dialogs or inline prompts?"
@@ -315,6 +319,16 @@ If assumptions were surfaced, the CLARIFY phase uses them:
 - Wait for response before next question
 - Offer multiple-choice where possible: "A) Option, B) Option, C) Something else"
 - Allow quick responses: "1A, 2C" for batch answers
+
+### Verification Question Guidance:
+- If user provides a command: Store for prd.json generation
+- If user skips: Note that success criteria will use defaults (config.yaml or CLI flag)
+- Suggest common patterns based on detected project type:
+  - Python: `pytest`, `python -m pytest tests/`
+  - Node.js: `npm test`, `yarn test`
+  - Rust: `cargo test`
+  - Go: `go test ./...`
+  - Generic: `make test`, `./run-tests.sh`
 
 ### Stop Conditions:
 - 5 questions asked
@@ -809,6 +823,10 @@ For each story during decomposition:
 {
   "description": "{from spec Problem Statement}",
   "createdAt": "{ISO-8601}",
+  "successCriteria": {                    // OPTIONAL: Only include if user provided during CLARIFY
+    "command": "{user's validation command}",
+    "timeout": {timeout_seconds}          // Default: 300
+  },
   "userStories": [
     {
       "id": "STORY-001",
@@ -831,6 +849,8 @@ For each story during decomposition:
 ```
 
 > **Note:** No `feature` or `branchName` fields - the feature is identified by the folder path, which is derived from the git branch.
+
+> **successCriteria is optional.** Only include if the user provided a validation command during CLARIFY. If omitted, Ralph will use config.yaml settings or the `--success-criteria` CLI flag at runtime.
 
 > **Per-story config fields are optional.** Only include `model` if overriding the default. Only include `mcpServers` if the story needs specific MCP tools (or `[]` to explicitly disable MCP).
 
@@ -909,6 +929,27 @@ The plan checker produces PLAN-REVIEW.md output with:
 - Verdict: READY, NEEDS_REVISION, or BLOCKED
 - Issue counts by severity (BLOCKER, WARNING, INFO)
 - Detailed issue descriptions and recommendations
+
+#### Step 2.5: Validate Success Criteria (if provided)
+
+If prd.json contains `successCriteria`, validate:
+
+1. **Command is not empty** - `successCriteria.command` must be a non-empty string
+2. **Timeout is reasonable** - `successCriteria.timeout` should be between 10 and 3600 seconds
+3. **Command looks valid** - Basic sanity check (not just whitespace, doesn't start with dangerous patterns)
+
+```
+[VERIFY] Checking success criteria...
+  ✓ Command: pytest tests/
+  ✓ Timeout: 300s (reasonable)
+```
+
+If validation fails, add to plan checker issues:
+```
+WARNING: Success criteria command is empty
+  → Set a valid command or remove successCriteria from prd.json
+  → Alternatively, use --success-criteria flag at runtime
+```
 
 #### Step 3: Process Verdict
 

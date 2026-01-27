@@ -102,12 +102,17 @@ ralph-hybrid run --model opus         # Or with specific model
 
 ## Testing
 
-Use BATS (Bash Automated Testing System). Test cases defined in SPEC.md section 13.
+Use BATS (Bash Automated Testing System). Test cases defined in SPEC.md section 20.
 
 ```bash
-bats tests/unit/
-bats tests/integration/
+./run_tests.sh                    # All tests (1100+ test cases)
+./run_tests.sh --unit             # Unit tests only
+./run_tests.sh --unit profile     # Filter by keyword
+./run_tests.sh --verbose          # Verbose output
+./tests/e2e_test.sh               # E2E tests (requires claude CLI)
 ```
+
+**Prerequisites**: `sudo apt install bats` or `brew install bats-core`
 
 ---
 
