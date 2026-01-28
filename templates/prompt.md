@@ -27,8 +27,10 @@ You have been given:
 1. Read existing code to understand patterns
 2. Implement the story following project conventions
 3. Write tests for your implementation
-4. Run quality checks (typecheck, lint, test)
-5. Fix any issues before committing
+4. Run only the tests you wrote for this story
+5. Fix any test failures before proceeding
+
+Do NOT run regression tests, lint, typecheck, or full test suites. Ralph runs those automatically after you mark the story complete.
 
 ### 4. Commit & Update
 
@@ -43,6 +45,7 @@ If all checks pass:
 2. **Update prd.json:**
    - Set `passes: true` for the completed story
    - Add any notes to the `notes` field
+   - Do NOT modify `successCriteria`, `gates`, or any other fields
 
 3. **Append to progress.txt:**
    ```
@@ -97,20 +100,14 @@ added or modified after initial planning via `/ralph-hybrid-amend`.
 
 **CRITICAL: You own ALL errors in the codebase, regardless of which story introduced them.**
 
-When quality checks fail (mypy, ruff, tests, etc.):
+When your tests fail:
 - You MUST investigate and fix the errors before marking ANY story complete
 - Do NOT skip fixes because "this error was from a previous story"
 - Do NOT document errors as "Known issues" to be "fixed in subsequent stories"
-- In fresh context iterations, "previous story" is meaningless - the bug exists NOW
 
-**There is no "not my bug" in this system.** If the codebase doesn't pass quality checks, it's YOUR responsibility to fix it THIS iteration, regardless of when the bug was introduced.
+**There is no "not my bug" in this system.** If your tests fail, fix them before proceeding.
 
-**If quality checks reveal errors:**
-1. Fix ALL errors before committing
-2. If the errors are outside your story's scope, still fix them
-3. Only proceed to commit when ALL quality checks pass
-
-**The rule "Never commit broken code" means exactly that** - if there are ANY errors (type errors, lint errors, test failures), you must fix them before committing, even if you didn't introduce them.
+**The rule "Never commit broken code" means exactly that** - if your tests fail, you must fix them before committing.
 
 ## If Blocked
 
