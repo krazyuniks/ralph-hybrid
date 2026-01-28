@@ -57,15 +57,15 @@ You have been given:
    git commit -m "feat: [STORY-ID] - [Story Title]"
    ```
 
-2. **Update prd.json** (CRITICAL - use jq, NOT Edit tool):
+2. **Update prd.json** (CRITICAL - use ONLY jq):
    ```bash
-   # NEVER use Edit tool on prd.json - it can overwrite other stories with stale content
-   # jq reads the current file state, so it's safe
+   # ONLY use jq - NEVER use Edit tool, Python scripts, or other methods
+   # Other methods can corrupt/truncate the file and lose stories!
    PRD_FILE=$(find .ralph-hybrid -name "prd.json" -type f | head -1)
    jq '(.userStories[] | select(.id == "STORY-XXX")) |= (.passes = true | .notes = "Your notes here")' \
      "$PRD_FILE" > /tmp/prd.json && mv /tmp/prd.json "$PRD_FILE"
    ```
-   Replace STORY-XXX with your story ID. The jq command only modifies the matching story, preserving all other stories.
+   Replace STORY-XXX with your story ID. **VERIFY the file still has all stories after update.**
 
 3. **Update progress.txt** (use iteration/timestamp from context above):
    ```
