@@ -90,7 +90,7 @@ pf_check_feature_folder() {
 
     if [[ ! -d "$feature_dir" ]]; then
         pf_error "Feature folder not found: ${feature_dir}"
-        pf_error "Run '/ralph-plan' in Claude Code to create the feature files."
+        pf_error "Run '/ralph-hybrid-plan' in Claude Code to create the feature files."
         return 1
     fi
 
