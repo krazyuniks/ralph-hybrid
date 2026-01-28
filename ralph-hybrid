@@ -101,7 +101,7 @@ Run Options:
   -m, --model CMD            AI command to use (opus, sonnet, haiku, glm, codex, gemini)
   --profile PROFILE          Model profile (quality, balanced, budget; default: balanced)
   --success-criteria CMD     Command that must pass before story completion
-  --external-state           Use external state directory (~/.ralph/projects/)
+  --legacy                   Use legacy .ralph-hybrid/ in-tree state (default: external)
 
 Archive Options:
   -y, --yes                  Skip confirmation for deferred work warnings
@@ -2538,9 +2538,9 @@ parse_run_args() {
                 RALPH_HYBRID_SUCCESS_CRITERIA_FROM_CLI=true
                 shift 2
                 ;;
-            --external-state)
-                RALPH_HYBRID_EXTERNAL_STATE=true
-                export RALPH_HYBRID_EXTERNAL_STATE
+            --legacy|--in-tree)
+                RALPH_HYBRID_LEGACY_STATE=true
+                export RALPH_HYBRID_LEGACY_STATE
                 shift
                 ;;
             -*)
@@ -4162,10 +4162,15 @@ cmd_run() {
     # Validate arguments and run preflight checks
     _run_validate_args "$@" || return 1
 
-    # Check for external state mode
-    if [[ "${RALPH_HYBRID_EXTERNAL_STATE:-}" == true ]]; then
-        cmd_run_external
-        return $?
+    # Default to external state mode unless --legacy flag is used
+    if [[ "${RALPH_HYBRID_LEGACY_STATE:-}" != true ]]; then
+        # Check if external state exists for this project/branch
+        if state_exists; then
+            cmd_run_external
+            return $?
+        fi
+        # Fall back to legacy mode if no external state found
+        log_debug "No external state found, using legacy mode"
     fi
 
     # Setup state (sets RUN_FEATURE_NAME, RUN_FEATURE_DIR, RUN_PRD_FILE)

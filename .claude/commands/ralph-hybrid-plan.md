@@ -15,7 +15,7 @@ Plan a new feature for Ralph Hybrid development. Guide the user through requirem
 | `--regenerate` | Regenerate prd.json from existing spec.md |
 | `--no-issue` | Skip GitHub issue lookup |
 | `--skip-verify` | Skip plan verification phase (not recommended) |
-| `--external-state` | Write state to ~/.ralph/projects/ instead of .ralph-hybrid/ (recommended) |
+| `--legacy` | Use legacy .ralph-hybrid/ in-tree state (default: external state at ~/.ralph/) |
 
 ## Workflow States
 
@@ -815,28 +815,34 @@ visual_regression:
 
 #### Step 1: Derive Feature Folder (CRITICAL)
 
-**IMPORTANT:** The folder location depends on the `--external-state` flag:
+**IMPORTANT:** External state is the DEFAULT. State is stored OUTSIDE the working tree where Claude cannot modify it.
 
-##### External State Mode (--external-state flag or RALPH_HYBRID_EXTERNAL_STATE=true)
+##### External State Mode (default)
 
-State is stored OUTSIDE the working tree where Claude cannot modify it:
+State is stored at `~/.ralph/projects/{repo-name}/{branch}/`:
 
 ```bash
 # Get project root and branch
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 
-# Generate project hash (8 characters of md5)
-PROJECT_HASH=$(echo "$PROJECT_ROOT" | md5sum | cut -c1-8)
+# Get repo name from git remote (or directory name as fallback)
+REPO_NAME=$(basename "$(git remote get-url origin 2>/dev/null || echo "$PROJECT_ROOT")" .git)
 
 # Sanitize branch name
 FOLDER_NAME=$(echo "$BRANCH" | tr '/' '-')
 
 # External state directory
-STATE_DIR="$HOME/.ralph/projects/${PROJECT_HASH}/${FOLDER_NAME}"
+STATE_DIR="$HOME/.ralph/projects/${REPO_NAME}/${FOLDER_NAME}"
 ```
 
-##### Legacy Mode (default - .ralph-hybrid/ in working tree)
+**Examples:**
+| Repo | Branch | State Directory |
+|------|--------|-----------------|
+| `ralph-hybrid` | `feature/42-auth` | `~/.ralph/projects/ralph-hybrid/feature-42-auth/` |
+| `my-app` | `603-improve-display` | `~/.ralph/projects/my-app/603-improve-display/` |
+
+##### Legacy Mode (--legacy flag)
 
 The folder name MUST be derived exactly from the git branch name. Do NOT invent a shorter or "cleaner" name.
 
@@ -862,7 +868,28 @@ FEATURE_DIR=".ralph-hybrid/${FOLDER_NAME}"
 
 **Why folder names matter:** `ralph-hybrid run` derives the folder from the branch name using the same logic. If you use a different name, `ralph-hybrid run` won't find your files.
 
-#### Step 2: Create directory if it doesn't exist
+#### Step 2: Create directory and initialize state
+
+**For external state mode:** Create the state directory structure and initialize progress.log:
+
+```bash
+# Create external state directory
+mkdir -p "$STATE_DIR/logs"
+
+# Initialize progress.log
+cat > "$STATE_DIR/progress.log" << EOF
+# Progress Log
+# Initialized: $(date -Iseconds)
+# State Directory: $STATE_DIR
+EOF
+
+# Add .ralph/ to .gitignore (working tree will get task.md during run)
+if ! grep -q '^\.ralph/$' .gitignore 2>/dev/null; then
+    echo '.ralph/' >> .gitignore
+fi
+```
+
+**For legacy mode:** Create the feature directory if it doesn't exist.
 
 #### Step 3: Generate `spec.md` using template (see below)
 
@@ -1367,7 +1394,7 @@ Plan Status: {READY ✓ | NEEDS_REVISION ⚠ | BLOCKED ✗ | NOT_VERIFIED}
 ───────────────────────────────────────────────────────────────
 Ready to execute. Run:
 
-    ralph-hybrid run --external-state
+    ralph-hybrid run
 
 ───────────────────────────────────────────────────────────────
 

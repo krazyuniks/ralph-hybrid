@@ -58,21 +58,32 @@ state_get_root_dir() {
     echo "${RALPH_STATE_DIR:-$STATE_DEFAULT_DIR}"
 }
 
-# Generate a hash for a project path
+# Get the project name from git remote or directory
 # Args: project_root_path
-# Returns: 8-character hash
-state_hash_project() {
+# Returns: Project name (e.g., "ralph-hybrid", "my-project")
+state_get_project_name() {
     local project_root="$1"
-    # Normalize path (resolve symlinks, remove trailing slash)
-    local normalized
-    normalized=$(cd "$project_root" 2>/dev/null && pwd -P) || normalized="$project_root"
-    # Generate short hash
-    echo "$normalized" | md5sum | cut -c1-8
+
+    # Try to get from git remote origin
+    local remote_url
+    remote_url=$(git -C "$project_root" remote get-url origin 2>/dev/null || echo "")
+
+    if [[ -n "$remote_url" ]]; then
+        # Extract repo name from URL
+        # Handles: git@github.com:user/repo.git, https://github.com/user/repo.git, etc.
+        local repo_name
+        repo_name=$(basename "$remote_url" .git)
+        echo "$repo_name"
+        return
+    fi
+
+    # Fall back to directory name
+    basename "$project_root"
 }
 
 # Get the project state directory for a given project and branch
 # Args: project_root branch_name
-# Returns: Path to ~/.ralph/projects/{hash}/{branch}
+# Returns: Path to ~/.ralph/projects/{project-name}/{branch}
 state_get_project_dir() {
     local project_root="$1"
     local branch="$2"
@@ -80,13 +91,13 @@ state_get_project_dir() {
     local state_root
     state_root=$(state_get_root_dir)
 
-    local hash
-    hash=$(state_hash_project "$project_root")
+    local project_name
+    project_name=$(state_get_project_name "$project_root")
 
     # Sanitize branch name: convert slashes to dashes
     local sanitized_branch="${branch//\//-}"
 
-    echo "${state_root}/projects/${hash}/${sanitized_branch}"
+    echo "${state_root}/projects/${project_name}/${sanitized_branch}"
 }
 
 # Get the project state directory for current working directory and branch
