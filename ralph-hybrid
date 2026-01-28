@@ -208,15 +208,36 @@ cmd_status() {
         return 1
     fi
 
-    # Get feature directory from current git branch
-    local feature_dir
-    feature_dir=$(get_feature_dir) || return 1
+    # Get current branch
+    local current_branch
+    current_branch=$(git branch --show-current 2>/dev/null || echo "")
+    if [[ -z "$current_branch" ]]; then
+        log_error "Not on a branch (detached HEAD)"
+        return 1
+    fi
 
-    local prd_file="${feature_dir}/prd.json"
+    local prd_file=""
+    local feature_name=""
+    local state_dir=""
+    local state_mode=""
 
-    # Get feature name from directory for display
-    local feature_name
-    feature_name=$(basename "$feature_dir")
+    # Check for external state first
+    if state_exists; then
+        state_mode="external"
+        local project_root
+        project_root=$(git rev-parse --show-toplevel)
+        state_dir=$(state_get_project_dir "$project_root" "$current_branch")
+        prd_file=$(state_get_prd_file "$state_dir")
+        feature_name=$(basename "$state_dir")
+    else
+        # Fall back to legacy in-tree state
+        state_mode="legacy"
+        local feature_dir
+        feature_dir=$(get_feature_dir) || return 1
+        prd_file="${feature_dir}/prd.json"
+        feature_name=$(basename "$feature_dir")
+        state_dir="$feature_dir"
+    fi
 
     if [[ ! -f "$prd_file" ]]; then
         log_error "prd.json not found for feature: ${feature_name}"
@@ -228,26 +249,25 @@ cmd_status() {
     total=$(prd_get_total_stories "$prd_file")
     passed=$(prd_get_passes_count "$prd_file")
 
-    # Get current branch (for display only - feature is derived from folder)
-    local current_branch
-    current_branch=$(git branch --show-current 2>/dev/null || echo "unknown")
-
     echo "=========================================="
     echo "Feature: ${feature_name}"
     echo "=========================================="
     echo "Stories: ${passed}/${total} complete"
-    echo "Current branch: ${current_branch}"
+    echo "Branch: ${current_branch}"
+    echo "State: ${state_mode} (${state_dir})"
     echo ""
 
-    # Show circuit breaker state if it exists
-    export RALPH_HYBRID_STATE_DIR="${feature_dir}"
-    if [[ -f "${feature_dir}/circuit_breaker.state" ]]; then
-        cb_load_state
-        cb_get_status
-    else
-        echo "Circuit Breaker: Not initialized"
+    # Show circuit breaker state if it exists (legacy mode only)
+    if [[ "$state_mode" == "legacy" ]]; then
+        export RALPH_HYBRID_STATE_DIR="${state_dir}"
+        if [[ -f "${state_dir}/circuit_breaker.state" ]]; then
+            cb_load_state
+            cb_get_status
+        else
+            echo "Circuit Breaker: Not initialized"
+        fi
+        echo ""
     fi
-    echo ""
 
     # Show stories
     echo "Stories:"
@@ -461,8 +481,12 @@ cmd_validate() {
         return 1
     fi
 
-    # Run all preflight checks (feature_dir auto-detected from branch)
-    pf_run_all_checks || return $?
+    # Check if external state exists - use appropriate preflight
+    if state_exists; then
+        pf_run_external_checks || return $?
+    else
+        pf_run_all_checks || return $?
+    fi
 
     # Run smoke tests if requested
     if [[ "$run_smoke" == true ]]; then
@@ -2577,9 +2601,16 @@ _run_validate_args() {
             return 1
         fi
 
-        # Run all preflight checks
-        if ! pf_run_all_checks; then
-            return 1
+        # Check if external state exists - use external preflight if so
+        if state_exists; then
+            if ! pf_run_external_checks; then
+                return 1
+            fi
+        else
+            # Fall back to legacy preflight
+            if ! pf_run_all_checks; then
+                return 1
+            fi
         fi
     fi
 
@@ -3978,6 +4009,9 @@ _run_external_iteration() {
     log_file=$(state_get_iteration_log "$state_dir" "$iteration")
     mkdir -p "$(dirname "$log_file")"
 
+    # Set RUN_PRD_FILE for _run_invoke_claude compatibility
+    RUN_PRD_FILE="$prd_file"
+
     # Invoke Claude
     _run_invoke_claude "$prompt_content" "$timeout_cmd" "$log_file" "$iteration"
 
@@ -4003,11 +4037,13 @@ _run_external_iteration() {
                 state_mark_story_complete "$prd_file" "$story_id" "Completed in iteration $iteration"
                 state_log_story_complete "$state_dir" "$story_id"
 
-                # Rebase main
+                # Rebase onto main - hard stop if this fails
                 log_info "Rebasing onto origin/main..."
-                (cd "$project_root" && git fetch origin main && git rebase origin/main) || {
-                    log_warn "Rebase failed - may need manual intervention"
-                }
+                if ! (cd "$project_root" && git fetch origin main && git rebase origin/main); then
+                    log_error "Rebase failed - manual intervention required"
+                    state_log_error "$state_dir" "Rebase onto origin/main failed"
+                    return "$RALPH_HYBRID_EXIT_ERROR"
+                fi
 
                 # Check if all stories complete
                 if state_all_stories_complete "$prd_file"; then

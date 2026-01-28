@@ -448,6 +448,112 @@ pf_check_story_infrastructure() {
 }
 
 #=============================================================================
+# External State Preflight Checks
+#=============================================================================
+
+# Run preflight checks for external state mode
+# Returns: 0 if all checks pass, 1 if any errors
+pf_run_external_checks() {
+    local branch
+    local project_root
+    local state_dir
+    local prd_file
+
+    # Reset state
+    pf_reset
+
+    # Get current branch
+    branch=$(git branch --show-current 2>/dev/null || echo "")
+    if [[ -z "$branch" ]]; then
+        pf_error "Not on a branch (detached HEAD)"
+        pf_display_results ""
+        return 1
+    fi
+
+    # Get project root
+    project_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+        pf_error "Not in a git repository"
+        pf_display_results ""
+        return 1
+    }
+
+    # Get external state directory
+    state_dir=$(state_get_project_dir "$project_root" "$branch")
+    prd_file=$(state_get_prd_file "$state_dir")
+
+    echo ""
+    echo "Preflight checks (external state mode):"
+    echo "✓ Branch: ${branch}"
+    echo "  State: ${state_dir}"
+    echo ""
+
+    # Check protected branch (warning only)
+    if is_protected_branch "$branch"; then
+        pf_warning "Running on protected branch '$branch'"
+        echo "⚠ Warning: Running on protected branch '${branch}'"
+    fi
+
+    # Check state directory exists
+    if [[ ! -d "$state_dir" ]]; then
+        pf_error "External state directory not found: ${state_dir}"
+        pf_error "Run 'ralph-hybrid init' or '/ralph-hybrid-plan' to create state"
+        pf_display_results ""
+        return 1
+    fi
+    echo "✓ State directory exists"
+
+    # Check prd.json exists
+    if [[ ! -f "$prd_file" ]]; then
+        pf_error "prd.json not found: ${prd_file}"
+        pf_error "Run '/ralph-hybrid-plan' to create prd.json"
+        pf_display_results ""
+        return 1
+    fi
+    echo "✓ prd.json exists"
+
+    # Check prd.json is valid JSON
+    if ! jq empty "$prd_file" 2>/dev/null; then
+        pf_error "prd.json is not valid JSON"
+        pf_display_results ""
+        return 1
+    fi
+
+    # Check for userStories array
+    local has_stories
+    has_stories=$(jq 'has("userStories") and (.userStories | type == "array")' "$prd_file")
+    if [[ "$has_stories" != "true" ]]; then
+        pf_error "prd.json missing required 'userStories' array"
+        pf_display_results ""
+        return 1
+    fi
+
+    local story_count
+    story_count=$(jq '.userStories | length' "$prd_file")
+    if [[ "$story_count" -eq 0 ]]; then
+        pf_error "prd.json has no user stories"
+        pf_display_results ""
+        return 1
+    fi
+    echo "✓ prd.json valid (${story_count} stories)"
+
+    # Check successCriteria
+    local has_success_criteria
+    has_success_criteria=$(jq 'has("successCriteria")' "$prd_file")
+    if [[ "$has_success_criteria" != "true" ]]; then
+        pf_warning "prd.json missing 'successCriteria' - tests won't run after commits"
+        echo "⚠ Missing successCriteria in prd.json"
+    else
+        local per_story_cmd
+        per_story_cmd=$(jq -r '.successCriteria.perStory // .successCriteria.command // ""' "$prd_file")
+        if [[ -n "$per_story_cmd" ]]; then
+            echo "✓ Per-story test: ${per_story_cmd}"
+        fi
+    fi
+
+    pf_display_results ""
+}
+
+#=============================================================================
 # Main Preflight Function
 #=============================================================================
 
