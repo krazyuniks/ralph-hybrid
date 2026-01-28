@@ -1,0 +1,65 @@
+# Progress Log
+# Branch: 526/epic-multi-provider-oauth-account-linkin
+# Started: 2026-01-27T21:45:00Z
+# Spec: spec.md
+
+---
+Iteration: 1
+Started: 2026-01-27T22:37:38Z
+Story: STORY-001 - Create OAuth Provider Configuration
+Status: complete
+
+Changes made:
+- Added OAuthProvider enum (facebook, github, google, t3k)
+- Added get_oauth_provider_config() function for provider-specific OAuth settings
+- OAuth config fields already existed in Settings class (google/github/facebook client IDs/secrets)
+- Created comprehensive unit tests in tests/unit/backend/core/test_oauth_config.py
+- Fixed pre-existing mypy errors in html.py (BrowseScope import, get_packs -> get_gear, tags/makes filters)
+- Fixed pre-existing ruff errors (line length, import sorting, unused imports)
+
+Verification:
+- All unit tests pass (6 new tests for OAuth config)
+- mypy passes (0 errors in 188 files)
+- ruff passes (0 errors)
+
+
+---
+Iteration: 2
+Started: 2026-01-27T22:44:51Z
+Story: STORY-002 - Create UserIdentity Model and Migration
+Status: complete
+
+Changes made:
+- Created unit tests in tests/unit/backend/models/test_user_identity.py (7 tests)
+- Tests cover model creation, minimal fields, token encryption (access/refresh), expiration, null handling, and repr
+- Model and migration already existed from previous iteration, but unit tests were missing
+- Fixed test to account for SQLAlchemy default behavior (defaults only apply on DB insert, not Python object creation)
+
+Verification:
+- All 7 unit tests pass
+- ruff check passes (fixed import ordering and removed unused pytest import)
+- mypy passes (no type errors)
+
+---
+Iteration: 3
+Started: 2026-01-27T22:47:49Z
+Story: STORY-003 - Migrate Existing T3K Data to UserIdentities
+Status: complete
+
+Changes made:
+- Created comprehensive integration tests in tests/integration/backend/models/test_t3k_identity_migration.py (9 tests)
+- Tests verify table structure (user_identities table exists with required columns)
+- Tests verify OAuth provider seeding (T3K provider has ID 4)
+- Tests verify migration logic (creates identity for existing users)
+- Tests verify idempotency (safe to re-run multiple times)
+- Tests verify encrypted token preservation (tokens remain encrypted and decrypt correctly)
+- Tests verify email_verified=true for T3K identities (T3K uses magic link verification)
+- Tests verify users table retains T3K columns (for safe rollback)
+- Tests verify unique constraint on (provider_id, provider_user_id)
+- Migration already existed at backend/alembic/versions/20260127_000003_migrate_t3k_to_identities.py
+
+Verification:
+- All 9 integration tests pass
+- All 753 unit tests pass
+- ruff check passes
+- mypy passes (188 source files)

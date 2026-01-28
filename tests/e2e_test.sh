@@ -231,6 +231,141 @@ else
     fail "MCP server handling missing from ralph-hybrid"
 fi
 
+# Test 17: Command log library functions
+info "Test 17: Command log library"
+source "$PROJECT_ROOT/lib/logging.sh"
+source "$PROJECT_ROOT/lib/command_log.sh"
+
+# Get log file path
+log_file_path=$(cmd_log_get_file ".ralph-hybrid/test-feature")
+if [[ "$log_file_path" == *"commands.jsonl" ]]; then
+    pass "cmd_log_get_file returns correct path"
+else
+    fail "cmd_log_get_file returned wrong path: $log_file_path"
+fi
+
+# Ensure log directory
+cmd_log_ensure_dir ".ralph-hybrid/test-feature"
+if [[ -d ".ralph-hybrid/test-feature/logs" ]]; then
+    pass "cmd_log_ensure_dir creates logs directory"
+else
+    fail "cmd_log_ensure_dir failed to create logs directory"
+fi
+
+# Write a test entry
+cmd_log_write "test_source" "echo hello" "0" "100" "1" "TEST-001" ".ralph-hybrid/test-feature"
+if [[ -f ".ralph-hybrid/test-feature/logs/commands.jsonl" ]]; then
+    pass "cmd_log_write creates command log"
+else
+    fail "cmd_log_write failed to create command log"
+fi
+
+# Verify log entry format
+entry=$(cat ".ralph-hybrid/test-feature/logs/commands.jsonl" | head -1)
+if echo "$entry" | jq -e '.source == "test_source"' >/dev/null 2>&1; then
+    pass "Command log entry has correct format"
+else
+    fail "Command log entry format incorrect: $entry"
+fi
+
+# Test 18: Command log parsing - stream-json format
+info "Test 18: Command log parsing (stream-json)"
+# Create a mock stream-json output file
+mkdir -p ".ralph-hybrid/test-feature/logs"
+cat > ".ralph-hybrid/test-feature/logs/iteration-99.log" << 'STREAMJSON'
+{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_123","name":"Bash","input":{}}}
+{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"command\":\"ls -la\"}"}}
+{"type":"content_block_stop","index":1}
+{"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"toolu_456","name":"Bash","input":{}}}
+{"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"command\":"}}
+{"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"\"git status\"}"}}
+{"type":"content_block_stop","index":2}
+STREAMJSON
+
+# Clear the log and parse
+: > ".ralph-hybrid/test-feature/logs/commands.jsonl"
+cmd_log_parse_iteration "99" ".ralph-hybrid/test-feature"
+
+# Check parsed commands
+parsed_count=$(wc -l < ".ralph-hybrid/test-feature/logs/commands.jsonl" | tr -d ' ')
+if [[ "$parsed_count" -ge 1 ]]; then
+    pass "Stream-json parsing extracted $parsed_count command(s)"
+else
+    fail "Stream-json parsing failed (got $parsed_count commands)"
+fi
+
+# Verify first command
+first_cmd=$(jq -r '.command' ".ralph-hybrid/test-feature/logs/commands.jsonl" | head -1)
+if [[ "$first_cmd" == "ls -la" ]]; then
+    pass "Parsed command is correct: $first_cmd"
+else
+    fail "Parsed command wrong: expected 'ls -la', got '$first_cmd'"
+fi
+
+# Test 19: Command log parsing - complete JSON format
+info "Test 19: Command log parsing (complete JSON)"
+cat > ".ralph-hybrid/test-feature/logs/iteration-100.log" << 'COMPLETEJSON'
+{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}
+{"type":"tool_use","name":"Bash","input":{"command":"npm run build"}}
+{"type":"tool_use","name":"Read","input":{"path":"package.json"}}
+COMPLETEJSON
+
+: > ".ralph-hybrid/test-feature/logs/commands.jsonl"
+cmd_log_parse_claude_jsonl ".ralph-hybrid/test-feature/logs/iteration-100.log" "100" ".ralph-hybrid/test-feature"
+
+parsed_count=$(wc -l < ".ralph-hybrid/test-feature/logs/commands.jsonl" | tr -d ' ')
+if [[ "$parsed_count" -eq 2 ]]; then
+    pass "Complete JSON parsing extracted 2 Bash commands (ignored Read)"
+else
+    fail "Complete JSON parsing failed (expected 2, got $parsed_count)"
+fi
+
+# Test 20: Analyse commands (requires log data)
+info "Test 20: Analyse commands"
+# Add more entries for analysis
+cmd_log_write "claude_code" "npm test" "0" "5000" "1" "STORY-001" ".ralph-hybrid/test-feature"
+cmd_log_write "success_criteria" "npm test" "0" "5000" "1" "STORY-001" ".ralph-hybrid/test-feature"
+cmd_log_write "callback" "npm test" "0" "3000" "1" "STORY-001" ".ralph-hybrid/test-feature"
+
+source "$PROJECT_ROOT/lib/deps.sh"
+source "$PROJECT_ROOT/lib/command_analysis.sh"
+
+# Test summary function
+summary=$(ca_summarise_commands ".ralph-hybrid/test-feature")
+if echo "$summary" | jq -e 'length > 0' >/dev/null 2>&1; then
+    pass "ca_summarise_commands produces valid output"
+else
+    fail "ca_summarise_commands failed"
+fi
+
+# Test duplicate detection
+duplicates=$(ca_identify_duplicates ".ralph-hybrid/test-feature")
+if echo "$duplicates" | jq -e 'length > 0' >/dev/null 2>&1; then
+    pass "ca_identify_duplicates finds redundant commands"
+else
+    fail "ca_identify_duplicates found no duplicates (expected at least 1)"
+fi
+
+# Test waste calculation
+waste=$(ca_calculate_waste ".ralph-hybrid/test-feature")
+redundant_ms=$(echo "$waste" | jq -r '.total_redundant_duration_ms // 0')
+if [[ "$redundant_ms" -gt 0 ]]; then
+    pass "ca_calculate_waste computes redundant time: ${redundant_ms}ms"
+else
+    fail "ca_calculate_waste failed (redundant_ms=$redundant_ms)"
+fi
+
+# Test CLI analyse-commands
+info "Test 21: CLI analyse-commands"
+cd "$TEST_DIR"
+analyse_output=$("$PROJECT_ROOT/ralph-hybrid" analyse-commands 2>&1) || true
+if echo "$analyse_output" | grep -qE "Summary|Redundancy|No commands"; then
+    pass "CLI analyse-commands works"
+else
+    echo "Analyse output: $analyse_output"
+    fail "CLI analyse-commands failed"
+fi
+
 # Summary
 echo ""
 echo "================================"

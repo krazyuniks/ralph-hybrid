@@ -1,0 +1,499 @@
+{
+  "description": "Multi-provider OAuth authentication with account linking using BFF pattern. Supports Facebook, GitHub, Google, and Tone3000 as equal providers. Includes encrypted token storage, PKCE, auto-linking by verified email, and comprehensive security hardening.",
+  "createdAt": "2026-01-27T21:45:00Z",
+  "profile": "budget",
+  "successCriteria": {
+    "command": "just test-regression",
+    "timeout": 300
+  },
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "title": "Create OAuth Provider Configuration",
+      "description": "As a developer, I want to have a centralised OAuth provider configuration so that all providers can be configured consistently.",
+      "acceptanceCriteria": [
+        "Create OAuthProvider enum with values: facebook, github, google, t3k",
+        "Add provider configuration to backend/app/core/config.py",
+        "Environment variables for each provider's client_id and client_secret",
+        "Provider-specific settings (auth_url, token_url, userinfo_url, scopes)",
+        "Typecheck passes",
+        "Unit tests pass"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Completed. Added OAuthProvider enum and get_oauth_provider_config() function. Fixed pre-existing mypy/ruff errors.",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-002",
+      "title": "Create UserIdentity Model and Migration",
+      "description": "As a developer, I want to store multiple OAuth identities per user so that users can link multiple providers to one account.",
+      "acceptanceCriteria": [
+        "Create UserIdentity SQLAlchemy model in backend/app/models/user_identity.py",
+        "Fields: id, user_id, provider, provider_id, email, email_verified, access_token (encrypted), refresh_token (encrypted), token_expires_at, created_at, updated_at",
+        "Unique constraint on (provider, provider_id)",
+        "Index on user_id and on email WHERE email_verified = TRUE",
+        "Create Alembic migration for user_identities table",
+        "Add identities relationship to User model",
+        "Typecheck passes",
+        "Unit tests for model creation pass"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Completed. Model created in backend/app/models/user_identity.py with encrypted token properties. Migration created at backend/alembic/versions/20260127_000002_create_user_identities.py. User.identities relationship already existed. Added comprehensive unit tests (7 tests) for model creation, token encryption, and properties.",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-003",
+      "title": "Migrate Existing T3K Data to UserIdentities",
+      "description": "As a system, I want to migrate existing T3K authentication data so that existing users continue working with the new model.",
+      "acceptanceCriteria": [
+        "Create data migration that copies T3K data from users table to user_identities",
+        "Preserve user_id, tone3000_id as provider_id, tokens",
+        "Set provider='t3k', email_verified=TRUE for all migrated records",
+        "Migration is idempotent (can run multiple times safely)",
+        "Verify no data loss with rollback capability",
+        "Typecheck passes",
+        "Integration test verifies migration correctness"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Completed. Migration already existed at backend/alembic/versions/20260127_000003_migrate_t3k_to_identities.py. Created comprehensive integration tests (9 tests) that verify table structure, OAuth provider seeding, migration logic, idempotency, encrypted token preservation, email_verified=true setting, and unique constraints.",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-004",
+      "title": "Implement Encrypted Token Storage",
+      "description": "As a developer, I want to encrypt OAuth tokens at rest so that tokens are protected if database is compromised.",
+      "acceptanceCriteria": [
+        "Create token encryption module using Fernet",
+        "Encryption key from environment variable TOKEN_ENCRYPTION_KEY",
+        "Functions: encrypt_token(plaintext) -> bytes, decrypt_token(ciphertext) -> str",
+        "Handle key rotation (accept list of keys, try each for decryption)",
+        "Typecheck passes",
+        "Unit tests for encrypt/decrypt round-trip",
+        "Unit tests for key rotation scenario"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-005",
+      "title": "Create OAuth State Management",
+      "description": "As a developer, I want to securely manage OAuth state parameters so that OAuth flows are protected against CSRF and replay attacks.",
+      "acceptanceCriteria": [
+        "Create OAuthState dataclass with: nonce, timestamp, user_id (optional), operation (login/link), code_verifier (PKCE)",
+        "Create state encoder: encrypt and sign state to URL-safe string",
+        "Create state decoder: validate signature, decrypt, check expiry (10 min)",
+        "Generate PKCE code_verifier (64 bytes, URL-safe) and code_challenge (S256)",
+        "State stored in Redis with TTL matching expiry",
+        "Typecheck passes",
+        "Unit tests for state encode/decode round-trip",
+        "Unit tests for expiry validation",
+        "Unit tests for PKCE challenge generation"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-006",
+      "title": "Create IdentityService",
+      "description": "As a developer, I want to have a service layer for identity management so that business logic is separated from API endpoints.",
+      "acceptanceCriteria": [
+        "Create IdentityService in backend/app/services/identity_service.py",
+        "Method: get_user_by_identity(provider, provider_id) -> User | None",
+        "Method: get_user_identities(user_id) -> list[UserIdentity]",
+        "Method: create_identity(user_id, provider, provider_id, email, tokens) -> UserIdentity",
+        "Method: link_identity(user_id, provider, provider_id, email, tokens) -> UserIdentity",
+        "Method: unlink_identity(user_id, provider) -> bool (with min 1 protection)",
+        "Method: find_by_verified_email(email) -> UserIdentity | None",
+        "All methods use async with proper transaction handling",
+        "Typecheck passes",
+        "Unit tests for each method",
+        "Integration tests with real database"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-007",
+      "title": "Create Base OAuth Adapter Interface",
+      "description": "As a developer, I want to have a common interface for OAuth providers so that all providers can be used interchangeably.",
+      "acceptanceCriteria": [
+        "Create abstract base class OAuthAdapter in backend/app/adapters/oauth/base.py",
+        "Abstract methods: get_authorization_url, exchange_code, get_user_info, refresh_token",
+        "Create TokenResponse dataclass: access_token, refresh_token, expires_in",
+        "Create UserInfo dataclass: provider_id, email, email_verified, name, avatar_url",
+        "Create adapter factory: get_oauth_adapter(provider) -> OAuthAdapter",
+        "Typecheck passes",
+        "Unit tests for factory function"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-008",
+      "title": "Implement Google OAuth Adapter",
+      "description": "As a user, I want to login with my Google account so that I can use GTS without creating a new account.",
+      "acceptanceCriteria": [
+        "Create GoogleOAuthAdapter implementing OAuthAdapter",
+        "Use Google OAuth 2.0 endpoints with PKCE",
+        "Request scopes: openid, email, profile",
+        "Parse Google's userinfo response correctly",
+        "Handle token refresh",
+        "Register adapter in factory",
+        "Typecheck passes",
+        "Unit tests with mocked HTTP responses"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-009",
+      "title": "Implement GitHub OAuth Adapter",
+      "description": "As a user, I want to login with my GitHub account so that I can use GTS with my developer identity.",
+      "acceptanceCriteria": [
+        "Create GitHubOAuthAdapter implementing OAuthAdapter",
+        "Use GitHub OAuth 2.0 endpoints with PKCE",
+        "Request scopes: read:user, user:email",
+        "Fetch primary verified email from /user/emails endpoint",
+        "Handle GitHub tokens (no expiry)",
+        "Register adapter in factory",
+        "Typecheck passes",
+        "Unit tests with mocked HTTP responses"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-010",
+      "title": "Implement Facebook OAuth Adapter",
+      "description": "As a user, I want to login with my Facebook account so that I can use GTS with my social identity.",
+      "acceptanceCriteria": [
+        "Create FacebookOAuthAdapter implementing OAuthAdapter",
+        "Use Facebook OAuth 2.0 endpoints",
+        "Request scopes: email, public_profile",
+        "Parse Facebook's graph API response correctly",
+        "Handle long-lived token exchange",
+        "Register adapter in factory",
+        "Typecheck passes",
+        "Unit tests with mocked HTTP responses"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-011",
+      "title": "Refactor T3K OAuth to Adapter Pattern",
+      "description": "As a developer, I want T3K authentication to use the adapter pattern so that all providers have consistent implementation.",
+      "acceptanceCriteria": [
+        "Create T3KOAuthAdapter implementing OAuthAdapter",
+        "Migrate existing T3K OAuth logic to adapter",
+        "Maintain backwards compatibility with existing T3K auth flow",
+        "Use UserIdentity model instead of User model for token storage",
+        "Register adapter in factory",
+        "Existing T3K login continues to work",
+        "Typecheck passes",
+        "Integration tests pass"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-012",
+      "title": "Create Unified Auth Endpoints",
+      "description": "As a developer, I want unified auth endpoints for all providers so that the API is consistent and maintainable.",
+      "acceptanceCriteria": [
+        "Create GET /api/v1/auth/login/{provider} - initiates OAuth flow",
+        "Create GET /api/v1/auth/callback/{provider} - handles OAuth callback",
+        "Login endpoint generates state, redirects to provider",
+        "Callback endpoint validates state, exchanges code, creates session",
+        "Session cookie set with httponly, secure (prod), samesite=lax",
+        "Regenerate session ID after successful OAuth",
+        "Typecheck passes",
+        "Integration tests for full OAuth flow (mocked provider)"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-013",
+      "title": "Implement Account Linking Endpoints",
+      "description": "As a user, I want to link additional OAuth providers to my account so that I can login with any of my social accounts.",
+      "acceptanceCriteria": [
+        "Create GET /api/v1/auth/link/{provider} - requires authenticated session",
+        "Store user_id in encrypted state parameter",
+        "Callback detects linking operation from state",
+        "Create new UserIdentity linked to current user",
+        "Error if provider_id already linked to different user",
+        "Success message if already linked to same user",
+        "Redirect to account settings after linking",
+        "Typecheck passes",
+        "Integration tests for linking flow"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-014",
+      "title": "Implement Account Unlinking",
+      "description": "As a user, I want to unlink OAuth providers from my account so that I can manage my authentication options.",
+      "acceptanceCriteria": [
+        "Create DELETE /api/v1/auth/unlink/{provider} - requires auth",
+        "Verify user has at least 2 linked providers before unlinking",
+        "Return 400 error if attempting to unlink last provider",
+        "Delete UserIdentity record for provider",
+        "Return success with updated provider list",
+        "Typecheck passes",
+        "Unit tests for unlink protection",
+        "Integration tests for unlink flow"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-015",
+      "title": "Implement Auto-Link by Verified Email",
+      "description": "As a system, I want to automatically link accounts with matching verified emails so that users don't create duplicate accounts.",
+      "acceptanceCriteria": [
+        "During OAuth callback (login, not link), check for existing identity",
+        "If no identity exists, check for any UserIdentity with same verified email",
+        "If found, auto-link new provider to existing user",
+        "Only auto-link when BOTH emails are verified",
+        "Log auto-link events for audit",
+        "Typecheck passes",
+        "Integration tests for auto-link scenarios"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-016",
+      "title": "Create Account Settings API",
+      "description": "As a developer, I want an API for account settings so that the frontend can display linked providers.",
+      "acceptanceCriteria": [
+        "Update GET /api/v1/auth/me to include linked providers",
+        "Response includes: user info + list of {provider, email, linked_at}",
+        "Mask sensitive data (no tokens in response)",
+        "Indicate which providers are available but not linked",
+        "Typecheck passes",
+        "Unit tests for response schema",
+        "Integration tests"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-017",
+      "title": "Update Login Page with All Providers",
+      "description": "As a user, I want to see all login options on the login page so that I can choose my preferred authentication method.",
+      "acceptanceCriteria": [
+        "Display 4 provider buttons: Facebook, GitHub, Google, Tone3000",
+        "Buttons ordered alphabetically (equal weight)",
+        "Each button has provider icon and 'Continue with {Provider}' text",
+        "Buttons link to /api/v1/auth/login/{provider}",
+        "Preserve ?next= parameter for post-login redirect",
+        "Add terms/privacy policy agreement text",
+        "Typecheck passes",
+        "E2E test for login page rendering"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-018",
+      "title": "Create Account Settings Page UI",
+      "description": "As a user, I want to manage my linked accounts in settings so that I can add or remove authentication methods.",
+      "acceptanceCriteria": [
+        "Create account settings page at /settings/account",
+        "Display all 4 providers with link status",
+        "Linked providers show email and Unlink button",
+        "Unlinked providers show Link Account button",
+        "Disable unlink button if only one provider linked",
+        "Show tooltip explaining why unlink is disabled",
+        "Use HTMX for link/unlink actions",
+        "Typecheck passes",
+        "E2E test for settings page"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-019",
+      "title": "Add Rate Limiting on Auth Endpoints",
+      "description": "As a system, I want to rate limit authentication endpoints so that brute force attacks are prevented.",
+      "acceptanceCriteria": [
+        "Configure nginx rate limiting for /api/v1/auth/*",
+        "Limit: 5 requests per minute per IP",
+        "Burst: 10 requests with nodelay",
+        "Return 429 Too Many Requests when exceeded",
+        "Log rate limit events",
+        "Typecheck passes",
+        "Integration test for rate limiting"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-020",
+      "title": "Implement Session Fixation Protection",
+      "description": "As a system, I want to regenerate session IDs after authentication so that session fixation attacks are prevented.",
+      "acceptanceCriteria": [
+        "Regenerate session ID after successful OAuth callback",
+        "Old session ID invalidated immediately",
+        "New session cookie set with same security attributes",
+        "Verify protection works across all providers",
+        "Typecheck passes",
+        "Integration test for session regeneration"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-021",
+      "title": "Add Audit Logging for Auth Events",
+      "description": "As a system, I want to log all authentication events so that security incidents can be investigated.",
+      "acceptanceCriteria": [
+        "Log: login attempts (success/failure)",
+        "Log: account linking (success/failure)",
+        "Log: account unlinking",
+        "Log: auto-link events",
+        "Log: rate limit triggers",
+        "Include: timestamp, user_id, provider, IP, user_agent",
+        "Use structured logging (JSON format)",
+        "Typecheck passes",
+        "Unit tests for log format"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    },
+    {
+      "id": "STORY-022",
+      "title": "Security Review and Final Validation",
+      "description": "As a developer, I want to validate all security requirements are met so that the feature is production-ready.",
+      "acceptanceCriteria": [
+        "PKCE enabled for all 4 providers",
+        "State parameter signed with nonce + timestamp",
+        "State expiry enforced (10 min)",
+        "Cookies: Secure (prod), HttpOnly, SameSite=Lax",
+        "Auto-link only for verified emails",
+        "Tokens encrypted at rest",
+        "Rate limiting active",
+        "Unlink protection (min 1 provider)",
+        "Auth events logged",
+        "Session fixation protection verified",
+        "All unit tests pass",
+        "All integration tests pass",
+        "E2E tests pass",
+        "Security checklist from issue #526 complete"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "",
+      "mcpServers": [
+        "chrome-devtools",
+        "playwright"
+      ]
+    }
+  ],
+  "mcpNotes": "chrome-devtools: Use throughout development for in-progress UI validation and design. playwright: All tests use python-playwright."
+}

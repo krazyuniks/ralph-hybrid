@@ -252,6 +252,10 @@ cmd_log_exec() {
 # Parse Claude's JSONL event stream for Bash tool invocations
 # This extracts commands that Claude ran during an iteration
 #
+# Handles both formats:
+# 1. Complete JSON: {"type":"tool_use","name":"Bash","input":{"command":"..."}}
+# 2. Stream-JSON: tool use spread across content_block_start/delta/stop events
+#
 # Arguments:
 #   $1 - Path to Claude's JSONL output file (or iteration log)
 #   $2 - Iteration number
@@ -268,37 +272,79 @@ cmd_log_parse_claude_jsonl() {
         return 0
     fi
 
-    # Look for Bash tool invocations in the stream
-    # Format: {"type":"tool_use","name":"Bash","input":{"command":"..."}}
-    # or nested in message.content arrays
-
     local parsed_count=0
+    local in_bash_block=false
+    local accumulated_json=""
+    local current_tool_id=""
 
-    # Extract Bash tool uses and their results
+    # Process the file line by line
     while IFS= read -r line; do
         # Skip empty lines
         [[ -z "$line" ]] && continue
 
-        # Check if this line contains a Bash tool use
-        if [[ "$line" == *'"name":"Bash"'* ]] || [[ "$line" == *'"name": "Bash"'* ]]; then
-            # Try to extract the command
-            local command
-            command=$(echo "$line" | jq -r '
-                .input.command //
-                .message.content[].input.command //
-                .content[].input.command //
-                empty
-            ' 2>/dev/null | head -1)
-
-            if [[ -n "$command" ]]; then
-                # We don't have timing info from Claude's output, use 0
-                cmd_log_write "claude_code" "$command" "0" "0" "$iteration" "" "$feature_dir"
-                ((parsed_count++))
-            fi
+        # Method 1: Handle stream-json format (content_block_start/delta/stop)
+        # Check this FIRST because content_block_start contains "type":"tool_use" inside content_block
+        # Start of Bash tool block
+        if [[ "$line" == *'"content_block_start"'* ]] && [[ "$line" == *'"name":"Bash"'* ]]; then
+            in_bash_block=true
+            accumulated_json=""
+            current_tool_id=$(echo "$line" | jq -r '.content_block.id // ""' 2>/dev/null)
+            continue
         fi
 
-        # Also check for tool_result to get exit codes (if available)
-        # This is more complex and may not always be present
+        # Accumulate input JSON from delta events
+        if [[ "$in_bash_block" == true ]] && [[ "$line" == *'"content_block_delta"'* ]]; then
+            local partial
+            partial=$(echo "$line" | jq -r '.delta.partial_json // empty' 2>/dev/null)
+            if [[ -n "$partial" ]]; then
+                accumulated_json="${accumulated_json}${partial}"
+            fi
+            continue
+        fi
+
+        # End of tool block - extract command
+        if [[ "$in_bash_block" == true ]] && [[ "$line" == *'"content_block_stop"'* ]]; then
+            if [[ -n "$accumulated_json" ]]; then
+                local command
+                command=$(echo "$accumulated_json" | jq -r '.command // empty' 2>/dev/null)
+                if [[ -n "$command" ]]; then
+                    cmd_log_write "claude_code" "$command" "0" "0" "$iteration" "" "$feature_dir"
+                    ((parsed_count++)) || true
+                fi
+            fi
+            in_bash_block=false
+            accumulated_json=""
+            current_tool_id=""
+            continue
+        fi
+
+        # Method 2: Check for complete tool_use with Bash (non-streaming format)
+        # This handles {"type":"tool_use","name":"Bash","input":{"command":"..."}}
+        # Must check it's NOT a content_block_start (which also has type:tool_use inside)
+        if [[ "$line" == *'"type":"tool_use"'* ]] && [[ "$line" == *'"name":"Bash"'* ]] && [[ "$line" != *'"content_block_start"'* ]]; then
+            local command
+            command=$(echo "$line" | jq -r '.input.command // empty' 2>/dev/null)
+            if [[ -n "$command" ]]; then
+                cmd_log_write "claude_code" "$command" "0" "0" "$iteration" "" "$feature_dir"
+                ((parsed_count++)) || true
+            fi
+            continue
+        fi
+
+        # Method 3: Check for nested content arrays (message.content format)
+        if [[ "$line" == *'"name":"Bash"'* ]] && [[ "$line" == *'"content":'* ]]; then
+            local commands
+            commands=$(echo "$line" | jq -r '
+                .message.content[]? | select(.name == "Bash") | .input.command // empty,
+                .content[]? | select(.name == "Bash") | .input.command // empty
+            ' 2>/dev/null)
+            while IFS= read -r cmd; do
+                if [[ -n "$cmd" ]]; then
+                    cmd_log_write "claude_code" "$cmd" "0" "0" "$iteration" "" "$feature_dir"
+                    ((parsed_count++)) || true
+                fi
+            done <<< "$commands"
+        fi
     done < "$input_file"
 
     log_debug "Parsed $parsed_count Bash commands from Claude output"

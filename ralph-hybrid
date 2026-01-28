@@ -3560,6 +3560,9 @@ _run_iteration() {
     if [[ $INVOKE_EXIT_CODE -eq $RALPH_HYBRID_EXIT_TIMEOUT ]]; then
         log_warn "Iteration timed out after ${RALPH_HYBRID_TIMEOUT_MINUTES} minutes"
 
+        # Parse Claude's output for command logging (even on timeout)
+        cmd_log_parse_iteration "$iteration" "$feature_dir"
+
         # Read output from log for context
         local timeout_output
         timeout_output=$(cat "$log_file" 2>/dev/null || true)
@@ -3612,6 +3615,9 @@ _run_iteration() {
     # Read output from log for completion detection
     local output
     output=$(cat "$log_file")
+
+    # Parse Claude's output for command logging (extract Bash tool invocations)
+    cmd_log_parse_iteration "$iteration" "$feature_dir"
 
     # Handle completion signals (pass passes_before for quality check rollback)
     local completion_result=0
