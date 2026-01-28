@@ -174,7 +174,7 @@ Legend: RH = Ralph Hybrid, RO = Ralph Orchestrator, GSD = Get Shit Done
 | **Git Integration** | Commit per story | Atomic commit per task | External |
 | **Callbacks System** | pre/post run, iteration, completion | Phase lifecycle | Event pub/sub |
 | **Amendment Workflow** | `/ralph-hybrid-amend` | Add/insert phases | Event emission |
-| **Monitoring** | tmux dashboard | `/gsd:progress` | Interactive TUI |
+| **Monitoring** | status.json, logs/ | `/gsd:progress` | Interactive TUI |
 | **State Persistence** | prd.json, progress.txt | STATE.md, config.json | scratchpad.md, memories.md |
 | **Multi-Backend** | Planned (AI-agnostic) | Claude Code, OpenCode | 8+ backends supported |
 | **Task Tracking** | Stories in prd.json | Plans in .planning/ | tasks.jsonl |
@@ -377,7 +377,7 @@ Acceptance Criteria:
 
 **Step 3: Execution**
 ```bash
-ralph-hybrid run --monitor
+ralph-hybrid run
 ```
 
 **Iteration 1 (STORY-001):**

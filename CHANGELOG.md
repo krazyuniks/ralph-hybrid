@@ -7,14 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- tmux monitoring dashboard (`--monitor` flag, `ralph-hybrid monitor` command, `lib/monitor.sh`)
+
 ## [0.1.0] - 2026-01-11
 
 ### Added
 
 #### Core CLI
-- Main `ralph` CLI script with subcommands: `run`, `status`, `archive`, `validate`, `setup`, `monitor`, `help`, `version`
+- Main `ralph` CLI script with subcommands: `run`, `status`, `archive`, `validate`, `setup`, `help`, `version`
 - Feature folder auto-detection from git branch name (no manual init required)
-- Configurable run options: `--max-iterations`, `--timeout`, `--rate-limit`, `--prompt`, `--model`, `--verbose`, `--dry-run`, `--monitor`
+- Configurable run options: `--max-iterations`, `--timeout`, `--rate-limit`, `--prompt`, `--model`, `--verbose`, `--dry-run`
 - Support for custom Claude models via `-m/--model` flag (opus, sonnet, or full name)
 
 #### Development Loop
@@ -67,12 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deferred work detection and warnings before archiving
 - Manual archive command with `-y/--yes` flag to skip confirmation
 
-#### Monitoring
-- Optional tmux-based monitoring dashboard (`--monitor` flag)
-- Real-time status display: iteration count, API usage, progress
-- status.json for programmatic access to loop state
-- Standalone `ralph monitor` command to attach to running session
-
 #### Configuration
 - Global configuration at `~/.ralph/config.yaml`
 - Project-level configuration at `.ralph/config.yaml`
@@ -99,7 +96,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - lib/config.sh - YAML configuration loading
 - lib/exit_detection.sh - Completion and error signal detection
 - lib/logging.sh - Colored log output utilities
-- lib/monitor.sh - tmux dashboard and status file management
 - lib/platform.sh - Cross-platform compatibility (macOS/Linux)
 - lib/prd.sh - PRD file parsing and manipulation
 - lib/preflight.sh - Validation checks before running

@@ -87,28 +87,7 @@ readonly _RALPH_HYBRID_API_LIMIT_WAIT=300
 # User input timeout for API limit prompt (seconds)
 readonly _RALPH_HYBRID_USER_INPUT_TIMEOUT=30
 
-#=============================================================================
-# Monitor Dashboard Constants
-#=============================================================================
-
-# Default tmux session name for monitor
-readonly _RALPH_HYBRID_TMUX_SESSION_NAME="ralph-hybrid"
-
-# Dashboard refresh interval (seconds)
-readonly _RALPH_HYBRID_MONITOR_REFRESH_INTERVAL=2
-
-# Tmux window size (columns x rows)
-readonly _RALPH_HYBRID_TMUX_WINDOW_WIDTH=160
-readonly _RALPH_HYBRID_TMUX_WINDOW_HEIGHT=40
-
-# Left pane width for tmux split (characters)
-readonly _RALPH_HYBRID_TMUX_LEFT_PANE_WIDTH=95
-
-# Number of recent log lines to show in dashboard
-readonly _RALPH_HYBRID_MONITOR_LOG_LINES=8
-
-# Max characters to truncate text in dashboard display
-readonly _RALPH_HYBRID_MONITOR_TEXT_TRUNCATE=60
+# Monitor dashboard constants removed - tmux functionality deprecated
 
 #=============================================================================
 # Display Constants

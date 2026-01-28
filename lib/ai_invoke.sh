@@ -29,14 +29,52 @@ readonly AI_TOOL_CLAUDE="claude"
 readonly AI_TOOL_CODEX="codex"
 readonly AI_TOOL_GEMINI="gemini"
 
+# Claude model aliases (converted to "claude --model ALIAS")
+readonly -a AI_CLAUDE_MODEL_ALIASES=("opus" "sonnet" "haiku")
+
 # Claude-based wrappers (use same invocation pattern)
 # Add custom wrappers here or they'll be auto-detected
-readonly -a AI_CLAUDE_WRAPPERS=("opus" "sonnet" "haiku" "glm" "claude")
+readonly -a AI_CLAUDE_WRAPPERS=("glm" "claude")
+
+# Check if a string is a Claude model alias
+# Usage: ai_is_model_alias "sonnet" -> 0 (true)
+ai_is_model_alias() {
+    local cmd="$1"
+    for alias in "${AI_CLAUDE_MODEL_ALIASES[@]}"; do
+        if [[ "$cmd" == "$alias" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Resolve a command to its actual executable form
+# Model aliases (opus, sonnet, haiku) become "claude --model ALIAS"
+# Other commands remain unchanged
+# Usage: ai_resolve_cmd "sonnet" -> "claude --model sonnet"
+ai_resolve_cmd() {
+    local cmd="$1"
+
+    # Check if it's a model alias - convert to claude --model
+    if ai_is_model_alias "$cmd"; then
+        echo "claude --model $cmd"
+        return 0
+    fi
+
+    # Otherwise return as-is
+    echo "$cmd"
+}
 
 # Detect which tool type a command belongs to
 # Usage: ai_detect_tool_type "opus" -> "claude"
 ai_detect_tool_type() {
     local cmd="$1"
+
+    # Check if it's a Claude model alias
+    if ai_is_model_alias "$cmd"; then
+        echo "$AI_TOOL_CLAUDE"
+        return 0
+    fi
 
     # Check if it's a known Claude wrapper
     for wrapper in "${AI_CLAUDE_WRAPPERS[@]}"; do
@@ -76,8 +114,12 @@ _ai_build_claude_cmd() {
     local extra_args="${2:-}"
     local output_format="${3:-stream-json}"
 
+    # Resolve model aliases to "claude --model ALIAS"
+    local resolved_cmd
+    resolved_cmd=$(ai_resolve_cmd "$cmd")
+
     # Claude pattern: cmd -p [args] --output-format X --verbose
-    echo "$cmd -p $extra_args --output-format $output_format --verbose"
+    echo "$resolved_cmd -p $extra_args --output-format $output_format --verbose"
 }
 
 # Build Codex invocation command
@@ -233,20 +275,24 @@ ai_invoke_simple() {
     local tool_type
     tool_type=$(ai_detect_tool_type "$cmd")
 
+    # Resolve model aliases to actual commands
+    local resolved_cmd
+    resolved_cmd=$(ai_resolve_cmd "$cmd")
+
     local invoke_cmd
     case "$tool_type" in
         "$AI_TOOL_CLAUDE")
             # Simple mode: no streaming format
-            invoke_cmd="$cmd -p $extra_args"
+            invoke_cmd="$resolved_cmd -p $extra_args"
             ;;
         "$AI_TOOL_CODEX")
-            invoke_cmd="$cmd exec - $extra_args"
+            invoke_cmd="$resolved_cmd exec - $extra_args"
             ;;
         "$AI_TOOL_GEMINI")
-            invoke_cmd="$cmd -p $extra_args"
+            invoke_cmd="$resolved_cmd -p $extra_args"
             ;;
         *)
-            invoke_cmd="$cmd -p $extra_args"
+            invoke_cmd="$resolved_cmd -p $extra_args"
             ;;
     esac
 

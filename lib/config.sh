@@ -450,16 +450,6 @@ cfg_load_feature_config() {
         fi
     fi
 
-    # Tmux/monitor mode (--monitor flag takes priority)
-    if [[ -z "${RALPH_HYBRID_MONITOR_FROM_CLI:-}" ]]; then
-        local feature_tmux
-        feature_tmux=$(cfg_load_yaml_value "$feature_config" "tmux")
-        if [[ "$feature_tmux" == "true" ]]; then
-            export RALPH_HYBRID_MONITOR=true
-            log_debug "Feature config: tmux=true (monitor enabled)"
-        fi
-    fi
-
     # Max iterations (--max-iterations flag takes priority)
     if [[ -z "${RALPH_HYBRID_MAX_ITERATIONS_FROM_CLI:-}" ]]; then
         local feature_max_iterations

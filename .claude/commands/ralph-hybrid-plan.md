@@ -20,11 +20,12 @@ Plan a new feature for Ralph Hybrid development. Guide the user through requirem
 
 ```
 Phase 0: DISCOVER     → Extract context from GitHub issue
+Phase 0.5: SDLC       → Discover project tooling and present to user
 Phase 1: SUMMARIZE    → Combine external context with user input
 Phase 1.5: ASSUMPTIONS → [Optional] Surface implicit assumptions (--list-assumptions flag)
 Phase 2: CLARIFY      → Ask targeted questions to fill gaps
 Phase 2.5: RESEARCH   → [Optional] Spawn research agents for topics (--research flag)
-Phase 2.7: SETTINGS   → Collect runtime settings (profile, tmux, success criteria, max iterations)
+Phase 2.7: SETTINGS   → Collect runtime settings (profile, success criteria, max iterations)
 Phase 3: ANALYZE      → Detect patterns requiring skills/scripts/callbacks
 Phase 4: DRAFT        → Generate spec.md document
 Phase 5: DECOMPOSE    → Break spec into properly-sized stories
@@ -142,6 +143,105 @@ I'll use this as the starting point for the spec.
 - Auto-detection supplements but doesn't replace `--research` flag
 - User can still skip research by saying "skip research" during planning
 - Keywords must be whole words (not substrings) to avoid false positives
+
+---
+
+## Phase 0.5: SDLC
+
+**Goal:** Discover the project's development workflow and tooling, present findings to user.
+
+### Why This Matters
+
+Every project has its own SDLC (Software Development Life Cycle). Without knowing the tooling:
+- Claude wastes time fumbling with raw docker/npm/pytest commands
+- Path errors when project uses wrappers
+- Quality checks fail because wrong commands used
+
+### Actions:
+
+#### Step 1: Scan for Project Documentation
+
+```bash
+# Check for agent instructions
+ls -la CLAUDE.md AGENTS.md .claude/CLAUDE.md 2>/dev/null
+
+# Check for README
+ls -la README.md 2>/dev/null
+```
+
+Read any found files to understand project conventions.
+
+#### Step 2: Scan for Task Runners
+
+```bash
+# Check for task runners (in priority order)
+ls -la justfile Justfile 2>/dev/null      # just
+ls -la Makefile makefile 2>/dev/null      # make
+ls -la package.json 2>/dev/null           # npm/yarn/pnpm
+ls -la pyproject.toml setup.py 2>/dev/null # python
+ls -la Cargo.toml 2>/dev/null             # rust
+ls -la go.mod 2>/dev/null                 # go
+```
+
+If `justfile` found, list available recipes:
+```bash
+just --list 2>/dev/null
+```
+
+If `package.json` found, extract scripts:
+```bash
+jq '.scripts | keys' package.json 2>/dev/null
+```
+
+If `Makefile` found, extract targets:
+```bash
+grep -E '^[a-zA-Z_-]+:' Makefile | cut -d: -f1 | head -20
+```
+
+#### Step 3: Present Findings to User
+
+```
+[SDLC] Discovered project tooling:
+
+Documentation:
+  ✓ CLAUDE.md - Project conventions found
+  ✓ README.md - Setup instructions found
+
+Task Runner: justfile
+  Available commands:
+    just test           - Run tests
+    just check-backend  - Run all backend checks (lint + format + type + test)
+    just build-astro    - Build frontend
+    ...
+
+Test Command: just check-backend (inferred from justfile)
+
+Is this correct? If you use a different task runner or test command, let me know:
+```
+
+#### Step 4: Allow User Override
+
+User may respond:
+- "Yes, that's correct" → Store findings
+- "Use `just test-regression` instead" → Store user's command
+- "We use make, not just" → Re-discover with user's tool
+- "The test command is `docker compose exec backend pytest`" → Store custom command
+
+### Output:
+
+Store the discovered (or user-provided) tooling for use in:
+- SETTINGS phase (pre-populate success criteria)
+- prd.json (successCriteria.command)
+- Prompt template context (so Claude knows the SDLC during execution)
+
+```
+[SDLC] Project tooling confirmed:
+  Task runner: just
+  Test command: just test-regression
+  Quality check: just check-backend
+
+This will be used for success criteria and quality checks.
+```
 
 ---
 
@@ -522,18 +622,14 @@ Present all settings in a single prompt for quick batch answers:
    C) budget - Sonnet execution, Haiku research (lowest cost)
    D) glm - GLM for all phases
 
-2. **Dashboard** - Use tmux monitoring dashboard during execution?
-   A) Yes - Show live progress in split panes
-   B) No - Simple terminal output
+2. **Success criteria** - Command to verify story completion?
+   [From SDLC discovery: {discovered_test_command}]  ← Pre-populated from Phase 0.5
+   Press Enter to use this, or provide a different command.
 
-3. **Success criteria** - Command to verify story completion?
-   Examples: npm test, pytest, cargo test, make test
-   (Leave blank to skip - tests in acceptance criteria will still run)
-
-4. **Max iterations** - Safety limit for the development loop?
+3. **Max iterations** - Safety limit for the development loop?
    Default: 20
 
-5. **MCP Servers** - Which MCP servers should be available to ALL stories?
+4. **MCP Servers** - Which MCP servers should be available to ALL stories?
    Available servers can be listed with: claude mcp list
    Common options:
    - chrome-devtools: Browser console, network inspection, UI validation
@@ -542,7 +638,7 @@ Present all settings in a single prompt for quick batch answers:
 
    Examples: "chrome-devtools, playwright" or "none"
 
-Your choices (e.g., "1B, 2A, 3: npm test, 4: 20, 5: chrome-devtools, playwright"):
+Your choices (e.g., "1B, 2: npm test, 3: 20, 4: chrome-devtools, playwright"):
 ```
 
 ### Store Settings:
@@ -554,7 +650,6 @@ After collecting responses, create/update `.ralph-hybrid/{branch}/config.yaml`:
 # These override project-level config for this feature only
 
 profile: balanced
-tmux: true
 max_iterations: 20
 
 # Success criteria (optional)
@@ -576,7 +671,6 @@ mcpNotes: "chrome-devtools for UI validation, playwright for E2E tests"
 [SETTINGS] Configuration saved to .ralph-hybrid/{branch}/config.yaml
 
   Profile:          balanced (Opus planning, Sonnet execution)
-  Dashboard:        enabled (--monitor)
   Success criteria: npm test
   Max iterations:   20
   MCP Servers:      chrome-devtools, playwright

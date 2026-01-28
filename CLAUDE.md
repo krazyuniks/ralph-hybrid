@@ -33,7 +33,7 @@ Ralph Hybrid is an **inner-loop focused** implementation of the Ralph Wiggum tec
 
 | Command | Purpose |
 |---------|---------|
-| `/ralph-hybrid-plan <description>` | Interactive planning workflow (or `--regenerate` to regenerate prd.json from spec.md) |
+| `/ralph-hybrid-plan <description>` | Interactive planning workflow - discovers project SDLC, collects settings, generates spec.md and prd.json |
 | `/ralph-hybrid-amend` | Safely modify requirements during implementation |
 
 ## Quick Start
@@ -100,17 +100,76 @@ ralph-hybrid run --model opus         # Or with specific model
 
 ## Testing
 
-Use BATS (Bash Automated Testing System).
+**DO NOT write unit tests that mock behaviour. They don't catch real issues.**
 
 ```bash
-./run_tests.sh                    # All tests (1100+ test cases)
-./run_tests.sh --unit             # Unit tests only
-./run_tests.sh --unit profile     # Filter by keyword
-./run_tests.sh --verbose          # Verbose output
-./tests/e2e_test.sh               # E2E tests (requires claude CLI)
+./run_tests.sh           # Integration + E2E tests
+./tests/e2e_test.sh      # E2E tests only (requires claude CLI)
 ```
 
+All testing must:
+1. **Actually invoke the tool** - Run `ralph-hybrid run` with real fixtures
+2. **Verify real output** - Check log files for actual commands executed
+3. **Test model resolution** - Confirm `sonnet` becomes `claude --model sonnet`
+4. **Test MCP server configuration** - Verify MCP servers from prd.json are passed
+5. **Test successCriteria** - Verify `successCriteria.command` from prd.json is used
+
 **Prerequisites**: `sudo apt install bats` or `brew install bats-core`
+
+## Critical Agent Rules
+
+### Model Resolution
+
+Model aliases MUST be resolved to `claude --model X`:
+
+| Input | Output |
+|-------|--------|
+| `sonnet` | `claude --model sonnet` |
+| `opus` | `claude --model opus` |
+| `haiku` | `claude --model haiku` |
+| `glm` | `glm` (wrapper script, unchanged) |
+| `claude` | `claude` (unchanged) |
+
+See `lib/ai_invoke.sh` - `ai_resolve_cmd()` function.
+
+### prd.json Required Fields
+
+Every prd.json MUST have:
+
+```json
+{
+  "profile": "balanced",
+  "successCriteria": {
+    "command": "just test-regression",
+    "timeout": 300
+  },
+  "userStories": [
+    {
+      "id": "STORY-001",
+      "mcpServers": ["chrome-devtools", "playwright"]
+    }
+  ]
+}
+```
+
+### Common Mistakes to Avoid
+
+1. **Don't pass model names as commands** - `sonnet` is not a command, use `claude --model sonnet`
+2. **Don't ignore prd.json settings** - successCriteria, mcpServers, profile are all functional
+3. **Don't write unit tests that mock** - They pass but don't catch real issues
+4. **Don't guess** - Ask the user if uncertain about requirements
+5. **Test before claiming something works** - Actually run the tool
+
+### Files Modified Together
+
+When changing model invocation:
+- `lib/ai_invoke.sh` - Model resolution functions
+- `ralph-hybrid` - Main script invocation code (search for `invoke_cmd`)
+- `tests/e2e_test.sh` - E2E tests for model resolution
+
+When changing callback behaviour:
+- `templates/callbacks/post_iteration.sh` - Template
+- `lib/callbacks.sh` - Callback execution
 
 ---
 
@@ -140,7 +199,6 @@ For complex features, use Ralph Hybrid to run autonomous development loops.
 | `/ralph-hybrid-plan --regenerate` | Claude Code | Regenerate prd.json from updated spec.md |
 | `/ralph-hybrid-amend` | Claude Code | Modify requirements mid-implementation |
 | `ralph-hybrid run` | Terminal | Execute autonomous loop |
-| `ralph-hybrid run --monitor` | Terminal | Run with tmux dashboard |
 | `ralph-hybrid status` | Terminal | Show feature progress |
 
 ### Example: GitHub Issue to Implementation
@@ -153,7 +211,7 @@ git checkout -b 42-user-authentication
 /ralph-hybrid-plan
 
 # 3. Run autonomous loop
-ralph-hybrid run --monitor
+ralph-hybrid run
 ```
 
 ### Key Concepts

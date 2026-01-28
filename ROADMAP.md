@@ -62,7 +62,6 @@ Foundational improvements required before adding new features.
   - Add `ralph validate` command
   - Remove deprecated `ralph init` command
   - Simplified prd.json schema (no `feature`/`branchName` fields)
-- **Note:** Monitor-related items (`lib/monitor.sh`, `ralph monitor`) handled by #20
 - **Files:** `ralph`, `lib/preflight.sh` (new), `lib/prd.sh`
 
 ### #7 - Break up cmd_run() into smaller functions
@@ -102,12 +101,6 @@ Improve user visibility into what Ralph is doing.
 **Status:** Blocked by Phase 3
 
 New capabilities to enhance the Ralph experience.
-
-### #20 - tmux monitoring dashboard
-- **Commands:** `ralph run --monitor`, `ralph monitor`
-- **Display:** Iteration count, status, API usage, rate limit countdown, progress, recent logs
-- **Implementation:** `lib/monitor.sh`, `status.json` per feature
-- **Files:** `lib/monitor.sh` (new), `ralph`
 
 ### #18 - Document specs/ directory patterns
 - **Problem:** specs/ directory pattern exists but isn't documented
@@ -165,7 +158,8 @@ New capabilities to enhance the Ralph experience.
 - #28 - /ralph-plan output must specify 'ralph run' command (Phase 1)
 
 ### Superseded
-- #15 - Interactive visualization/flowchart (superseded by #20 tmux dashboard)
+- #15 - Interactive visualization/flowchart (removed)
+- #20 - tmux monitoring dashboard (removed)
 
 ---
 

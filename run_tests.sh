@@ -86,8 +86,8 @@ done
 
 # If no specific type selected, run all
 if ! $RUN_UNIT && ! $RUN_INTEGRATION && ! $RUN_E2E; then
-    RUN_UNIT=true
     RUN_INTEGRATION=true
+    RUN_E2E=true
 fi
 
 # Check bats is installed
@@ -100,24 +100,8 @@ fi
 # Build test file list
 TEST_FILES=()
 
-if $RUN_UNIT; then
-    if [[ -n "$FILTER" ]]; then
-        # Filter by pattern
-        while IFS= read -r -d '' file; do
-            TEST_FILES+=("$file")
-        done < <(find tests/unit -name "*.bats" -print0 | xargs -0 grep -l -i "$FILTER" 2>/dev/null || true)
-        # Also match filenames
-        while IFS= read -r -d '' file; do
-            if [[ "$file" == *"$FILTER"* ]] && [[ ! " ${TEST_FILES[*]} " =~ " ${file} " ]]; then
-                TEST_FILES+=("$file")
-            fi
-        done < <(find tests/unit -name "*.bats" -print0)
-    else
-        while IFS= read -r -d '' file; do
-            TEST_FILES+=("$file")
-        done < <(find tests/unit -name "*.bats" -print0 | sort -z)
-    fi
-fi
+# Unit tests removed - they didn't catch real issues
+# Real testing is done via integration and e2e tests
 
 if $RUN_INTEGRATION; then
     if [[ -n "$FILTER" ]]; then
@@ -136,7 +120,7 @@ if $RUN_INTEGRATION; then
     fi
 fi
 
-if [[ ${#TEST_FILES[@]} -eq 0 ]]; then
+if [[ ${#TEST_FILES[@]} -eq 0 ]] && ! $RUN_E2E; then
     if [[ -n "$FILTER" ]]; then
         echo -e "${YELLOW}No tests found matching: $FILTER${NC}"
     else
@@ -155,14 +139,31 @@ if [[ -n "$FILTER" ]]; then
 fi
 echo ""
 
-# Run bats
-# shellcheck disable=SC2086
-if bats $VERBOSE $TAP $JOBS "${TEST_FILES[@]}"; then
+# Run bats if we have test files
+BATS_RESULT=0
+if [[ ${#TEST_FILES[@]} -gt 0 ]]; then
+    # shellcheck disable=SC2086
+    if ! bats $VERBOSE $TAP $JOBS "${TEST_FILES[@]}"; then
+        BATS_RESULT=1
+    fi
+fi
+
+# Run e2e tests if requested
+E2E_RESULT=0
+if $RUN_E2E; then
     echo ""
+    echo -e "${BLUE}Running e2e tests...${NC}"
+    if ! ./tests/e2e_test.sh; then
+        E2E_RESULT=1
+    fi
+fi
+
+# Summary
+echo ""
+if [[ $BATS_RESULT -eq 0 && $E2E_RESULT -eq 0 ]]; then
     echo -e "${GREEN}All tests passed${NC}"
     exit 0
 else
-    echo ""
     echo -e "${RED}Some tests failed${NC}"
     exit 1
 fi

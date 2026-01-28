@@ -2,7 +2,7 @@
 # Ralph Hybrid - External Dependencies Abstraction Layer
 # Provides wrapper functions for external commands to enable mocking in tests.
 #
-# This module wraps external dependencies (jq, date, git, claude, tmux) with
+# This module wraps external dependencies (jq, date, git, claude) with
 # functions that can be overridden for testing purposes.
 #
 # USAGE FOR TESTING:
@@ -28,7 +28,6 @@
 # - deps_date [args...]      - Wrapper for date
 # - deps_git [args...]       - Wrapper for git
 # - deps_claude [args...]    - Wrapper for claude CLI
-# - deps_tmux [args...]      - Wrapper for tmux
 # - deps_timeout [args...]   - Wrapper for timeout/gtimeout
 #
 # EXAMPLE TEST SETUP:
@@ -151,27 +150,7 @@ deps_claude() {
     "$claude_cmd" "$@"
 }
 
-#=============================================================================
-# tmux Wrapper
-#=============================================================================
-
-# Wrapper for tmux command
-# Allows mocking via RALPH_HYBRID_MOCK_TMUX=1 and _ralph_hybrid_mock_tmux function
-# or via RALPH_HYBRID_TMUX_CMD environment variable
-#
-# Usage: deps_tmux [tmux_args...]
-# Example: deps_tmux has-session -t ralph
-deps_tmux() {
-    # Check for mock function override
-    if [[ "${RALPH_HYBRID_MOCK_TMUX:-}" == "1" ]] && declare -f _ralph_hybrid_mock_tmux &>/dev/null; then
-        _ralph_hybrid_mock_tmux "$@"
-        return $?
-    fi
-
-    # Check for command path override
-    local tmux_cmd="${RALPH_HYBRID_TMUX_CMD:-tmux}"
-    "$tmux_cmd" "$@"
-}
+# tmux wrapper removed - tmux functionality deprecated
 
 #=============================================================================
 # timeout Wrapper
@@ -272,14 +251,12 @@ deps_reset_mocks() {
     unset RALPH_HYBRID_MOCK_DATE
     unset RALPH_HYBRID_MOCK_GIT
     unset RALPH_HYBRID_MOCK_CLAUDE
-    unset RALPH_HYBRID_MOCK_TMUX
     unset RALPH_HYBRID_MOCK_TIMEOUT
 
     unset RALPH_HYBRID_JQ_CMD
     unset RALPH_HYBRID_DATE_CMD
     unset RALPH_HYBRID_GIT_CMD
     unset RALPH_HYBRID_CLAUDE_CMD
-    unset RALPH_HYBRID_TMUX_CMD
     unset RALPH_HYBRID_TIMEOUT_CMD
 
     # Unset mock functions if they exist
@@ -287,7 +264,6 @@ deps_reset_mocks() {
     unset -f _ralph_hybrid_mock_date 2>/dev/null || true
     unset -f _ralph_hybrid_mock_git 2>/dev/null || true
     unset -f _ralph_hybrid_mock_claude 2>/dev/null || true
-    unset -f _ralph_hybrid_mock_tmux 2>/dev/null || true
     unset -f _ralph_hybrid_mock_timeout 2>/dev/null || true
 }
 

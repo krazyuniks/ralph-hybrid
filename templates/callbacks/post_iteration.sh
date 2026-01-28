@@ -79,8 +79,8 @@ set -euo pipefail
 # Make-based projects:
 # TEST_COMMAND="make test"
 
-# Default: Run tests silently (returns 0 always - override this!)
-# Change this to your project's test command
+# TEST_COMMAND is loaded from prd.json successCriteria.command
+# Override here only if you need a different command than what's in prd.json
 TEST_COMMAND=""
 
 # Optional: Additional checks (set to "true" to enable)
@@ -145,6 +145,17 @@ parse_context() {
     OUTPUT_FILE="${OUTPUT_FILE:-${RALPH_HYBRID_OUTPUT_FILE:-}}"
 
     log_info "Story: $STORY_ID | Iteration: $ITERATION"
+
+    # Load TEST_COMMAND from prd.json successCriteria if not already set
+    if [[ -z "$TEST_COMMAND" && -n "$FEATURE_DIR" ]]; then
+        local prd_file="${FEATURE_DIR}/prd.json"
+        if [[ -f "$prd_file" ]] && command -v jq &>/dev/null; then
+            TEST_COMMAND=$(jq -r '.successCriteria.command // ""' "$prd_file" 2>/dev/null || echo "")
+            if [[ -n "$TEST_COMMAND" ]]; then
+                log_info "Loaded TEST_COMMAND from prd.json: $TEST_COMMAND"
+            fi
+        fi
+    fi
 }
 
 #=============================================================================
@@ -153,18 +164,38 @@ parse_context() {
 
 run_tests() {
     if [[ -z "$TEST_COMMAND" ]]; then
-        log_info "No TEST_COMMAND configured - skipping tests"
-        log_info "Configure TEST_COMMAND in this callback to enable verification"
-        return 0
+        log_fail "No TEST_COMMAND configured - validation is MANDATORY"
+        log_fail "Set successCriteria.command in prd.json or configure TEST_COMMAND in this callback"
+        return 1
     fi
 
     log_info "Running tests: $TEST_COMMAND"
 
-    if $TEST_COMMAND; then
+    # Capture output to check for skipped tests
+    local output
+    local exit_code
+    output=$($TEST_COMMAND 2>&1) || exit_code=$?
+    exit_code=${exit_code:-0}
+
+    echo "$output"
+
+    # Check for pytest skipped tests (counts as failure - tests must actually run)
+    if echo "$output" | grep -qE "^\s*[0-9]+ skipped|SKIPPED"; then
+        log_fail "Tests were SKIPPED - this counts as failure. Tests must actually run."
+        return 1
+    fi
+
+    # Check for "0 passed" or no tests collected
+    if echo "$output" | grep -qE "0 passed|no tests ran|collected 0 items"; then
+        log_fail "No tests ran - this counts as failure."
+        return 1
+    fi
+
+    if [[ $exit_code -eq 0 ]]; then
         log_pass "Tests passed"
         return 0
     else
-        log_fail "Tests failed"
+        log_fail "Tests failed (exit code: $exit_code)"
         return 1
     fi
 }

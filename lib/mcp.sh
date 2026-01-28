@@ -25,9 +25,33 @@ if [[ -f "${_MCP_LIB_DIR}/deps.sh" ]]; then
     source "${_MCP_LIB_DIR}/deps.sh"
 fi
 
+# Source constants.sh for RALPH_HYBRID_BUILTIN_MCP_SERVERS
+if [[ -f "${_MCP_LIB_DIR}/constants.sh" ]]; then
+    source "${_MCP_LIB_DIR}/constants.sh"
+fi
+
 #=============================================================================
 # MCP Configuration Functions
 #=============================================================================
+
+# Check if a server is a built-in MCP server (always available in Claude Code)
+# Arguments:
+#   $1 - server name
+# Returns:
+#   0 if built-in, 1 otherwise
+# Usage:
+#   if mcp_is_builtin "playwright"; then echo "built-in"; fi
+mcp_is_builtin() {
+    local server_name="$1"
+    local builtin_servers="${RALPH_HYBRID_BUILTIN_MCP_SERVERS:-playwright chrome-devtools}"
+
+    for builtin in $builtin_servers; do
+        if [[ "$server_name" == "$builtin" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
 
 # Find .mcp.json file in current directory or parent directories
 # Arguments:
@@ -185,6 +209,12 @@ mcp_build_config() {
     while IFS= read -r server; do
         [[ -z "$server" ]] && continue
 
+        # Built-in servers (playwright, chrome-devtools) are always available
+        # in Claude Code and don't need config passed - skip them
+        if mcp_is_builtin "$server"; then
+            continue
+        fi
+
         local server_info=""
 
         # First try to get from .mcp.json file
@@ -243,15 +273,18 @@ mcp_check_servers() {
         return 0
     fi
 
-    # Get available servers
+    # Get available servers from claude mcp list
     local available_servers
-    if ! available_servers=$(claude mcp list 2>/dev/null | grep -oE '^[a-zA-Z0-9_-]+:' | sed 's/:$//' || true); then
-        return 1
-    fi
+    available_servers=$(claude mcp list 2>/dev/null | grep -oE '^[a-zA-Z0-9_-]+:' | sed 's/:$//' || true)
 
     # Check each requested server
     while IFS= read -r server; do
         [[ -z "$server" ]] && continue
+
+        # Built-in servers are always available
+        if mcp_is_builtin "$server"; then
+            continue
+        fi
 
         if ! echo "$available_servers" | grep -qx "$server"; then
             return 1
@@ -261,11 +294,24 @@ mcp_check_servers() {
     return 0
 }
 
-# List available MCP servers
+# List available MCP servers (including built-in servers)
 # Returns:
 #   Newline-separated list of server names
 # Usage:
 #   servers=$(mcp_list_available)
 mcp_list_available() {
-    claude mcp list 2>/dev/null | grep -oE '^[a-zA-Z0-9_-]+:' | sed 's/:$//' || true
+    # Get servers from claude mcp list
+    local servers
+    servers=$(claude mcp list 2>/dev/null | grep -oE '^[a-zA-Z0-9_-]+:' | sed 's/:$//' || true)
+
+    # Add built-in servers
+    local builtin_servers="${RALPH_HYBRID_BUILTIN_MCP_SERVERS:-playwright chrome-devtools}"
+    for builtin in $builtin_servers; do
+        echo "$builtin"
+    done
+
+    # Add servers from claude mcp list (if any)
+    if [[ -n "$servers" ]]; then
+        echo "$servers"
+    fi
 }

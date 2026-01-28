@@ -5,7 +5,7 @@ Show Ralph Hybrid usage patterns and workflow guidance.
 ## Quick Reference
 
 ```
-WORKFLOW: Plan → Run → Monitor
+WORKFLOW: Plan → Run
 ```
 
 | Step | Command | Where |
@@ -14,7 +14,6 @@ WORKFLOW: Plan → Run → Monitor
 | 2. Create feature branch | `git checkout -b feature/xyz` | Terminal |
 | 3. Plan the feature | `/ralph-hybrid-plan "description"` | Claude Code |
 | 4. Run the loop | `ralph-hybrid run` | Terminal |
-| 5. Monitor (optional) | `ralph-hybrid run --monitor` | Terminal |
 
 ---
 
@@ -32,7 +31,7 @@ git checkout -b 42-user-authentication
 # Claude will auto-detect issue #42 and fetch context
 
 # 3. Run the autonomous loop
-ralph-hybrid run --monitor
+ralph-hybrid run
 ```
 
 ### Starting a New Feature from Scratch
@@ -85,7 +84,6 @@ ralph-hybrid run
 |---------|---------|
 | `ralph-hybrid setup` | Install Claude commands to project |
 | `ralph-hybrid run [options]` | Execute the autonomous loop |
-| `ralph-hybrid run --monitor` | Run with tmux dashboard |
 | `ralph-hybrid run --model opus` | Run with specific model |
 | `ralph-hybrid status` | Show current feature progress |
 | `ralph-hybrid validate` | Run preflight checks |
@@ -132,7 +130,6 @@ Feature files live in `.ralph-hybrid/{branch-name}/`:
 
 - **Always plan first** - Don't skip `/ralph-hybrid-plan`, it creates the required files
 - **Use descriptive branch names** - `42-user-auth` lets Ralph find GitHub issues
-- **Monitor long runs** - Use `--monitor` for visibility into progress
 - **Check status often** - `ralph-hybrid status` shows completion progress
 - **Archive when done** - `ralph-hybrid archive` cleans up completed work
 
