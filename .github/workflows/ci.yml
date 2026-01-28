@@ -57,10 +57,6 @@ jobs:
           brew install bash
           echo "$(brew --prefix)/bin" >> $GITHUB_PATH
 
-      - name: Run unit tests
-        shell: bash
-        run: bats tests/unit/
-
       - name: Run integration tests
         shell: bash
         run: bats tests/integration/

@@ -109,7 +109,8 @@ if $RUN_INTEGRATION; then
             TEST_FILES+=("$file")
         done < <(find tests/integration -name "*.bats" -print0 | xargs -0 grep -l -i "$FILTER" 2>/dev/null || true)
         while IFS= read -r -d '' file; do
-            if [[ "$file" == *"$FILTER"* ]] && [[ ! " ${TEST_FILES[*]} " =~ " ${file} " ]]; then
+            pattern=" ${file} "
+            if [[ "$file" == *"$FILTER"* ]] && [[ ! " ${TEST_FILES[*]} " =~ $pattern ]]; then
                 TEST_FILES+=("$file")
             fi
         done < <(find tests/integration -name "*.bats" -print0)
