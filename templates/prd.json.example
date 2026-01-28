@@ -3,8 +3,14 @@
   "createdAt": "2026-01-09T12:00:00Z",
   "profile": "balanced",
   "successCriteria": {
-    "command": "pytest tests/e2e",
+    "tddTests": "pytest tests/ -k 'test_feature_name'",
+    "regression": "just test-regression",
+    "e2e": "just e2e",
     "timeout": 600
+  },
+  "gates": {
+    "perStory": ["tddTests", "regression"],
+    "final": ["tddTests", "regression", "e2e"]
   },
   "userStories": [
     {

@@ -150,7 +150,43 @@ parse_context() {
     if [[ -z "$TEST_COMMAND" && -n "$FEATURE_DIR" ]]; then
         local prd_file="${FEATURE_DIR}/prd.json"
         if [[ -f "$prd_file" ]] && command -v jq &>/dev/null; then
+            # Try old format first (backwards compatibility)
             TEST_COMMAND=$(jq -r '.successCriteria.command // ""' "$prd_file" 2>/dev/null || echo "")
+
+            # If empty, try layered format
+            if [[ -z "$TEST_COMMAND" ]]; then
+                local gate_type="perStory"
+
+                # Check if this is the final story
+                local last_story
+                last_story=$(jq -r '.userStories | last | .id // ""' "$prd_file" 2>/dev/null || echo "")
+                if [[ "$STORY_ID" == "$last_story" ]]; then
+                    gate_type="final"
+                    log_info "Final story detected - using 'final' gate"
+                fi
+
+                # Build command from gates
+                local gates
+                gates=$(jq -r ".gates.${gate_type} // [] | .[]" "$prd_file" 2>/dev/null || true)
+                if [[ -n "$gates" ]]; then
+                    local commands=()
+                    while IFS= read -r gate; do
+                        local cmd
+                        cmd=$(jq -r ".successCriteria.${gate} // empty" "$prd_file" 2>/dev/null || true)
+                        if [[ -n "$cmd" ]]; then
+                            commands+=("$cmd")
+                        fi
+                    done <<< "$gates"
+                    if [[ ${#commands[@]} -gt 0 ]]; then
+                        # Join with && for sequential execution
+                        TEST_COMMAND="${commands[0]}"
+                        for ((i=1; i<${#commands[@]}; i++)); do
+                            TEST_COMMAND="$TEST_COMMAND && ${commands[$i]}"
+                        done
+                    fi
+                fi
+            fi
+
             if [[ -n "$TEST_COMMAND" ]]; then
                 log_info "Loaded TEST_COMMAND from prd.json: $TEST_COMMAND"
             fi

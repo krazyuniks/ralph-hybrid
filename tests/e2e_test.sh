@@ -366,6 +366,81 @@ else
     fail "CLI analyse-commands failed"
 fi
 
+# Test 22: Layered gates - sc_get_command with new schema
+info "Test 22: Layered gates support"
+source "$PROJECT_ROOT/lib/success_criteria.sh"
+
+# Create a prd.json with layered gates
+cat > "$TEST_DIR/.ralph-hybrid/test-feature/prd-layered.json" << 'LAYEREDPRD'
+{
+  "successCriteria": {
+    "tddTests": "pytest tests/ -k feature",
+    "regression": "just test-regression",
+    "e2e": "just e2e",
+    "timeout": 300
+  },
+  "gates": {
+    "perStory": ["tddTests", "regression"],
+    "final": ["tddTests", "regression", "e2e"]
+  },
+  "userStories": [
+    {"id": "STORY-001", "title": "First", "passes": false},
+    {"id": "STORY-002", "title": "Last", "passes": false}
+  ]
+}
+LAYEREDPRD
+
+# Test perStory gate command
+per_story_cmd=$(sc_get_command "$TEST_DIR/.ralph-hybrid/test-feature/prd-layered.json" "perStory")
+if [[ "$per_story_cmd" == "pytest tests/ -k feature && just test-regression" ]]; then
+    pass "Layered gates perStory command correct"
+else
+    fail "Layered gates perStory failed: got '$per_story_cmd'"
+fi
+
+# Test final gate command
+final_cmd=$(sc_get_command "$TEST_DIR/.ralph-hybrid/test-feature/prd-layered.json" "final")
+if [[ "$final_cmd" == "pytest tests/ -k feature && just test-regression && just e2e" ]]; then
+    pass "Layered gates final command correct"
+else
+    fail "Layered gates final failed: got '$final_cmd'"
+fi
+
+# Test 23: sc_is_final_story function
+info "Test 23: Final story detection"
+if sc_is_final_story "$TEST_DIR/.ralph-hybrid/test-feature/prd-layered.json" "STORY-002"; then
+    pass "sc_is_final_story correctly identifies final story"
+else
+    fail "sc_is_final_story failed to identify final story"
+fi
+
+if ! sc_is_final_story "$TEST_DIR/.ralph-hybrid/test-feature/prd-layered.json" "STORY-001"; then
+    pass "sc_is_final_story correctly rejects non-final story"
+else
+    fail "sc_is_final_story incorrectly identified non-final as final"
+fi
+
+# Test 24: Backwards compatibility with old schema
+info "Test 24: Backwards compatibility with old successCriteria.command"
+cat > "$TEST_DIR/.ralph-hybrid/test-feature/prd-old.json" << 'OLDPRD'
+{
+  "successCriteria": {
+    "command": "npm test",
+    "timeout": 300
+  },
+  "userStories": [
+    {"id": "STORY-001", "title": "Only", "passes": false}
+  ]
+}
+OLDPRD
+
+old_cmd=$(sc_get_command "$TEST_DIR/.ralph-hybrid/test-feature/prd-old.json" "final")
+if [[ "$old_cmd" == "npm test" ]]; then
+    pass "Backwards compatibility with old schema works"
+else
+    fail "Backwards compatibility failed: got '$old_cmd'"
+fi
+
 # Summary
 echo ""
 echo "================================"

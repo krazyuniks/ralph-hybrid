@@ -59,13 +59,15 @@ sc_is_configured() {
 }
 
 # Get the success criteria command
-# Priority: CLI > config > prd.json
+# Priority: CLI > config > prd.json (old format) > prd.json (layered gates)
 # Arguments:
 #   $1 - Path to prd.json (optional, for PRD-based config)
+#   $2 - Gate type: "perStory" or "final" (optional, defaults to "perStory")
 # Returns:
 #   Prints command string, empty if not configured
 sc_get_command() {
     local prd_file="${1:-}"
+    local gate_type="${2:-perStory}"
 
     # Priority 1: CLI environment variable
     if [[ -n "${RALPH_HYBRID_SUCCESS_CRITERIA_CMD:-}" ]]; then
@@ -83,18 +85,67 @@ sc_get_command() {
         fi
     fi
 
-    # Priority 3: PRD file (successCriteria.command)
+    # Priority 3: PRD file
     if [[ -n "$prd_file" ]] && [[ -f "$prd_file" ]]; then
+        # Try old format first (backwards compatibility)
         local prd_cmd
         prd_cmd=$(jq -r '.successCriteria.command // empty' "$prd_file" 2>/dev/null || true)
         if [[ -n "$prd_cmd" ]]; then
             echo "$prd_cmd"
             return 0
         fi
+
+        # Try new layered format
+        local gates
+        gates=$(jq -r ".gates.${gate_type} // [] | .[]" "$prd_file" 2>/dev/null || true)
+        if [[ -n "$gates" ]]; then
+            local commands=()
+            while IFS= read -r gate; do
+                local cmd
+                cmd=$(jq -r ".successCriteria.${gate} // empty" "$prd_file" 2>/dev/null || true)
+                if [[ -n "$cmd" ]]; then
+                    commands+=("$cmd")
+                fi
+            done <<< "$gates"
+            if [[ ${#commands[@]} -gt 0 ]]; then
+                # Join with && for sequential execution
+                local result="${commands[0]}"
+                for ((i=1; i<${#commands[@]}; i++)); do
+                    result="$result && ${commands[$i]}"
+                done
+                echo "$result"
+                return 0
+            fi
+        fi
     fi
 
     # Not configured
     return 0
+}
+
+# Check if the given story is the final story in the PRD
+# Arguments:
+#   $1 - Path to prd.json
+#   $2 - Story ID to check
+# Returns:
+#   0 if this is the final story, 1 otherwise
+sc_is_final_story() {
+    local prd_file="${1:-}"
+    local story_id="${2:-}"
+
+    if [[ -z "$prd_file" ]] || [[ ! -f "$prd_file" ]]; then
+        return 1
+    fi
+
+    if [[ -z "$story_id" ]]; then
+        return 1
+    fi
+
+    # Get last story ID from prd.json
+    local last_story
+    last_story=$(jq -r '.userStories | last | .id // empty' "$prd_file" 2>/dev/null || true)
+
+    [[ "$story_id" == "$last_story" ]]
 }
 
 # Get the success criteria timeout
