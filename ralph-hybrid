@@ -39,6 +39,8 @@ source "${SCRIPT_DIR}/lib/ai_invoke.sh"
 source "${SCRIPT_DIR}/lib/success_criteria.sh"
 source "${SCRIPT_DIR}/lib/command_log.sh"
 source "${SCRIPT_DIR}/lib/command_analysis.sh"
+source "${SCRIPT_DIR}/lib/state.sh"
+source "${SCRIPT_DIR}/lib/task.sh"
 
 #=============================================================================
 # Global Variables (set by parse_args or load_config)
@@ -68,6 +70,7 @@ Usage: ralph-hybrid <command> [options]
 
 Commands:
   run [options]          Execute the development loop
+  init                   Initialize external state for current branch
   status                 Show current feature status
   kill                   Kill the Ralph process running in this project
   archive                Archive a completed feature
@@ -98,6 +101,7 @@ Run Options:
   -m, --model CMD            AI command to use (opus, sonnet, haiku, glm, codex, gemini)
   --profile PROFILE          Model profile (quality, balanced, budget; default: balanced)
   --success-criteria CMD     Command that must pass before story completion
+  --external-state           Use external state directory (~/.ralph/projects/)
 
 Archive Options:
   -y, --yes                  Skip confirmation for deferred work warnings
@@ -2181,6 +2185,98 @@ cmd_setup() {
 }
 
 #=============================================================================
+# Init Command - Initialize External State
+#=============================================================================
+
+cmd_init() {
+    # Parse arguments
+    local force=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--force)
+                force=true
+                shift
+                ;;
+            -h|--help)
+                cat << EOF
+Usage: ralph-hybrid init [options]
+
+Initialize external state for the current branch. This creates the state
+directory at ~/.ralph/projects/{hash}/{branch}/ where Ralph stores:
+  - prd.json (all stories, completion status)
+  - spec.md (full specification)
+  - progress.log (append-only log)
+  - current_task.md (generated per-iteration)
+  - logs/ (iteration logs)
+
+Options:
+  -f, --force    Overwrite existing state (use with caution)
+  -h, --help     Show this help message
+
+Note: State is stored OUTSIDE the working tree so Claude cannot modify it.
+      The working tree only gets .ralph/task.md (read-only for Claude).
+EOF
+                return 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+
+    # Check git repo
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Get current branch
+    local branch
+    branch=$(git branch --show-current 2>/dev/null)
+    if [[ -z "$branch" ]]; then
+        log_error "Not on a branch (detached HEAD)"
+        return 1
+    fi
+
+    # Get project root
+    local project_root
+    project_root=$(git rev-parse --show-toplevel)
+
+    # Get state directory
+    local state_dir
+    state_dir=$(state_get_project_dir "$project_root" "$branch")
+
+    log_info "Initializing external state..."
+    log_info "  Project: ${project_root}"
+    log_info "  Branch: ${branch}"
+    log_info "  State directory: ${state_dir}"
+
+    # Check if state already exists
+    local prd_file
+    prd_file=$(state_get_prd_file "$state_dir")
+
+    if [[ -f "$prd_file" ]] && [[ "$force" != true ]]; then
+        log_warn "State already exists for this branch."
+        log_info "Use -f/--force to reinitialize (will preserve existing prd.json)"
+        return 1
+    fi
+
+    # Initialize state directory
+    state_init "$state_dir"
+
+    # Initialize working tree .ralph directory
+    state_init_working_tree "$project_root"
+
+    log_success "External state initialized successfully."
+    echo ""
+    log_info "Next steps:"
+    log_info "  1. Use /ralph-hybrid-plan in Claude Code to create spec.md and prd.json"
+    log_info "  2. Run 'ralph-hybrid run' to start the development loop"
+
+    return 0
+}
+
+#=============================================================================
 # Import Command - Import PRD from External File
 #=============================================================================
 
@@ -2441,6 +2537,11 @@ parse_run_args() {
                 export RALPH_HYBRID_SUCCESS_CRITERIA_CMD
                 RALPH_HYBRID_SUCCESS_CRITERIA_FROM_CLI=true
                 shift 2
+                ;;
+            --external-state)
+                RALPH_HYBRID_EXTERNAL_STATE=true
+                export RALPH_HYBRID_EXTERNAL_STATE
+                shift
                 ;;
             -*)
                 log_error "Unknown option: $1"
@@ -3804,12 +3905,268 @@ _run_main_loop() {
 }
 
 #=============================================================================
+# Run Command - External State Mode Helpers
+#=============================================================================
+
+# Build prompt for external state mode
+# Args: state_dir project_root iteration
+# Returns: Prompt content to stdout
+_run_build_external_prompt() {
+    local state_dir="$1"
+    local project_root="$2"
+    local iteration="$3"
+
+    local prompt_path="${SCRIPT_DIR}/templates/${RALPH_HYBRID_EXTERNAL_PROMPT_TEMPLATE}"
+    local timestamp
+    timestamp=$(date -Iseconds)
+
+    cat << EOF
+# CONTEXT
+
+**Working Directory:** \`${project_root}\`
+**Iteration:** ${iteration}
+**Timestamp:** ${timestamp}
+
+---
+
+$(cat "$prompt_path")
+EOF
+}
+
+# Execute a single iteration in external state mode
+# Args: iteration state_dir project_root prd_file timeout_cmd feature_name
+# Returns: 0 to continue, 1 to stop with error, 2 for user exit, 100 for completion
+_run_external_iteration() {
+    local iteration="$1"
+    local state_dir="$2"
+    local project_root="$3"
+    local prd_file="$4"
+    local timeout_cmd="$5"
+    local feature_name="$6"
+
+    local iteration_start_time
+    iteration_start_time=$(date +%s)
+
+    # Get current story
+    local story_id
+    story_id=$(state_get_current_story_id "$prd_file")
+    if [[ -z "$story_id" ]]; then
+        log_success "All stories complete!"
+        return "$RALPH_HYBRID_EXIT_COMPLETE"
+    fi
+
+    log_info "Story: ${story_id}"
+
+    # Log story started
+    state_log_story_started "$state_dir" "$story_id"
+
+    # Generate and copy task.md
+    local spec_file
+    spec_file=$(state_get_spec_file "$state_dir")
+    task_prepare "$state_dir" "$prd_file" "$project_root" "$spec_file"
+
+    # Record commit before iteration
+    local commit_before
+    commit_before=$(git -C "$project_root" rev-parse HEAD 2>/dev/null || echo "")
+
+    # Build prompt
+    local prompt_content
+    prompt_content=$(_run_build_external_prompt "$state_dir" "$project_root" "$iteration")
+
+    # Create log file
+    local log_file
+    log_file=$(state_get_iteration_log "$state_dir" "$iteration")
+    mkdir -p "$(dirname "$log_file")"
+
+    # Invoke Claude
+    _run_invoke_claude "$prompt_content" "$timeout_cmd" "$log_file" "$iteration"
+
+    # Check for new commit (commit = done signal)
+    local commit_after
+    commit_after=$(git -C "$project_root" rev-parse HEAD 2>/dev/null || echo "")
+
+    if [[ "$commit_before" != "$commit_after" ]]; then
+        log_info "Commit detected: ${commit_after:0:7}"
+        state_log_iteration_done "$state_dir" "$iteration" "${commit_after:0:7}"
+
+        # Run per-story regression test
+        local success_criteria_cmd
+        success_criteria_cmd=$(jq -r '.successCriteria.perStory // .successCriteria.command // ""' "$prd_file")
+
+        if [[ -n "$success_criteria_cmd" ]]; then
+            log_info "Running regression test: ${success_criteria_cmd}"
+            if (cd "$project_root" && eval "$success_criteria_cmd"); then
+                log_success "Regression passed!"
+                state_log_tests_passed "$state_dir" "perStory"
+
+                # Mark story complete
+                state_mark_story_complete "$prd_file" "$story_id" "Completed in iteration $iteration"
+                state_log_story_complete "$state_dir" "$story_id"
+
+                # Rebase main
+                log_info "Rebasing onto origin/main..."
+                (cd "$project_root" && git fetch origin main && git rebase origin/main) || {
+                    log_warn "Rebase failed - may need manual intervention"
+                }
+
+                # Check if all stories complete
+                if state_all_stories_complete "$prd_file"; then
+                    # Run final test
+                    local final_cmd
+                    final_cmd=$(jq -r '.successCriteria.final // ""' "$prd_file")
+                    if [[ -n "$final_cmd" ]]; then
+                        log_info "Running final test suite: ${final_cmd}"
+                        if ! (cd "$project_root" && eval "$final_cmd"); then
+                            log_error "Final test suite failed!"
+                            state_log_tests_failed "$state_dir" "final"
+                            # Append error to task.md for Claude to fix
+                            task_append_error "$project_root" "Final test suite failed. Fix all issues regardless of which story caused them."
+                            return 0  # Continue to let Claude fix
+                        fi
+                        log_success "Final test suite passed!"
+                        state_log_tests_passed "$state_dir" "final"
+                    fi
+                    return "$RALPH_HYBRID_EXIT_COMPLETE"
+                fi
+
+                return 0  # Continue to next story
+            else
+                log_error "Regression failed!"
+                state_log_tests_failed "$state_dir" "perStory"
+
+                # Append error to task.md
+                task_append_error "$project_root" "Regression test failed. Fix the issue and commit again."
+                return 0  # Continue to let Claude fix
+            fi
+        else
+            # No success criteria - mark complete on commit
+            state_mark_story_complete "$prd_file" "$story_id" "Completed in iteration $iteration"
+            state_log_story_complete "$state_dir" "$story_id"
+
+            if state_all_stories_complete "$prd_file"; then
+                return "$RALPH_HYBRID_EXIT_COMPLETE"
+            fi
+            return 0
+        fi
+    else
+        log_warn "No commit detected - Claude didn't complete the task"
+        return 0  # Continue to retry
+    fi
+}
+
+# Run the main loop in external state mode
+# Args: timeout_cmd state_dir project_root prd_file feature_name
+_run_external_main_loop() {
+    local timeout_cmd="$1"
+    local state_dir="$2"
+    local project_root="$3"
+    local prd_file="$4"
+    local feature_name="$5"
+
+    log_info "Starting Ralph loop (external state mode) for: ${feature_name}"
+    log_info "State directory: ${state_dir}"
+    log_info "Max iterations: ${RALPH_HYBRID_MAX_ITERATIONS}"
+
+    local iteration=0
+    while [[ $iteration -lt $RALPH_HYBRID_MAX_ITERATIONS ]]; do
+        iteration=$((iteration + 1))
+
+        local iter_result=0
+        _run_external_iteration "$iteration" "$state_dir" "$project_root" "$prd_file" "$timeout_cmd" "$feature_name" || iter_result=$?
+
+        case $iter_result in
+            "$RALPH_HYBRID_EXIT_SUCCESS")
+                sleep "$_RALPH_HYBRID_ITERATION_SLEEP"
+                ;;
+            "$RALPH_HYBRID_EXIT_ERROR")
+                return "$RALPH_HYBRID_EXIT_ERROR"
+                ;;
+            "$RALPH_HYBRID_EXIT_USER")
+                return "$RALPH_HYBRID_EXIT_USER"
+                ;;
+            "$RALPH_HYBRID_EXIT_COMPLETE")
+                log_success "All stories complete!"
+                return "$RALPH_HYBRID_EXIT_SUCCESS"
+                ;;
+        esac
+    done
+
+    log_error "Max iterations (${RALPH_HYBRID_MAX_ITERATIONS}) reached without completion."
+    return "$RALPH_HYBRID_EXIT_ERROR"
+}
+
+# Run command for external state mode
+cmd_run_external() {
+    # Check git repo
+    if ! check_git_repo; then
+        return 1
+    fi
+
+    # Get project root and branch
+    local project_root
+    project_root=$(git rev-parse --show-toplevel)
+    local branch
+    branch=$(git branch --show-current)
+
+    if [[ -z "$branch" ]]; then
+        log_error "Not on a branch (detached HEAD)"
+        return 1
+    fi
+
+    # Get state directory
+    local state_dir
+    state_dir=$(state_get_project_dir "$project_root" "$branch")
+
+    # Check if state exists
+    local prd_file
+    prd_file=$(state_get_prd_file "$state_dir")
+
+    if [[ ! -f "$prd_file" ]]; then
+        log_error "No prd.json found in external state: ${prd_file}"
+        log_info "Run 'ralph-hybrid init' or use /ralph-hybrid-plan to create state"
+        return 1
+    fi
+
+    local feature_name
+    feature_name=$(basename "$state_dir")
+
+    log_info "External state mode"
+    log_info "  Project: ${project_root}"
+    log_info "  Branch: ${branch}"
+    log_info "  State: ${state_dir}"
+
+    # Initialize working tree
+    state_init_working_tree "$project_root"
+
+    # Get timeout command
+    local timeout_cmd
+    if ! timeout_cmd=$(get_timeout_cmd); then
+        return 1
+    fi
+
+    # Check if already complete
+    if state_all_stories_complete "$prd_file"; then
+        log_success "All stories already complete!"
+        return 0
+    fi
+
+    # Run the external state loop
+    _run_external_main_loop "$timeout_cmd" "$state_dir" "$project_root" "$prd_file" "$feature_name"
+}
+
+#=============================================================================
 # Run Command - Main Loop
 #=============================================================================
 
 cmd_run() {
     # Validate arguments and run preflight checks
     _run_validate_args "$@" || return 1
+
+    # Check for external state mode
+    if [[ "${RALPH_HYBRID_EXTERNAL_STATE:-}" == true ]]; then
+        cmd_run_external
+        return $?
+    fi
 
     # Setup state (sets RUN_FEATURE_NAME, RUN_FEATURE_DIR, RUN_PRD_FILE)
     _run_setup_state || return 1
@@ -3948,6 +4305,10 @@ main() {
             ;;
         status)
             cmd_status "$@"
+            return $?
+            ;;
+        init)
+            cmd_init "$@"
             return $?
             ;;
         kill)

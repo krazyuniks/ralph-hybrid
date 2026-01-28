@@ -178,6 +178,15 @@ readonly RALPH_HYBRID_CALLBACKS_DIR_NAME="callbacks"
 # Default prompt template filename
 readonly RALPH_HYBRID_DEFAULT_PROMPT_TEMPLATE="prompt-tdd.md"
 
+# External state prompt template (for Ralph-managed state mode)
+readonly RALPH_HYBRID_EXTERNAL_PROMPT_TEMPLATE="prompt-external.md"
+
+# Working tree Ralph directory (minimal, gitignored)
+readonly RALPH_HYBRID_WORKING_TREE_DIR=".ralph"
+
+# Task file name in working tree
+readonly RALPH_HYBRID_TASK_FILE="task.md"
+
 #=============================================================================
 # Lockfile Settings
 #=============================================================================

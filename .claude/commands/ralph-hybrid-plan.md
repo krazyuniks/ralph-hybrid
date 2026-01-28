@@ -15,6 +15,7 @@ Plan a new feature for Ralph Hybrid development. Guide the user through requirem
 | `--regenerate` | Regenerate prd.json from existing spec.md |
 | `--no-issue` | Skip GitHub issue lookup |
 | `--skip-verify` | Skip plan verification phase (not recommended) |
+| `--external-state` | Write state to ~/.ralph/projects/ instead of .ralph-hybrid/ (recommended) |
 
 ## Workflow States
 
@@ -814,7 +815,30 @@ visual_regression:
 
 #### Step 1: Derive Feature Folder (CRITICAL)
 
-**IMPORTANT:** The folder name MUST be derived exactly from the git branch name. Do NOT invent a shorter or "cleaner" name.
+**IMPORTANT:** The folder location depends on the `--external-state` flag:
+
+##### External State Mode (--external-state flag or RALPH_HYBRID_EXTERNAL_STATE=true)
+
+State is stored OUTSIDE the working tree where Claude cannot modify it:
+
+```bash
+# Get project root and branch
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+BRANCH=$(git branch --show-current)
+
+# Generate project hash (8 characters of md5)
+PROJECT_HASH=$(echo "$PROJECT_ROOT" | md5sum | cut -c1-8)
+
+# Sanitize branch name
+FOLDER_NAME=$(echo "$BRANCH" | tr '/' '-')
+
+# External state directory
+STATE_DIR="$HOME/.ralph/projects/${PROJECT_HASH}/${FOLDER_NAME}"
+```
+
+##### Legacy Mode (default - .ralph-hybrid/ in working tree)
+
+The folder name MUST be derived exactly from the git branch name. Do NOT invent a shorter or "cleaner" name.
 
 ```bash
 # Get exact branch name
@@ -827,14 +851,16 @@ FOLDER_NAME=$(echo "$BRANCH" | tr '/' '-')
 FEATURE_DIR=".ralph-hybrid/${FOLDER_NAME}"
 ```
 
-**Examples:**
+**Examples (Legacy Mode):**
 | Branch | Folder (CORRECT) | Folder (WRONG) |
 |--------|------------------|----------------|
 | `384/job-processing-pipeline-step-3-video-com` | `.ralph-hybrid/384-job-processing-pipeline-step-3-video-com/` | `.ralph-hybrid/384-video-composition/` |
 | `feature/42-user-auth` | `.ralph-hybrid/feature-42-user-auth/` | `.ralph-hybrid/user-auth/` |
 | `fix/123-bug-fix` | `.ralph-hybrid/fix-123-bug-fix/` | `.ralph-hybrid/bug-fix/` |
 
-**Why this matters:** `ralph-hybrid run` derives the folder from the branch name using the same logic. If you use a different name, `ralph-hybrid run` won't find your files.
+**Why external state is recommended:** Claude cannot modify prd.json or progress files. Ralph owns all state. Claude only sees .ralph/task.md in the working tree.
+
+**Why folder names matter:** `ralph-hybrid run` derives the folder from the branch name using the same logic. If you use a different name, `ralph-hybrid run` won't find your files.
 
 #### Step 2: Create directory if it doesn't exist
 
@@ -1006,9 +1032,27 @@ Only override individual story MCP if there's a specific reason:
 
 ### Actions:
 1. Read final spec.md
-2. **Use the SAME feature folder from Phase 3** - do NOT recalculate or use a different name
-   - The folder MUST be: `.ralph-hybrid/$(git branch --show-current | tr '/' '-')/`
+2. **Use the SAME feature folder from Phase 4** - do NOT recalculate or use a different name
+   - **External state mode:** `~/.ralph/projects/{hash}/{branch}/`
+   - **Legacy mode:** `.ralph-hybrid/$(git branch --show-current | tr '/' '-')/`
 3. Generate `prd.json` in that folder:
+
+**For external state mode, use the simplified successCriteria format:**
+```json
+{
+  "description": "{from spec Problem Statement}",
+  "createdAt": "{ISO-8601}",
+  "profile": "{quality|balanced|budget}",
+  "successCriteria": {
+    "perStory": "just test-regression",  // Runs after each story commit
+    "final": "just test",                 // Runs after all stories complete
+    "timeout": 300
+  },
+  "userStories": [ ... ]
+}
+```
+
+**For legacy mode:**
 
 ```json
 {
@@ -1046,27 +1090,50 @@ Only override individual story MCP if there's a specific reason:
 
 > **Per-story config fields are optional.** Only include `model` if overriding the default. Only include `mcpServers` if the story needs specific MCP tools (or `[]` to explicitly disable MCP).
 
-4. Initialize empty `progress.txt`:
+4. Initialize progress log:
+   - **External state mode:** Creates `progress.log` (append-only format for Ralph)
+   - **Legacy mode:** Creates `progress.txt` (human-readable format)
 
 ```
-# Progress Log
+# Progress Log (legacy format)
 # Branch: {branch-name}
 # Started: {ISO-8601}
 # Spec: spec.md
 
 ```
 
-4. Create `specs/` directory (for additional detailed specs if needed)
+5. Create `specs/` directory (for additional detailed specs if needed)
 
-5. **Validate folder name** before outputting summary:
+6. **Validate folder location** before outputting summary:
    ```bash
-   # Verify the folder you created matches what ralph expects
-   EXPECTED=".ralph-hybrid/$(git branch --show-current | tr '/' '-')"
+   # External state mode
+   if [[ -n "$RALPH_HYBRID_EXTERNAL_STATE" ]]; then
+       PROJECT_HASH=$(echo "$(git rev-parse --show-toplevel)" | md5sum | cut -c1-8)
+       EXPECTED="$HOME/.ralph/projects/${PROJECT_HASH}/$(git branch --show-current | tr '/' '-')"
+   else
+       # Legacy mode
+       EXPECTED=".ralph-hybrid/$(git branch --show-current | tr '/' '-')"
+   fi
    # If your folder doesn't match $EXPECTED, you made an error - fix it!
    ```
 
-6. Output generation summary:
+7. Output generation summary:
 
+**External state mode:**
+```
+[GENERATE] Files created in external state:
+  ~/.ralph/projects/{hash}/{branch}/
+  ├── spec.md          # Feature specification
+  ├── prd.json         # {N} stories, all passes: false
+  └── progress.log     # Empty, ready for iterations
+
+Working tree remains clean (no .ralph-hybrid/ created).
+Claude will only see .ralph/task.md during execution.
+
+Proceeding to plan verification...
+```
+
+**Legacy mode:**
 ```
 [GENERATE] Files created:
   .ralph-hybrid/{branch-with-slashes-as-dashes}/
@@ -1272,6 +1339,49 @@ Save the final PLAN-REVIEW.md to the feature folder:
 
 After verification (or skip), show the final plan status:
 
+**External state mode:**
+```
+═══════════════════════════════════════════════════════════════
+PLANNING COMPLETE (External State Mode)
+═══════════════════════════════════════════════════════════════
+
+Branch: {exact branch name}
+State directory: ~/.ralph/projects/{hash}/{branch}/
+
+Files:
+  ├── spec.md          # Feature specification
+  ├── prd.json         # {N} stories, all passes: false
+  ├── progress.log     # Ready for iterations
+  └── PLAN-REVIEW.md   # Verification: {READY|NEEDS_REVISION|BLOCKED|SKIPPED}
+
+Configuration:
+  Profile: {quality|balanced|budget} ({description of what models will be used})
+  Success criteria:
+    Per-story: {perStory command}
+    Final: {final command}
+
+Plan Status: {READY ✓ | NEEDS_REVISION ⚠ | BLOCKED ✗ | NOT_VERIFIED}
+
+{status explanation as before}
+
+───────────────────────────────────────────────────────────────
+Ready to execute. Run:
+
+    ralph-hybrid run --external-state
+
+───────────────────────────────────────────────────────────────
+
+Benefits of external state:
+  - Claude cannot modify prd.json or progress files
+  - Ralph controls all state updates
+  - Working tree stays clean
+  - Commit = done signal (no explicit story completion needed)
+
+To modify: Edit spec.md in state directory, then run /ralph-hybrid-plan --regenerate
+═══════════════════════════════════════════════════════════════
+```
+
+**Legacy mode:**
 ```
 ═══════════════════════════════════════════════════════════════
 PLANNING COMPLETE
