@@ -4182,8 +4182,24 @@ cmd_run_external() {
 
     # Check if already complete
     if state_all_stories_complete "$prd_file"; then
-        log_success "All stories already complete!"
-        return 0
+        # All stories done - run final test
+        local final_cmd
+        final_cmd=$(jq -r '.successCriteria.final // ""' "$prd_file")
+        if [[ -n "$final_cmd" ]]; then
+            log_info "All stories complete. Running final test: ${final_cmd}"
+            if (cd "$project_root" && eval "$final_cmd"); then
+                log_success "Final test passed! Feature complete."
+                state_log_tests_passed "$state_dir" "final"
+                return 0
+            else
+                log_error "Final test failed!"
+                state_log_tests_failed "$state_dir" "final"
+                return 1
+            fi
+        else
+            log_success "All stories complete!"
+            return 0
+        fi
     fi
 
     # Run the external state loop
